@@ -1,0 +1,15 @@
+node_modules/
+dist/
+**/target/
+**/gen/
+*.tsbuildinfo
+.DS_Store
+artifacts/
+.build-cache/
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx

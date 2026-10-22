@@ -1,0 +1,37 @@
+{
+  "productName": "Mathdraw",
+  "mainBinaryName": "mathdraw",
+  "identifier": "lab.chuan.mathdraw",
+  "app": {
+    "windows": [
+      {
+        "label": "drawing",
+        "title": "数学绘图 · Mathdraw",
+        "url": "index.html?drawing=1&standalone=1",
+        "width": 1280,
+        "height": 860,
+        "minWidth": 960,
+        "minHeight": 640,
+        "backgroundColor": "#ffffff"
+      }
+    ]
+  },
+  "bundle": {
+    "shortDescription": "数学绘图：平面与空间几何",
+    "createUpdaterArtifacts": true,
+    "macOS": {
+      "signingIdentity": "-"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENBRTVBQ0I1QzE0MTBENDUKUldSRkRVSEJ0YXpseW5OckVZVGZSL0R4UFRsN3ExbjdNNURIVTRpR0x3cnMxZDg1TSs0UnVYeVIK",
+      "endpoints": [
+        "https://github.com/DrChuan/Mathdraw/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
+}

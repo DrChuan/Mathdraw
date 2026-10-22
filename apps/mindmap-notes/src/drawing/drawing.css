@@ -1,0 +1,436 @@
+.drawing-app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #f7f8f5;
+  color: #34463c;
+  font:
+    12px/1.5 -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+}
+.drawing-app button {
+  border: 1px solid #dce3db;
+  border-radius: 5px;
+  padding: 5px 9px;
+  min-height: 28px;
+  background: #fff;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.drawing-app button:hover:not(:disabled),
+.drawing-app button.active {
+  background: #e9f1e9;
+  color: #285c45;
+  border-color: #a7c6b1;
+}
+.drawing-app input:not([type="checkbox"]):not([type="range"]),
+.drawing-app select,
+.drawing-app textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #d5ddd3;
+  border-radius: 4px;
+  background: #fff;
+  padding: 5px 7px;
+  color: #273e30;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.drawing-app textarea {
+  resize: vertical;
+  font-family: "SFMono-Regular", Consolas, monospace;
+}
+.drawing-app label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 7px 0;
+  font-size: 11px;
+  color: #6a796c;
+}
+.drawing-app label > input:not([type="checkbox"]):not([type="range"]),
+.drawing-app label > select,
+.drawing-app label > textarea {
+  flex-basis: 100%;
+}
+.draw-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 48px;
+  padding: 7px 12px;
+  border-bottom: 1px solid #dce4d9;
+  background: #fafbf8;
+  flex-shrink: 0;
+}
+.draw-header strong {
+  font-size: 15px;
+  margin-right: 8px;
+  color: #365e4e;
+}
+.draw-filename {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 10px;
+  color: #8a9686;
+  font-size: 11px;
+}
+.draw-flex {
+  flex: 1;
+}
+.draw-toolbar,
+.draw-plane-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  min-height: 39px;
+  border-bottom: 1px solid #e0e6db;
+  flex-shrink: 0;
+}
+.draw-toolbar i {
+  height: 20px;
+  width: 1px;
+  background: #dbe2d7;
+  margin: 0 4px;
+}
+.draw-toolbar label {
+  margin: 0 4px;
+  white-space: nowrap;
+}
+.draw-plane-bar {
+  background: #edf2e9;
+  flex-wrap: wrap;
+}
+.draw-plane-bar label {
+  margin: 0;
+  flex-wrap: nowrap;
+}
+.draw-plane-bar label > select {
+  flex-basis: auto;
+  width: 160px;
+}
+.draw-plane-bar .draw-number {
+  width: 90px;
+}
+.draw-plane-bar .draw-number input {
+  width: 50px;
+}
+.draw-plane-bar input[type="range"] {
+  width: 120px;
+}
+.draw-plane-bar > span {
+  font-size: 10px;
+  color: #83927c;
+}
+.draw-workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.draw-left,
+.draw-right {
+  flex-shrink: 0;
+  overflow: auto;
+  background: #f9faf6;
+}
+.draw-left {
+  width: 205px;
+  border-right: 1px solid #dfe5d9;
+}
+.draw-right {
+  width: 260px;
+  border-left: 1px solid #dfe5d9;
+}
+.drawing-app section {
+  padding: 12px;
+  border-bottom: 1px solid #e0e6da;
+}
+.drawing-app h3 {
+  font-size: 11px;
+  font-weight: 600;
+  margin: 8px 0;
+  color: #536e56;
+}
+.drawing-app h3:first-child {
+  margin-top: 0;
+}
+.drawing-app h3 span {
+  float: right;
+  color: #99a58e;
+}
+.draw-create-tabs,
+.draw-preset-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  margin-bottom: 8px;
+}
+.drawing-app .draw-primary {
+  background: #3b6650;
+  border-color: #3b6650;
+  color: #fff;
+}
+.drawing-app .draw-primary:hover:not(:disabled) {
+  background: #2b533d;
+  color: white;
+}
+.draw-help {
+  font-size: 10px;
+  line-height: 1.7;
+  color: #8a9783;
+  margin: 8px 0;
+}
+.draw-object-list {
+  min-height: 130px;
+}
+.draw-object-list > button {
+  display: flex;
+  text-align: left;
+  justify-content: flex-start;
+  width: 100%;
+  margin: 3px 0;
+  padding: 5px;
+  border-color: transparent;
+  background: transparent;
+  white-space: normal;
+}
+.draw-object-list > button.selected {
+  background: #e6efe3;
+  border-color: #c4d6bd;
+}
+.draw-object-list > button > span:nth-child(2) {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.draw-type {
+  color: #99a38f;
+  font-size: 9px;
+  width: 33px;
+  flex-shrink: 0;
+}
+.draw-canvas-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: #fff;
+}
+.draw-svg {
+  display: block;
+  touch-action: none;
+  user-select: none;
+  outline: none;
+}
+.draw-hit {
+  stroke: transparent;
+  stroke-width: 12px;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+.draw-label {
+  cursor: move;
+}
+.draw-handle {
+  fill: #fff;
+  stroke: #3f8b70;
+  stroke-width: 1.5px;
+  cursor: move;
+}
+.draw-plane-hint {
+  position: absolute;
+  left: 12px;
+  top: 10px;
+  pointer-events: none;
+  font-size: 10px;
+  color: #8a9c8a;
+  background: #ffffffd0;
+  border-radius: 5px;
+  padding: 5px 8px;
+}
+.draw-plane-hint small {
+  display: block;
+  font-size: 9px;
+}
+.draw-calculating {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  color: #71866d;
+  font-size: 10px;
+}
+.draw-loading {
+  position: absolute;
+  inset: 0;
+  background: #fff9;
+  display: grid;
+  place-items: center;
+}
+.draw-number {
+  display: grid !important;
+  grid-template-columns: 1fr 90px;
+  align-items: center;
+}
+.draw-number > input {
+  grid-column: 2;
+}
+.draw-fields {
+  display: flex;
+  gap: 6px;
+}
+.draw-fields .draw-number {
+  display: flex !important;
+  flex-direction: column;
+  width: 33%;
+  align-items: stretch;
+  flex: 1;
+  min-width: 0;
+  width: 0;
+  flex-wrap: nowrap;
+}
+.draw-fields .draw-number > input {
+  flex: none !important;
+  height: 29px;
+  width: 100%;
+}
+.draw-plane-bar .draw-number {
+  width: 104px;
+  grid-template-columns: 30px 64px;
+}
+.draw-plane-bar .draw-number > span {
+  white-space: nowrap;
+}
+.draw-plane-bar .draw-number > input {
+  width: 64px;
+}
+.draw-button-row {
+  display: flex;
+  gap: 7px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+.draw-delete {
+  color: #a7674f !important;
+  margin-top: 14px;
+}
+.draw-error {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  color: #956438;
+  background: #fff4df;
+  padding: 7px 12px;
+  font-size: 11px;
+  flex-shrink: 0;
+  max-height: 85px;
+  overflow: auto;
+}
+.draw-error span {
+  flex: 1;
+}
+.draw-error button {
+  padding: 2px !important;
+  min-height: 20px;
+}
+.draw-footer {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  min-height: 26px;
+  padding: 4px 12px;
+  border-top: 1px solid #dfe6d9;
+  font-size: 10px;
+  color: #8c9b83;
+}
+.draw-footer span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.draw-modal-shade {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: #213d3033;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 30px;
+}
+.draw-modal {
+  width: 450px;
+  max-height: 90vh;
+  overflow: auto;
+  border: 1px solid #b9cbb7;
+  padding: 22px;
+  background: #fafcf7;
+  border-radius: 10px;
+  box-shadow: 0 12px 50px #243e3420;
+}
+.draw-modal h2 {
+  font-size: 17px;
+  color: #416347;
+  margin: 0 0 15px;
+}
+.draw-modal p {
+  color: #87947d;
+}
+@media (max-width: 1100px) {
+  .draw-header {
+    flex-wrap: wrap;
+  }
+  .draw-filename {
+    max-width: 110px;
+  }
+  .draw-left {
+    width: 185px;
+  }
+  .draw-right {
+    width: 235px;
+  }
+  .draw-header button {
+    padding: 4px 7px;
+  }
+}
+
+.draw-equation textarea {
+  font:
+    13px ui-monospace,
+    monospace;
+  min-height: 64px;
+  width: 100%;
+}
+.draw-equation-preview {
+  background: #f7f8f5;
+  border-radius: 5px;
+  padding: 6px;
+  min-height: 36px;
+  overflow: auto;
+  max-height: 180px;
+}
+.draw-equation-preview .markdown {
+  padding: 0;
+  font-size: 15px;
+}
+.draw-equation small {
+  color: #a33;
+}
+
+.draw-preset-grid button {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.perpendicular-option { display: flex; align-items: center; gap: 4px; white-space: nowrap; font-size: 12px; }
+.curve-limits { margin-top: 12px; }
+.curve-limits > small { display: block; margin-bottom: 8px; }

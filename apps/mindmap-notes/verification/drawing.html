@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><title>Mathdraw browser verification</title></head>
+<body><div id="root"></div><script type="module">
+// Browser-only test shell: keep all file/window calls inside this mock.
+// Open /verification/drawing.html?drawing&standalone with the Vite dev server.
+window.__TAURI_INTERNALS__ = {
+  metadata: { currentWindow: { label: 'drawing' }, currentWebview: { label: 'drawing' } },
+  invoke: async (command) => command === 'drawing_fonts' ? [] : command === 'drawing_check_text' ? '' : null,
+  transformCallback: () => 1,
+  unregisterCallback: () => {},
+};
+window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener: () => {} };
+await import('/src/main.tsx');
+</script></body></html>

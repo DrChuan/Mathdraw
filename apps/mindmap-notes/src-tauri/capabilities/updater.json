@@ -1,0 +1,11 @@
+{
+  "identifier": "drawing-updater",
+  "windows": [
+    "drawing"
+  ],
+  "permissions": [
+    "updater:allow-check",
+    "updater:allow-download",
+    "updater:allow-install"
+  ]
+}
