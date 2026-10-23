@@ -1,0 +1,58 @@
+{
+  "format": "mathdraw-conditions",
+  "version": 1,
+  "points": "A B C D P E H",
+  "segments": "A B, P A, B C, P B, C D, P C, D A, P D, A E, A C, C E, E H",
+  "curves": [],
+  "conditions": [
+    {
+      "source": "pyramid(P, A, B, C, D)",
+      "enabled": true
+    },
+    {
+      "source": "regularPolygon(A B P)",
+      "enabled": true
+    },
+    {
+      "source": "rhombus(A B C D)",
+      "enabled": true
+    },
+    {
+      "source": "AB=8",
+      "enabled": true
+    },
+    {
+      "source": "\\angle ABC=120",
+      "enabled": true
+    },
+    {
+      "source": "onSegment(E,P B)",
+      "enabled": true
+    },
+    {
+      "source": "PAB\\perp ABC",
+      "enabled": true
+    },
+    {
+      "source": "EH\\perp PAD",
+      "enabled": true
+    },
+    {
+      "source": "coplanar(A D P H)",
+      "enabled": true
+    }
+  ],
+  "placement": {
+    "planeNames": [
+      "A",
+      "B",
+      "C"
+    ],
+    "side": 1,
+    "orientationPoint": "",
+    "keepPlacement": true,
+    "mirrored": false,
+    "driver": "E",
+    "targetPlane": "xy"
+  }
+}

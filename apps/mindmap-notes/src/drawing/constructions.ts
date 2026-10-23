@@ -278,7 +278,7 @@ export function coordinateOnCurve(
   doc: DrawingDocument,
 ): Vec3[] {
   if(curve.parametric) {
-    const p=doc.planes.find(p=>p.id===curve.planeId)!,i=axis === "x"?0:1;
+    const p=curve.frame??doc.planes.find(p=>p.id===curve.planeId)!,i=axis === "x"?0:1;
     return roots(t=>pointAt(curve,t)[i]-value,curve.parametric.tMin,curve.parametric.tMax)
       .map(t=>pointAt(curve,t)).filter(q=>withinCurve(curve,q))
       .map(q=>add(p.origin,add(mul(p.u,q[0]),mul(p.v,q[1]))));
@@ -286,7 +286,7 @@ export function coordinateOnCurve(
   const fn = curveFunction(curve),
     range = curve.range,
     parsed = equation(curve.equation);
-  const plane = doc.planes.find((p) => p.id === curve.planeId)!;
+  const plane = curve.frame??doc.planes.find((p) => p.id === curve.planeId)!;
   if (parsed.type === (axis === "x" ? "y" : "x")) {
     const other = evaluate(parsed.ast, {
       x: value,
@@ -310,7 +310,7 @@ export function coordinateOnCurve(
     axis === "x" ? range[2] : range[0],
     axis === "x" ? range[3] : range[1],
   );
-  const p = doc.planes.find((p) => p.id === curve.planeId)!;
+  const p = curve.frame??doc.planes.find((p) => p.id === curve.planeId)!;
   return solutions.map((t) =>
     add(
       p.origin,

@@ -1,3 +1,5 @@
+import { relationDirection } from "./spatial";
+import {useConstraintMobility} from './useConstraintMobility';
 import { ColorPalette } from "./ColorPalette";
 import { useDrawingColors } from "./colors";
 import {
@@ -100,8 +102,10 @@ import { ToolBar, toolGroups } from "./ToolBar";
 import { insidePlot, plotBounds } from "./viewport";
 import ConstraintWorkbench from "./ConstraintWorkbench";
 import { applyCoordinateFrame } from "./constraints/rebase";
-import { selectedBranch } from "./constraints/document";
+import { selectedBranch,constraintBinding } from "./constraints/document";
 import { useConstraintMotion } from "./useConstraintMotion";
+import { createLocusDrag, inverseLocus, type LocusDrag } from "./locusDrag";
+import { PathProjectionError } from "./pathProjection";
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const editTarget = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
@@ -164,6 +168,7 @@ export default function DrawingWorkbench(props: Props) {
     ),
     [gridSnap, setGridSnap] = useState(false);
   const [dragMode, setDragMode] = useState<"box" | "pan">("box");
+  const [dragHint,setDragHint]=useState("");
   const [help, setHelp] = useState(false);
   const [constraintEditor,setConstraintEditor]=useState<string|null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; hit?: Hit } | null>(
@@ -195,6 +200,8 @@ export default function DrawingWorkbench(props: Props) {
   const object = doc.objects.find((o) => o.id === selection[0]),
     selectedPoint = geometry.points.get(selection[0]),
     edge = geometry.edges.find((e) => e.id === selection[0]);
+  const selectedBinding=constraintBinding(doc,selectedPoint?.object);
+  const selectedInverse=selectedPoint&&!selectedPoint.object?.locked&&!selectedBinding?inverseLocus(doc,selection[0]):undefined;
   const plane = doc.planes.find((p) => p.id === doc.view.planeId)!;
   const update = useCallback(
     (next: DrawingDocument, history = true, phase?: "continuous" | "complete") => {
@@ -209,6 +216,7 @@ export default function DrawingWorkbench(props: Props) {
     setState(next);
   };
   const constraintMotion=useConstraintMotion(docRef,update,onError);
+  useConstraintMobility(doc,docRef,update);
   const choose = (tool: Tool) => {
     if(tool==="axes")setZSign(1);
     setDragMode("box");
@@ -217,7 +225,7 @@ export default function DrawingWorkbench(props: Props) {
     if ((tool === "parallel" || tool === "perpendicular") && selectionRef.current.length === 1) {
       const id = selectionRef.current[0];
       if (geometry.points.has(id)) next.points = [id];
-      else if (geometry.edges.some(e => e.id === id)) next.references = [id];
+      else if (geometry.edges.some(e => e.id === id)||doc.dimension==="3d"&&["polygon","triangle"].includes(geometry.objects.get(id)?.kind??"")) next.references = [id];
     }
     setToolState(next);
     setMenu(null);
@@ -325,6 +333,8 @@ export default function DrawingWorkbench(props: Props) {
     }
   };
   const deleteSelection = (ids: string[] = selectionRef.current) => {
+    const planarMember=docRef.current.objects.find(o=>ids.includes(o.id)&&o.constraintSet&&!ids.includes(o.constraintSet)&&docRef.current.objects.some(s=>s.id===o.constraintSet&&s.kind==='solutionSet'&&(s.problem.mode==='plane'||s.problem.mode==='coordinate')));
+    if(planarMember?.constraintSet){setConstraintEditor(planarMember.constraintSet);return;}
     const managedPoint=docRef.current.objects.find(o=>ids.includes(o.id)&&o.kind === "point"&&o.construction.type === "constraint"&&!ids.includes(o.construction.set));
     if(managedPoint?.kind === "point"&&managedPoint.construction.type === "constraint"){
       setConstraintEditor(managedPoint.construction.set);return;
@@ -630,9 +640,13 @@ export default function DrawingWorkbench(props: Props) {
       }
       if(t === "area"||t === "perimeter"||(t === "length"&&!s.points.length&&hit?.kind==="edge")) {
         if(!hit)throw new Error("请选择要度量的图形");
-        const id=t === "length" ? hit.id : hit.owner;
-        const next=applyDefinition(docRef.current,`${{area:"Area",perimeter:"Perimeter",length:"Length"}[t]}(${rname(id)})`);
-        commitObjects(next.objects.filter(o=>!docRef.current.objects.some(p=>p.id===o.id)));return;
+        let target=t==='length'?hit.id:hit.owner,base=docRef.current,helper:GeometryObject|undefined;
+        if(hit.kind==='face'&&hit.vertices&&!geometry.objects.has(hit.id)) {
+          helper={id:crypto.randomUUID(),kind:'polygon',name:'度量参考面',symbol:nextSymbol(base,'polygon'),points:hit.vertices,hidden:true,style:defaultStyle()};
+          target=helper.id;base=normalizeDrawing({...base,objects:[...base.objects,helper]});
+        }
+        const next=applyDefinition(base,`${{area:"Area",perimeter:"Perimeter",length:"Length"}[t]}(${rname(target,base)})`);
+        commitObjects(next.objects.filter(o=>!docRef.current.objects.some(p=>p.id===o.id)).map(o=>o.id===helper?.id?{...o,auxiliary:true}:o));return;
       }
       if (t === "axes" && s.points.length === 2) {
         if (s.axisPlane) {
@@ -695,6 +709,12 @@ export default function DrawingWorkbench(props: Props) {
         return;
       }
       if ((t === "parallel" || t === "perpendicular") && !s.references.length) {
+        if(doc.dimension==='3d'&&hit?.kind==='face'&&hit.vertices) {
+          const original=docRef.current.objects.find(o=>o.id===hit.id);
+          const face:GeometryObject=original&&(original.kind==='polygon'||original.kind==='triangle')?original:{id:crypto.randomUUID(),kind:'polygon',name:'参考平面',symbol:nextSymbol(combined(s),'polygon'),points:hit.vertices,hidden:true,style:defaultStyle()};
+          const next={...s,references:[face.id],staged:face===original?s.staged:[...s.staged,face]};
+          if(next.points.length)finishPoints(next);else setToolState(next);return;
+        }
         const candidate = s.points.length ? null : snapPoint(combined(s),curves,size,q,alt,gridSnap);
         const crossing = candidate?.construction?.type === "intersection" || candidate?.construction?.type === "curveCoordinate";
         if (hit?.kind === "edge" && !crossing) {
@@ -702,7 +722,7 @@ export default function DrawingWorkbench(props: Props) {
           if(next.points.length) finishPoints(next); else setToolState(next);
           return;
         }
-        if(s.points.length) { onError("已选点，请选择参考直线、坐标轴或一条边"); return; }
+        if(s.points.length) { onError("已选点，请选择参考直线、坐标轴、边或平面"); return; }
         // With no reference yet, points (including implicit intersections) are staged first.
         if(hit && hit.kind !== "point" && !crossing && hit.kind !== "curve") {
           onError("请选择经过的点或参考线"); return;
@@ -806,7 +826,9 @@ export default function DrawingWorkbench(props: Props) {
     }
   };
   const pointer = useRef<{
-    kind: "pan" | "box" | "point" | "label" | "annotation";
+    kind: "pan" | "box" | "point" | "label" | "annotation" | "locus";
+    locus?:LocusDrag;
+    pointerId?:number;
     start: Vec2;
     before: DrawingDocument;
     id?: string;
@@ -830,7 +852,7 @@ export default function DrawingWorkbench(props: Props) {
       curves,
       size,
       q,
-      ["planeFace", "prism", "pyramid", "axes", "reflect", "area", "perimeter", "normal", "fold", "section3", "sectionLines", "sectionLinePoint"].includes(stateRef.current.tool) ||
+      ["planeFace", "prism", "pyramid", "axes", "reflect", "area", "perimeter", "normal", "fold", "section3", "sectionLines", "sectionLinePoint", "parallel", "perpendicular"].includes(stateRef.current.tool) ||
         stateRef.current.tool === "select",
     ));
   const executeSelection = (
@@ -870,12 +892,13 @@ export default function DrawingWorkbench(props: Props) {
     const textTarget = (e.target as Element)
       .closest("[data-owner]")
       ?.getAttribute("data-owner");
+    const trace=p&&hit.kind!=="label"&&!constraintBinding(docRef.current,p.object)?inverseLocus(docRef.current,hit.id):undefined;
     const kind =
       hit.kind === "label"
         ? p
           ? "label"
           : "annotation"
-        : p &&
+        : trace ? "locus" : p &&
             (p.object?.construction.type === "free" ||
               p.object?.construction.type === "constraint" ||
               p.object?.construction.type === "onPath" || p.object?.construction.type === "onAxis")
@@ -883,13 +906,21 @@ export default function DrawingWorkbench(props: Props) {
           : null;
     if (!kind) return;
     if (p?.object?.locked) return;
-    if (kind === "point" && p?.object?.parameters) {
+    const binding=constraintBinding(docRef.current,p?.object);
+    if(kind!=="label"&&binding&&!binding.movable)return;
+    setDragHint("");
+    let locus:LocusDrag|undefined;
+    if(kind==="locus") {
+      try{locus=createLocusDrag(docRef.current,trace!,size);setDragHint("沿轨迹拖动从动点，反向调整主动点");}
+      catch(error){onError(msg(error));return;}
+    }
+    if (kind === "point" && p?.object?.parameters && !binding) {
       onError("此点的坐标引用了数值对象，请调整数值滑块或编辑定义"); return;
     }
     const old = p?.p ?? (obj?.kind === "label" ? obj.position : undefined);
     if (
       kind === "point" &&
-      p?.object?.construction.type !== "constraint" &&
+      !binding &&
       old &&
       Math.abs(dot(sub(old, plane.origin), cross(plane.u, plane.v))) > 1e-6
     ) {
@@ -898,6 +929,8 @@ export default function DrawingWorkbench(props: Props) {
     }
     pointer.current = {
       kind,
+      locus,
+      pointerId:e.pointerId,
       start: q,
       before: docRef.current,
       id: textTarget ?? hit.id,
@@ -905,9 +938,7 @@ export default function DrawingWorkbench(props: Props) {
       offset: p?.object?.labelOffset,
       moved: false,
     };
-    if(kind === "point"&&p?.object?.construction.type === "constraint") {
-      const c=p.object.construction,set=docRef.current.objects.find(o=>o.id===c.set);
-      if(set?.kind!=="solutionSet"||selectedBranch(set).reference.includes(c.point)){pointer.current=null;return;}
+    if(kind === "point"&&binding) {
       constraintMotion.begin();
     }
     svg.current?.setPointerCapture(e.pointerId);
@@ -915,7 +946,10 @@ export default function DrawingWorkbench(props: Props) {
   const draggablePoint=(hit:Hit)=>{
     if(hit.kind!=="point")return false;
     const p=geometry.points.get(hit.id),o=p?.object;
-    if(!o||o.locked||o.parameters)return false;
+    if(!o||o.locked)return false;
+    const binding=constraintBinding(docRef.current,o);if(binding)return binding.movable;
+    if(inverseLocus(docRef.current,hit.id))return true;
+    if(o.parameters)return false;
     const c=o.construction;
     if(c.type==="constraint") {
       const set=docRef.current.objects.find(o=>o.id===c.set);
@@ -925,6 +959,10 @@ export default function DrawingWorkbench(props: Props) {
   };
   const pointRole=(hit:Hit)=>{
     const p=geometry.points.get(hit.id)?.object;
+    const binding=constraintBinding(docRef.current,p);
+    if(binding)return binding.reference?"固定参照点":binding.movable?(binding.set.driver===binding.point?"当前动点":"动点"):"约束确定的点";
+    const trace=inverseLocus(docRef.current,hit.id);
+    if(trace?.derived?.type==="locus")return `轨迹从动点 · 反向调整 ${rname(trace.derived.driver)}`;
     if(!p||p.construction.type!=="constraint")return draggablePoint(hit)?"可拖动":"参照 / 派生点";
     const c=p.construction,set=docRef.current.objects.find(o=>o.id===c.set);
     return set?.kind==="solutionSet"&&set.driver===c.point?"当前动点":"动点";
@@ -1017,6 +1055,9 @@ export default function DrawingWorkbench(props: Props) {
     const drag = pointer.current,
       s = stateRef.current;
     if (drag) {
+      // Pointer capture delivers positions outside the SVG as well. Keep the
+      // last valid point until the cursor re-enters, including on pointer-up.
+      if((drag.kind === "point"||drag.kind === "locus")&&!insidePlot(size,q))return;
       const dx = q[0] - drag.start[0],
         dy = q[1] - drag.start[1];
       if (Math.abs(dx) + Math.abs(dy) < 3 && !drag.moved) return;
@@ -1037,6 +1078,12 @@ export default function DrawingWorkbench(props: Props) {
           "continuous",
         );
       else if (drag.kind === "box") setBox({ start: drag.start, end: q });
+      else if(drag.kind === "locus"&&drag.locus&&drag.old) {
+        const start=screenPoint(drag.before,size,drag.old);
+        const result=drag.locus.move([start[0]+dx,start[1]+dy]);
+        setDragHint(result.hint);
+        if(result.document)update(result.document,false,"continuous");
+      }
       else if (drag.id)
         try {
           const obj = drag.before.objects.find((o) => o.id === drag.id);
@@ -1060,21 +1107,22 @@ export default function DrawingWorkbench(props: Props) {
                 drag.before,
               );
             if (obj.kind === "label") patch = { position };
-            else if(obj.kind === "point"&&obj.construction.type === "constraint") {
-              constraintMotion.move(obj.construction.set,obj.construction.point,position);return;
+            else if(obj.kind === "point"&&constraintBinding(docRef.current,obj)) {
+              const binding=constraintBinding(docRef.current,obj)!;
+              if(binding.movable)constraintMotion.move(binding.set.id,binding.point,position);return;
             }
             else if (obj.kind === "point" && obj.construction.type === "onAxis") {
               const c=obj.construction, axis=coordinateAxis(drag.before,c.axis,c.planeId);
               const parameter=dot(sub(position,axis.origin),axis.direction);
               patch={construction:{...c,parameter:drag.before.dimension === "3d" ? Math.max(0,parameter) : parameter}};
             }
-            else if (obj.kind === "point")
-              patch = {
-                construction:
-                  obj.construction.type === "onPath"
-                    ? pointOnPath(drag.before, obj.construction.path, position,obj.construction.parameter)
-                    : { type: "free", position },
-              };
+            else if (obj.kind === "point"&&obj.construction.type === "onPath") {
+              const current=docRef.current.objects.find(o=>o.id===obj.id);
+              const previous=current?.kind==="point"&&current.construction.type==="onPath"
+                ?current.construction.parameter:obj.construction.parameter;
+              patch={construction:pointOnPath(docRef.current,obj.construction.path,position,previous)};
+            }
+            else if (obj.kind === "point")patch={construction:{type:"free",position}};
           }
           update(
             {
@@ -1086,8 +1134,11 @@ export default function DrawingWorkbench(props: Props) {
             false,
             "continuous",
           );
+          if(drag.kind==="point")setDragHint("");
         } catch (e) {
-          onError(msg(e));
+          if(drag.kind==="point"&&e instanceof PathProjectionError)
+            setDragHint("此处无法沿原曲线继续拖动，已保留上一有效位置");
+          else onError(msg(e));
         }
       return;
     }
@@ -1158,6 +1209,9 @@ export default function DrawingWorkbench(props: Props) {
   };
   useEffect(()=>cancelMove,[doc.id]);
   const scheduleMove = (e:ReactPointerEvent) => {
+    const drag=pointer.current;
+    // Do not replace an unprocessed in-canvas sample with an outside event.
+    if(drag&&(drag.kind==="point"||drag.kind==="locus")&&!insidePlot(size,local(e)))return;
     latestMove.current=e;
     if(moveFrame.current!==null)return;
     moveFrame.current=requestAnimationFrame(()=>{
@@ -1167,16 +1221,19 @@ export default function DrawingWorkbench(props: Props) {
     });
   };
   const up = (e: ReactPointerEvent) => {
+    const pending=latestMove.current;
     cancelMove();
     const drag = pointer.current;
     if (!drag) return;
+    if(pending&&(drag.kind==="point"||drag.kind==="locus"))move(pending);
     move(e);
     pointer.current = null;
+    setDragHint("");
     try {
       svg.current?.releasePointerCapture(e.pointerId);
     } catch {}
     const draggedPoint=drag.before.objects.find(o=>o.id===drag.id);
-    if(drag.kind === "point"&&draggedPoint?.kind === "point"&&draggedPoint.construction.type === "constraint")return;
+    if(drag.kind === "point"&&draggedPoint?.kind === "point"&&constraintBinding(docRef.current,draggedPoint))return;
     if (drag.kind === "box") {
       const end = local(e);
       if (drag.moved) {
@@ -1216,6 +1273,11 @@ export default function DrawingWorkbench(props: Props) {
       }
       if (e.key === "Escape") {
         if (editTarget(e.target)) return;
+        if(pointer.current?.kind==="locus") {
+          const drag=pointer.current;pointer.current=null;cancelMove();
+          if(drag.pointerId!==undefined&&svg.current?.hasPointerCapture(drag.pointerId))svg.current.releasePointerCapture(drag.pointerId);
+          update(drag.before,false,"complete");setDragHint("");e.preventDefault();return;
+        }
         if (menu || candidates) {
           setMenu(null);
           setCandidates(null);
@@ -1382,36 +1444,14 @@ export default function DrawingWorkbench(props: Props) {
         ),
       );
     } catch {}
-  if (
-    (state.tool === "parallel" || state.tool === "perpendicular") &&
-    ((state.references.length && snap) || (state.points.length && hover?.kind === "edge"))
-  ) {
-    const e = geometry.edges.find((e) => e.id === state.references[0] || (!state.references.length && state.points.length && e.id === hover?.id));
-    if (e) {
-      const a = geometry.points.get(e.a)?.p,
-        b = geometry.points.get(e.b)?.p;
-      if (a && b) {
-        let direction = sub(b, a);
-        if (state.tool === "perpendicular")
-          direction = cross(cross(plane.u, plane.v), direction);
-        if (norm(direction) > 1e-8) {
-          const position = state.points.length ? overlayPoints.points.get(state.points[0])!.p : snap!.position;
-          const center = screenPoint(doc, size, position),
-            q = screenPoint(doc, size, add(position, unit(direction))),
-            dx = q[0] - center[0],
-            dy = q[1] - center[1],
-            length = Math.hypot(dx, dy);
-          if (length > 1e-8) {
-            const extent = Math.hypot(...size) / length;
-            previewLines.push([
-              [center[0] - dx * extent, center[1] - dy * extent],
-              [center[0] + dx * extent, center[1] + dy * extent],
-            ]);
-          }
-        }
-      }
-    }
-  }
+  if((state.tool==='parallel'||state.tool==='perpendicular')&&((state.references.length&&snap)||(state.points.length&&(hover?.kind==='edge'||hover?.kind==='face'))))try {
+    const base=combined(state),ref=state.references[0]??hover!.id;
+    const position=state.points.length?overlayPoints.points.get(state.points[0])!.p:snap!.position;
+    const face=geometry.objects.get(ref),planeSource=face&&(face.kind==='polygon'||face.kind==='triangle')?{type:'polygon' as const,polygon:ref}:undefined;
+    const direction=relationDirection(state.tool,position,planeSource?undefined:resolveGeometry(base).straightReference(ref),planeSource?resolveGeometry(base).plane(planeSource):undefined,plane,doc.dimension==='3d');
+    const center=screenPoint(doc,size,position),q=screenPoint(doc,size,add(position,direction)),dx=q[0]-center[0],dy=q[1]-center[1],length=Math.hypot(dx,dy);
+    if(length>1e-8){const extent=Math.hypot(...size)/length;previewLines.push([[center[0]-dx*extent,center[1]-dy*extent],[center[0]+dx*extent,center[1]+dy*extent]]);}
+  }catch{/* Invalid or non-unique constructions have no misleading preview. */}
   const handleRefs = new Set<string>();
   for (const id of selection) {
     if (axisReference(id)) continue;
@@ -1970,6 +2010,7 @@ export default function DrawingWorkbench(props: Props) {
               update(docRef.current,false,"complete");
               const d = pointer.current;
               pointer.current = null;
+              setDragHint("");
               setBox(null);
               if (d && d.kind !== "pan") update(d.before, false);
             }}
@@ -2464,7 +2505,7 @@ export default function DrawingWorkbench(props: Props) {
                       .join(", ")}
                     )
                   </p>
-                  {selectedPoint.object?.construction.type === "free" && !selectedPoint.object.parameters &&
+                  {selectedPoint.object?.construction.type === "free" && !selectedPoint.object.parameters && !selectedBinding &&
                     selectedPoint.p.map((v, i) => (
                       <NumberField
                         key={i}
@@ -2519,8 +2560,8 @@ export default function DrawingWorkbench(props: Props) {
                       </label>
                     </>
                   )}
-                  {selectedPoint.object?.construction.type !== "free" && (
-                    <small>此点由来源构造，拖动不会改为自由点。</small>
+                  {(selectedBinding||selectedPoint.object?.construction.type !== "free") && (
+                    <small>{selectedBinding?.reference?"固定参照点；如需改变参照，请在条件解集中切换参照结构。":selectedBinding?"此点受条件管理；拖动会联动求解并校验全部条件，不能独立改动坐标。":"此点由来源构造，拖动不会改为自由点。"}</small>
                   )}
                 </>
               )}
@@ -2729,10 +2770,11 @@ export default function DrawingWorkbench(props: Props) {
         )}
       </main>
       <div className="tool-instructions" role="status">
-        <strong>{state.tool === "select" ? dragMode === "pan"
+        <strong>{dragHint || (state.tool === "select" ? dragMode === "pan"
           ? "平移画布：按住鼠标拖动 · 滚轮缩放 · 点“选择 / 框选”返回编辑"
+          : selectedInverse?.derived?.type==="locus" ? `拖动从动点 ${rname(selection[0])}，沿轨迹反向调整主动点 ${rname(selectedInverse.derived.driver)} · 拖动点名可调整标签`
           : "选择 / 框选：点击选对象 · 空白拖动框选 · 拖动自由点 · 空格临时平移"
-          : `${toolGroups.flatMap(g => g.items).find(([id]) => id === state.tool)?.[1] ?? "作图"} · ${toolStep(state)}`}</strong>
+          : `${toolGroups.flatMap(g => g.items).find(([id]) => id === state.tool)?.[1] ?? "作图"} · ${toolStep(state)}`)}</strong>
         <span>
           {snap && state.tool !== "select"
             ? snap.hint

@@ -17,7 +17,7 @@
 - Vite 生产构建：通过。
 - Windows x64 正式版：2026-10-20 已完成 MSVC release 编译与 NSIS 打包，产品版本 0.1.0。安装包和独立程序的版本信息、PE 架构及 SHA-256 与构建清单核对通过；本轮未安装或启动桌面程序。
 
-打包文件位于项目根目录 `artifacts/mathdraw/windows/`：
+打包文件位于数学绘图项目的 `产物/windows/`：
 
 - `Mathdraw_0.1.0_x64-setup.exe`：5,526,458 字节，SHA-256 `8F72405B224CE6BAC4FA8540A721900D1FA0B05C7BA52B42200D13A220CB3607`。
 - `mathdraw.exe`：18,174,464 字节，SHA-256 `AB5587934733AE25B536FB3C3F19746229EE16B732AE96C07CFCB3E97975B3A6`。

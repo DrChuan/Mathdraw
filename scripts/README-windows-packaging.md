@@ -1,6 +1,6 @@
 # Windows EXE 打包
 
-在 **Windows 10/11 x64** 上使用完整项目源码（保留 apps/mindmap-notes 和 scripts 的相对位置）。本脚本不在 macOS 上交叉编译 Windows 程序。
+在 **Windows 10/11 x64** 上使用完整项目源码。本脚本不在 macOS 上交叉编译 Windows 程序。
 
 ## 准备环境
 
@@ -11,7 +11,7 @@
 
 ## 使用
 
-在项目根目录双击 `打包数学绘图Windows.cmd`，默认只构建独立的 Mathdraw。也可在 PowerShell 中运行：
+双击 `打包数学绘图Windows.cmd`，默认只构建独立的 Mathdraw。也可从 仓库根目录在 PowerShell 中运行：
 
 ```powershell
 .\scripts\build-mathdraw-windows.ps1
@@ -30,7 +30,7 @@
 - `artifacts/mathdraw/windows/Mathdraw_…_x64-setup.exe`：安装程序。
 - `artifacts/mathdraw/windows/mathdraw.exe`：单独启动的程序文件，需要已安装 WebView2 Runtime。
 - `artifacts/mathdraw/windows/build-info.json`：本次成功输出的路径、构建时间、Node 版本与 SHA-256。
-- 加 `-IncludeNotes` 时，Mindgrove 对应输出在 `artifacts/mindgrove/windows/`。
+- 加 `-IncludeNotes` 时，Mindgrove 对应输出在 `apps/mindmap-notes/artifacts/mathdraw/windows/`。
 
 脚本在命令失败或输出缺失时停止，不把旧文件报告成本轮成功构建。输出没有代码签名。
 
@@ -50,7 +50,7 @@ XWIN_ARCH=x86_64 XWIN_CACHE_DIR="$PWD/.build-cache/xwin" npm --prefix apps/mindm
 
 正式打包先设置 `TAURI_SIGNING_PRIVATE_KEY` 为原更新私钥的文件路径，`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 为其密码（当前密钥无密码）。必须沿用同一密钥；更换密钥会导致已安装程序拒绝更新。私钥请离线备份，不得上传 GitHub 或放进源码压缩包。此机器的密钥位于项目 `.build-cache/signing/`，已从 Git 排除，文件仅当前用户可读。
 
-仅本机开发、不发布更新时，可以使用 `-UnsignedDevelopment` 跳过更新产物签名。此类构建不可作为正式更新发布。
+仅本机开发、不发布更新时，可以使用 `-UnsignedDevelopment` 跳过更新artifacts/mathdraw签名。此类构建不可作为正式更新发布。
 
 发布时将安装包、独立 EXE、Mac ZIP、Mac 更新 tar.gz 以及安装包和 tar.gz 对应的 `.sig` 放进 `artifacts/mathdraw/releases/<版本>/`，运行：
 

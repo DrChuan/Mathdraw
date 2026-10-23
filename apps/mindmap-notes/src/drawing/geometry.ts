@@ -1,6 +1,6 @@
-import { reflectedCurve, tangentCandidates, withinDerivedCurve } from "./advanced";
+import { reframeCurve,reflectedCurve, tangentCandidates, withinDerivedCurve, pointConstrainedToCurve } from "./advanced";
 import { angleMark, defaultAngleRadius } from "./angleMark";
-import { exactLocus, cartesianLocus } from "./locus";
+import { exactLocus, cartesianLocus,locusDocument,naturalLocusParameter } from "./locus";
 import {
   circumsphere,
   insphere,
@@ -23,7 +23,7 @@ import {
   type WorkPlane,
   type DrawingPlaneSource,
 } from "./types";
-import { sourcePlane,planeDependencies,simplestNormal,sectionLoops,type PlaneGeometry } from "./spatial";
+import { sourcePlane,relationDirection,planeDependencies,simplestNormal,sectionLoops,type PlaneGeometry } from "./spatial";
 import { rotateAboutAxis } from "./fold";
 import { pointOnImplicit } from "./pathProjection";
 import { equation, evaluate, parseExpression, isLineEquation } from "./expression";
@@ -32,7 +32,8 @@ import { axisId, axisReference } from "./axes";
 import { pointAt, parameterCrossings, withinCurve, nearestParameter } from "./parametric";
 import { conicFoci, circleCenter, conicCoefficients } from "./conics";
 import { conicIntersections, type Quadratic } from "./quadratic";
-import { constraintPoint, solutionMesh, validateSolutionSet, validPose } from "./constraints/document";
+import { constraintPoint, solutionMesh, validateSolutionSet, validPose,constraintHidden,constraintPointName } from "./constraints/document";
+import { roundGeometry,curveGeometry } from "./constraints/measures";
 import { shellTopology } from "./polyhedra";
 import { local as inPose, world as fromPose } from "./constraints/math";
 export const add = (a: Vec3, b: Vec3): Vec3 => [
@@ -404,11 +405,21 @@ function computeGeometry(doc: DrawingDocument) {
     visitingCurves.add(id);
     try {
       let result = source;
+      if(source.declaration) {
+        const set=objects.get(source.constraintSet!);if(set?.kind!=="solutionSet")throw new Error("声明曲线所属的条件解集不存在");
+        const curve=set.problem.curves?.find(c=>c.id===source.declaration!.id);if(!curve)throw new Error("声明曲线不存在");
+        const p=Object.fromEntries([...new Set([...curve.points,...(curve.plane??[])])].map(n=>{
+          const point=doc.objects.find(o=>o.kind==="point"&&o.constraintSet===set.id&&o.constraintPointName===n);
+          return [n,point?resolve(point.id).p:constraintPoint(set,n)];
+        }));
+        curveGeometry(curve,p);
+      }
       if(source.parametric && source.parametric.tMin>=source.parametric.tMax) throw new Error("参数起点必须小于终点");
       if (source.circle) {
         const c = source.circle,
           ps = c.points.map((id) => resolve(id).p),
-          plane = doc.planes.find((p) => p.id === source.planeId)!;
+          working = doc.planes.find((p) => p.id === source.planeId)!;
+        const plane=doc.dimension==='3d'?(c.type==='threePoint'||c.type==='incircle'?{...planeFromPoints(ps[0],ps[1],ps[2],source.id),id:source.planeId}:{...working,origin:ps[0]}):working;
         if (
           ps.some(
             (p) =>
@@ -430,7 +441,7 @@ function computeGeometry(doc: DrawingDocument) {
         if (radius < 1e-9) throw new Error("半径为零，圆暂时失效");
         const [x, y] = toPlane(plane, center);
         result = {
-          ...source,
+          ...source,...(doc.dimension==="3d"?{frame:plane}:{}),
           equation: `(x-(${x}))^2+(y-(${y}))^2=(${radius})^2`,
         };
       }
@@ -438,25 +449,30 @@ function computeGeometry(doc: DrawingDocument) {
         const c=source.derived,plane=doc.planes.find(p=>p.id===source.planeId)!;
         if(c.type === "reflection") {
           const ref=straightReference(c.axis); if(!ref.a||!ref.b) throw new Error("对称轴必须是直线或边");
-          const original=getCurve(c.source);if(original.planeId!==source.planeId)throw new Error("对称图形必须在同一工作平面");
-          result={...source,...reflectedCurve(original,toPlane(plane,ref.a),toPlane(plane,ref.b)),reflectionInput:{source:original,a:toPlane(plane,ref.a),b:toPlane(plane,ref.b)}};
+          const original=getCurve(c.source),frame=original.frame??doc.planes.find(p=>p.id===original.planeId)!;
+          if(doc.dimension==='3d') {
+            const d=sub(ref.b,ref.a),reflect=(p:Vec3)=>sub(mul(add(ref.a,mul(d,dot(sub(p,ref.a),d)/dot(d,d))),2),p),origin=reflect(frame.origin);
+            result={...source,equation:original.equation,parametric:original.parametric,frame:{...frame,origin,u:sub(reflect(add(frame.origin,frame.u)),origin),v:sub(reflect(add(frame.origin,frame.v)),origin)}};
+          } else result={...source,...reflectedCurve(original,toPlane(frame,ref.a),toPlane(frame,ref.b)),reflectionInput:{source:original,a:toPlane(frame,ref.a),b:toPlane(frame,ref.b)}};
         } else if(c.type === "tangent") {
-          const curve=getCurve(c.curve),p=resolve(c.point).p;
-          if(curve.planeId!==source.planeId||Math.abs(dot(sub(p,plane.origin),unit(cross(plane.u,plane.v))))>1e-7)throw new Error("点与曲线必须在同一工作平面");
+          const curve=getCurve(c.curve),p=resolve(c.point).p,curvePlane=curve.frame??plane;
+          if(Math.abs(dot(sub(p,curvePlane.origin),unit(cross(curvePlane.u,curvePlane.v))))>1e-7)throw new Error("点与曲线必须在同一工作平面");
           const key=`${c.curve}:${c.point}`;
-          let candidates=tangents.get(key);if(!candidates){candidates=tangentCandidates(curve,toPlane(plane,p));tangents.set(key,candidates);}
-          const uv=toPlane(plane,p);
+          let candidates=tangents.get(key);if(!candidates){candidates=tangentCandidates(curve,toPlane(curvePlane,p),pointConstrainedToCurve(doc,c.point,c.curve));tangents.set(key,candidates);}
+          const uv=toPlane(curvePlane,p);
           // At tangency the two real branches merge into the same line.
           const merged=c.branch===1 && candidates.length===1 &&
             Math.hypot(candidates[0].point[0]-uv[0],candidates[0].point[1]-uv[1])<1e-7;
           const candidate=candidates[c.branch] ?? (merged ? candidates[0] : undefined);
           if(!candidate)throw new Error("该位置没有对应的实切线");
           const {point:q,direction:d}=candidate;
-          result={...source,equation:`(${d[1]})*(x-(${q[0]}))-(${d[0]})*(y-(${q[1]}))=0`};
+          result={...source,frame:curvePlane,equation:`(${d[1]})*(x-(${q[0]}))-(${d[0]})*(y-(${q[1]}))=0`};
         } else {
-          const base={...doc,objects:doc.objects.filter(o=>!(o.kind==="curve"&&o.derived?.type==="locus"))};
+          const base=locusDocument(doc,c.driver,c.follower);
           const exact=exactLocus(base,c.driver,c.follower,source.planeId);
-          result=exact ? {...source,parametric:{x:exact[0],y:exact[1],tMin:c.min,tMax:c.max},resolvedDefinition:cartesianLocus(exact) ?? `x(t)=${exact[0]}, y(t)=${exact[1]}`} :
+          const natural=exact&&c.natural?naturalLocusParameter(base,c.driver,exact):undefined,xy=natural?.xy??exact;
+          result=xy ? {...source,parametric:{x:xy[0],y:xy[1],tMin:natural?.min??c.min,tMax:natural?.max??c.max},resolvedDefinition:cartesianLocus(exact!) ?? `x(t)=${xy[0]}, y(t)=${xy[1]}`,
+            ...(natural?{locusRangeDescription:"主动点的完整自然范围（无界参数已重新参数化）；方程包含极限位置，原构造失效的孤立位置不作为有效构造点。"}:{})} :
             {...source,locusInput:{document:base,...c},resolvedDefinition:"数值轨迹（未确定精确方程）"};
         }
       }
@@ -473,29 +489,10 @@ function computeGeometry(doc: DrawingDocument) {
     if (visitingLines.has(obj.id)) throw new Error("直线构造循环");
     visitingLines.add(obj.id);
     try {
-      const c = obj.relation,
-        plane = doc.planes.find((p) => p.id === c.planeId)!,
-        normal = cross(plane.u, plane.v);
-      let a: Vec3, direction: Vec3;
-      if (c.type === "bisector") {
-        const p = resolve(obj.points[0]).p,
-          q = resolve(obj.points[1]).p;
-        a = lerp(p, q, 0.5);
-        direction = cross(normal, sub(q, p));
-      } else {
-        const ref = straightReference(c.reference!);
-        if (!ref.a || !ref.b) throw new Error("参考对象不是直线或边");
-        a = resolve(obj.points[0]).p;
-        direction = sub(ref.b, ref.a);
-        if (c.type === "perpendicular") direction = cross(normal, direction);
-      }
-      if (norm(direction) < 1e-9)
-        throw new Error("参考方向失效，请选择合适的工作平面");
-      if (
-        c.type !== "parallel" &&
-        Math.abs(dot(direction, normal)) > 1e-6 * norm(direction)
-      )
-        throw new Error("方向不在工作平面内");
+      const c=obj.relation,plane=doc.planes.find(p=>p.id===c.planeId)!;
+      const ref=c.type==='bisector'?{a:resolve(obj.points[0]).p,b:resolve(obj.points[1]).p}:c.plane?undefined:straightReference(c.reference!);
+      const a=c.type==='bisector'?lerp(ref!.a,ref!.b,.5):resolve(obj.points[0]).p;
+      const direction=relationDirection(c.type,a,ref,c.plane?getPlane(c.plane):undefined,plane,doc.dimension==='3d');
       return [a, add(a, unit(direction))];
     } finally {
       visitingLines.delete(obj.id);
@@ -537,6 +534,10 @@ function computeGeometry(doc: DrawingDocument) {
       const c = obj.construction;
       let mesh: Mesh;
       if (!c) mesh = solidMesh(obj);
+      else if(c.type === "roundPoints") {
+        if(!["cylinder","cone","coneFrustum","sphere"].includes(obj.shape))throw new Error("按点定义的曲面几何体类型无效");
+        mesh=solidMesh({...obj,...roundGeometry(obj.shape as "cylinder"|"cone"|"coneFrustum"|"sphere",c.points.map(id=>resolve(id).p)),rotation:[0,0,0]});
+      }
       else if(c.type === "faces") {
         const polygons=c.faces.map(face=>{
           const f=objects.get(face);if(!f||(f.kind!=="polygon"&&f.kind!=="triangle"))throw new Error("多面体引用的面不存在");return f;
@@ -711,8 +712,7 @@ function computeGeometry(doc: DrawingDocument) {
       cached = intersectionCache.get(key);
     if (cached) return cached;
     if (first === second) throw new Error("不能选择同一个对象求交点");
-    const a = reference(first),
-      b = reference(second);
+    let a = reference(first), b = reference(second);
     let result: Vec3[];
     if (a.a && a.b && b.a && b.b) {
       const u = sub(a.b, a.a),
@@ -739,12 +739,14 @@ function computeGeometry(doc: DrawingDocument) {
             ? b.obj
             : undefined;
       if (!curve) throw new Error("不支持的交点对象");
-      const plane = doc.planes.find((p) => p.id === curve.planeId)!;
+      const plane = curve.frame??doc.planes.find((p) => p.id === curve.planeId)!;
+      const align=(r:ReturnType<typeof reference>):ReturnType<typeof reference>=>{const c=r.obj;if(c.kind!=='curve')return r;return {obj:reframeCurve(c,c.frame??doc.planes.find(p=>p.id===c.planeId)!,plane)};};
+      a=align(a);b=align(b);
       const fn = (r: ReturnType<typeof reference>) => {
         if (r.obj.kind === "curve") {
-          if (r.obj.planeId !== curve.planeId)
-            throw new Error("曲线必须位于同一工作平面");
-          return curveFunction(r.obj);
+          const otherCurve=r.obj,other=otherCurve.frame??doc.planes.find(p=>p.id===otherCurve.planeId)!,n=unit(cross(plane.u,plane.v)),m=unit(cross(other.u,other.v));
+          if(norm(cross(n,m))>1e-7||Math.abs(dot(sub(other.origin,plane.origin),n))>1e-7)throw Error("两条空间曲线不共面；当前求交仅支持共面曲线");
+          const f=curveFunction(r.obj);return (x:number,y:number)=>{const q=toPlane(other,fromPlane(plane,x,y));return f(...q);};
         }
         const p = toPlane(plane, r.a!),
           q = toPlane(plane, r.b!);
@@ -757,7 +759,7 @@ function computeGeometry(doc: DrawingDocument) {
         return (x: number, y: number) =>
           (x - p[0]) * (q[1] - p[1]) - (y - p[1]) * (q[0] - p[0]);
       };
-      for (const r of [a,b]) if(r.obj.kind === "curve" && r.obj.planeId !== curve.planeId) throw new Error("曲线必须位于同一工作平面");
+
       const param=a.obj.kind === "curve" && a.obj.parametric ? a : b.obj.kind === "curve" && b.obj.parametric ? b : undefined;
       const other=param===a?b:a;
       const paramCurve=param?.obj.kind === "curve" ? param.obj : undefined;
@@ -783,7 +785,7 @@ function computeGeometry(doc: DrawingDocument) {
           }),
         );
     }
-    result=result.filter(p=>[a,b].every(r=>{const c=r.obj;if(c.kind!=="curve")return true;const uv=toPlane(doc.planes.find(p=>p.id===c.planeId)!,p);return withinCurve(c,uv)&&(c.followView!==false||(uv[0]>=c.range[0]-1e-8&&uv[0]<=c.range[1]+1e-8&&uv[1]>=c.range[2]-1e-8&&uv[1]<=c.range[3]+1e-8));}));
+    result=result.filter(p=>[reference(first),reference(second)].every(r=>{const c=r.obj;if(c.kind!=="curve")return true;const uv=toPlane(doc.planes.find(p=>p.id===c.planeId)!,p);return withinCurve(c,uv)&&(c.followView!==false||(uv[0]>=c.range[0]-1e-8&&uv[0]<=c.range[1]+1e-8&&uv[1]>=c.range[2]-1e-8&&uv[1]<=c.range[3]+1e-8));}));
     intersectionCache.set(key, result);
     return result;
   };
@@ -816,7 +818,15 @@ function computeGeometry(doc: DrawingDocument) {
     try {
       const c = object.construction;
       let p: Vec3;
-      if (c.type === "origin") p = doc.coordinateFrame?.origin ?? [0,0,0];
+      const owner=object.constraintSet&&objects.get(object.constraintSet);
+      const ownedName=owner&&owner.kind==='solutionSet'?constraintPointName(owner,object):undefined;
+      if(c.type!=="constraint"&&owner&&owner.kind==="solutionSet"&&ownedName)
+        p=constraintPoint(owner,ownedName);
+      else if (c.type === "origin") p = doc.coordinateFrame?.origin ?? [0,0,0];
+      else if(c.type==="planeOffset") {
+        const frame=getPlane(c.plane),u=unit(frame.u),n=unit(cross(frame.u,frame.v)),v=cross(n,u);
+        p=add(resolve(c.anchor).p,add(mul(u,c.offset[0]),add(mul(v,c.offset[1]),mul(n,c.offset[2]))));
+      }
       else if(c.type==="planeOrigin"||c.type==="planeNormal") {
         const plane=getPlane(c.plane),raw=cross(plane.u,plane.v);
         if(norm(raw)<1e-10)throw new Error("平面退化，法向量暂时失效");
@@ -833,15 +843,15 @@ function computeGeometry(doc: DrawingDocument) {
       else if (c.type === "curveCenter") {
         const curve = getCurve(c.curve), center = circleCenter(curve.equation);
         if (!center) throw new Error("圆心暂时失效，方程需为有效圆");
-        p = fromPlane(doc.planes.find(p => p.id === curve.planeId)!, ...center);
+        p = fromPlane(curve.frame??doc.planes.find(p => p.id === curve.planeId)!, ...center);
       }
       else if (c.type === "focus") {
         const curve = getCurve(c.curve), foci = conicFoci(curve.equation, curve.preset);
         const focus = foci?.[c.index];
         if (!focus) throw new Error("圆锥曲线退化或焦点暂时失效");
-        p = fromPlane(doc.planes.find(p => p.id === curve.planeId)!, ...focus);
+        p = fromPlane(curve.frame??doc.planes.find(p => p.id === curve.planeId)!, ...focus);
       }
-      else if (c.type === "free") p = c.position;
+      else if (c.type === "free") p=c.position;
       else if (c.type === "alias") p = resolve(c.point).p;
       else if(c.type === "rotation") {
         numeric.get(c.angle);const angle=numeric.numbers.get(c.angle);if(angle===undefined)throw new Error("翻折角暂时失效");
@@ -868,7 +878,7 @@ function computeGeometry(doc: DrawingDocument) {
         if (path.obj.kind === "curve") {
           if(path.obj.locusInput)throw new Error("数值轨迹仅用于显示，请在来源构造上创建关联点");
           const curve = path.obj,
-            plane = doc.planes.find((p) => p.id === curve.planeId)!,
+            plane = curve.frame??doc.planes.find((p) => p.id === curve.planeId)!,
             parsed = equation(curve.equation);
           if(curve.parametric) {
             if(c.parameter<curve.parametric.tMin || c.parameter>curve.parametric.tMax) throw new Error("曲线点超出参数区间");
@@ -970,7 +980,7 @@ function computeGeometry(doc: DrawingDocument) {
           const curve=getCurve(target.id),center=circleCenter(curve.equation);if(!center)throw new Error("当前仅支持圆的面积和周长");
           const f=curveFunction(curve),r2=-f(...center)/(f(center[0]+1,center[1])-f(...center));
           if(!Number.isFinite(r2)||r2<=0)throw new Error("圆暂时失效");
-          value=m.type === "area" ? Math.PI*r2 : 2*Math.PI*Math.sqrt(r2);anchor=fromPlane(plane,...center);
+          value=m.type === "area" ? Math.PI*r2 : 2*Math.PI*Math.sqrt(r2);anchor=fromPlane(curve.frame??doc.planes.find(p=>p.id===curve.planeId)!,...center);
         } else {
           if(m.type!=="length")throw new Error("面积或周长需要三角形、多边形或圆");
           const ref=reference(m.references[0]);if(!ref.a||!ref.b||ref.obj.kind === "line")throw new Error("直线没有有限长度");value=norm(sub(ref.b,ref.a));anchor=lerp(ref.a,ref.b,.5);
@@ -1065,9 +1075,9 @@ function computeGeometry(doc: DrawingDocument) {
     return owner && !owner.hidden && !errors.has(owner.id) &&
       (doc.edgeStyles[edge.id] ?? owner.style.line) !== "hidden";
   });
-  const visibleCurves = [...curves.values()].filter(c => !c.hidden && c.style.line !== "hidden" && !errors.has(c.id))
+  const visibleCurves = [...curves.values()].filter(c => !c.hidden && !constraintHidden(objects,c) && c.style.line !== "hidden" && !errors.has(c.id))
     .flatMap(curve => {
-      try { return [{ curve, parsed: equation(curve.equation), plane: doc.planes.find(p => p.id === curve.planeId)! }]; }
+      try { return [{ curve, parsed: equation(curve.equation), plane:curve.frame?? doc.planes.find(p => p.id === curve.planeId)! }]; }
       catch { return []; }
     });
   for (const point of points.values()) {
@@ -1136,6 +1146,7 @@ function geometryDependencies(obj: GeometryObject): string[] {
     const c = obj.construction;
     if (c.type === "free" || c.type === "origin" || c.type === "onAxis") return [];
     if (c.type === "constraint") return [c.set];
+    if(c.type==="planeOffset")return [c.anchor,...planeDependencies(c.plane)];
     if(c.type==="planeOrigin"||c.type==="planeNormal")return planeDependencies(c.plane);
     if (c.type === "focus" || c.type === "curveCenter") return [c.curve];
     if (c.type === "alias") return [c.point];
@@ -1153,6 +1164,7 @@ function geometryDependencies(obj: GeometryObject): string[] {
   if(obj.kind==="polygon"&&obj.fold)return [...obj.points,obj.fold.source,obj.fold.axis,obj.fold.angle,...(obj.fold.originalBody?[obj.fold.originalBody]:[])];
   if (obj.kind === "solid" && obj.construction) {
     const c = obj.construction;
+    if(c.type === "roundPoints")return c.points;
     if(c.type === "faces")return c.faces;
     return c.type === "extrusion"
       ? [c.base, ...(c.vector ? [c.vector] : [])]
@@ -1168,6 +1180,7 @@ function geometryDependencies(obj: GeometryObject): string[] {
   if(obj.kind === "curve" && obj.derived) {
     const c=obj.derived;return c.type === "reflection" ? [c.source,c.axis] : c.type === "tangent" ? [c.curve,c.point] : [c.driver,c.follower];
   }
+  if (obj.kind === "curve" && obj.declaration)return obj.declaration.points;
   if (obj.kind === "curve" && obj.circle) return obj.circle.points;
   if (
     (obj.kind === "line" || obj.kind === "segment" || obj.kind === "vector") &&
@@ -1176,6 +1189,7 @@ function geometryDependencies(obj: GeometryObject): string[] {
     return [
       ...obj.points,
       ...(obj.relation.reference ? [obj.relation.reference] : []),
+      ...(obj.relation.plane?planeDependencies(obj.relation.plane):[]),
     ];
   return obj.kind === "segment" ||
     obj.kind === "vector" ||
@@ -1217,7 +1231,7 @@ export function validateDrawing(input: unknown): DrawingDocument {
   const d = input as DrawingDocument;
   if (
     !d ||
-    ![1, 2, 3].includes(d.schemaVersion) ||
+    ![1, 2, 3, 4].includes(d.schemaVersion) ||
     d.type !== "mindgrove-mathdraw" ||
     typeof d.id !== "string" ||
     typeof d.title !== "string" ||
@@ -1330,7 +1344,7 @@ export function validateDrawing(input: unknown): DrawingDocument {
             "free",
             "constraint",
             "origin", "focus", "curveCenter", "onAxis",
-            "alias", "reflection", "rotation", "angleDirection", "planeOrigin", "planeNormal",
+            "alias", "reflection", "rotation", "angleDirection", "planeOffset", "planeOrigin", "planeNormal",
             "division",
             "center",
             "curveCoordinate",
@@ -1405,7 +1419,8 @@ export function validateDrawing(input: unknown): DrawingDocument {
           throw new Error("多边形顶点无效");
         break;
       case "curve":
-        if(o.locusInput || o.reflectionInput || o.resolvedDefinition !== undefined)throw new Error("文件不能包含临时计算缓存");
+        if(o.declaration&&(typeof o.declaration.id!=="string"||!Array.isArray(o.declaration.points)||o.declaration.points.length>50||o.declaration.points.some(id=>typeof id!=="string")))throw new Error("声明曲线引用无效");
+        if(o.frame || o.locusInput || o.reflectionInput || o.resolvedDefinition !== undefined || o.locusRangeDescription!==undefined)throw new Error("文件不能包含临时计算缓存");
         if (
           !planeIds.has(o.planeId) ||
           typeof o.equation !== "string" ||
@@ -1418,7 +1433,7 @@ export function validateDrawing(input: unknown): DrawingDocument {
         equation(replaceCoordinates(d,o.equation,o.parameters?.references ?? {},()=>[1,1,1]), Object.keys(o.parameters?.references ?? {}));
         if(o.derived) {
           const c=o.derived;
-          if(!["reflection","tangent","locus"].includes(c.type) || (c.type === "tangent" && (!Number.isInteger(c.branch)||c.branch<0||c.branch>32)) || (c.type === "locus" && (!finite(c.min)||!finite(c.max)||c.min>=c.max)))throw new Error("派生曲线参数无效");
+          if(!["reflection","tangent","locus"].includes(c.type) || (c.type === "tangent" && (!Number.isInteger(c.branch)||c.branch<0||c.branch>32)) || (c.type === "locus" && (!finite(c.min)||!finite(c.max)||c.min>=c.max||c.natural!==undefined&&typeof c.natural!=="boolean")))throw new Error("派生曲线参数无效");
         }
         if(o.parametric) {
           if(typeof o.parametric.x!=="string" || typeof o.parametric.y!=="string" || !finite(o.parametric.tMin) || !finite(o.parametric.tMax) || o.parametric.tMin>=o.parametric.tMax)
@@ -1465,9 +1480,10 @@ export function validateDrawing(input: unknown): DrawingDocument {
         if (o.construction) {
           const c = o.construction;
           if (
-            !["faces", "extrusion", "apex", "circumsphere", "insphere"].includes(
+            !["faces", "extrusion", "apex", "circumsphere", "insphere","roundPoints"].includes(
               c.type,
             ) ||
+            (c.type==="roundPoints"&&(!["cylinder","cone","coneFrustum","sphere"].includes(o.shape)||!Array.isArray(c.points)||c.points.length!==(o.shape==="sphere"?2:o.shape==="coneFrustum"?4:3)||new Set(c.points).size!==c.points.length||c.points.some(id=>typeof id!=="string"))) ||
             (c.type === "faces"&&(!Array.isArray(c.faces)||c.faces.length<4||c.faces.length>2000||new Set(c.faces).size!==c.faces.length||c.faces.some(id=>typeof id!=="string"))) ||
             (c.type === "extrusion" &&
               (!vector(c.direction, 3) || norm(c.direction) < 1e-9)) ||
@@ -1542,7 +1558,7 @@ export function validateDrawing(input: unknown): DrawingDocument {
             : 0;
       result = c.type === "extrusion" ? [n * 2, n * 3] : [n + 1, n * 2];
     } else {
-      const m = solidMesh(c ? { ...solid, shape: "sphere" } : solid);
+      const m = solidMesh(c&&c.type!=="roundPoints" ? { ...solid, shape: "sphere" } : solid);
       result = [m.vertices.length, m.edges.length];
     }
     counts.set(solid.id, result);
@@ -1602,7 +1618,8 @@ export function validateDrawing(input: unknown): DrawingDocument {
       throw new Error("数值引用的数值或点不存在");
     if (o.kind === "point") {
       const c = o.construction;
-      if(c.type==="planeOrigin"||c.type==="planeNormal")validPlane(c.plane);
+      if(c.type==="planeOffset") {validPlane(c.plane);if(!pointRef(c.anchor)||!vector(c.offset,3))throw Error('平行平面来源无效');}
+      else if(c.type==="planeOrigin"||c.type==="planeNormal")validPlane(c.plane);
       else if(c.type === "constraint") {
         const set=objects.get(c.set);
         if(set?.kind!=="solutionSet"||!set.problem.points.includes(c.point))throw new Error("约束点引用无效");
@@ -1634,6 +1651,7 @@ export function validateDrawing(input: unknown): DrawingDocument {
         if(objects.get(o.section.solid)?.kind!=="solid")throw new Error("截面引用的几何体不存在");validPlane(o.section.plane);
       } else refs = o.points;
       if(o.kind==="vector"&&o.normalPlane)validPlane(o.normalPlane);
+      if("relation" in o&&o.relation?.plane)validPlane(o.relation.plane);
       if(o.kind==="polygon"&&o.fold) {
         const f=o.fold;if(!["polygon","triangle"].includes(objects.get(f.source)?.kind??"")||!lineRef(f.axis)||objects.get(f.angle)?.kind!=="number"||f.originalBody!==undefined&&objects.get(f.originalBody)?.kind!=="solid")throw new Error("翻折来源、轴或角度变量无效");
       }
@@ -1643,6 +1661,8 @@ export function validateDrawing(input: unknown): DrawingDocument {
         !lineRef(o.relation.reference)
       )
         throw new Error("参考直线不存在");
+    } else if(o.kind === "curve" && o.declaration) {
+      const set=objects.get(o.constraintSet!);if(set?.kind!=="solutionSet"||!set.problem.curves?.some(c=>c.id===o.declaration!.id))throw new Error("声明曲线的来源无效");refs=o.declaration.points;
     } else if(o.kind === "curve" && o.derived) {
       const c=o.derived;
       if(c.type === "reflection" && (objects.get(c.source)?.kind!=="curve"||!lineRef(c.axis)))throw new Error("对称曲线引用无效");
@@ -1653,7 +1673,8 @@ export function validateDrawing(input: unknown): DrawingDocument {
     } else if (o.kind === "curve" && o.circle) refs = o.circle.points;
     else if (o.kind === "solid" && o.construction) {
       const c = o.construction;
-      if(c.type === "faces") {
+      if(c.type === "roundPoints")refs=c.points;
+      else if(c.type === "faces") {
         if(c.faces.some(id=>!["polygon","triangle"].includes(objects.get(id)?.kind??"")))throw new Error("多面体引用的面不存在");
       } else if (c.type === "extrusion" || c.type === "apex") {
         if (!["polygon", "triangle"].includes(objects.get(c.base)?.kind ?? ""))

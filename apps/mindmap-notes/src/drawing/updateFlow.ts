@@ -11,3 +11,14 @@ export async function runUpdate(update:UpdatePackage,saveDraft:()=>Promise<void>
   await update.install();
   await restart();
 }
+
+/** A healthy mirror wins; absence and errors both allow the fallback. */
+export async function checkUpdateSources<T>(check:(source:'gitee'|'github')=>Promise<T|null>):Promise<T|null>{
+  let responded=false,lastError:unknown;
+  for(const source of ['gitee','github'] as const){
+    try{const update=await check(source);responded=true;if(update)return update;}
+    catch(error){lastError=error;}
+  }
+  if(!responded)throw lastError??Error('暂时无法检查更新');
+  return null;
+}

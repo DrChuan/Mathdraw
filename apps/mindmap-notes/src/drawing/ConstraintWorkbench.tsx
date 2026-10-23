@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { DrawingChange, DrawingDocument, DrawingSolutionSet, Vec2, Vec3 } from "./types";
 import { newDrawing } from "./types";
-import { parseCondition, parseConditions, pointNames, segmentsFrom } from "./constraints/input";
-import { type Condition, type ConstraintProblem, type ConstraintResult } from "./constraints/types";
+import { parseCondition, parseConditions, pointNames, segmentsFrom,validateProblem } from "./constraints/input";
+import { type Condition, type ConstraintProblem, type ConstraintResult,type ConstraintCurve } from "./constraints/types";
 import { constraintPoint, constraintLocusPoints, installSolutionSet, placeOnPlane, solutionSetObject, mirrorSolutionSet } from "./constraints/document";
 import { add, mul, cross } from "./constraints/math";
-import { project, resolveGeometry, rotate } from "./geometry";
+import { project, resolveGeometry, rotate,fromPlane } from "./geometry";
 import { sceneFor, pathData, labelPlainText, arrowData } from "./scene";
 import { useConstraintSolver } from "./useConstraintSolver";
 import ConstraintSetControls from "./ConstraintSetControls";
@@ -16,11 +16,19 @@ import ShapeDeclaration from "./ShapeDeclaration";
 import { appendDeclaration, declarationLabel, type ShapeDeclaration as Declaration } from "./constraints/templates";
 import { conditionStatement } from "./constraints/statement";
 import ConditionInput from "./ConditionInput";
+import ConstraintCurves from "./ConstraintCurves";
+import { sampleCurve } from "./curves";
 import { configurationFiles,decodeConfiguration,type ConstraintConfiguration } from "./constraints/configuration";
 import "./constraints.css";
+import PlanarConstraintWorkbench from "./PlanarConstraintWorkbench";
 
 const text=(e:unknown)=>e instanceof Error?e.message:String(e);
-export default function ConstraintWorkbench({docRef,existing,change,close,highlight}:{docRef:RefObject<DrawingDocument>;existing?:DrawingSolutionSet;change:DrawingChange;close:()=>void;highlight:(ids:string[])=>void}) {
+type WorkbenchProps={docRef:RefObject<DrawingDocument>;existing?:DrawingSolutionSet;change:DrawingChange;close:()=>void;highlight:(ids:string[])=>void};
+export default function ConstraintWorkbench(props:WorkbenchProps){
+  if(props.existing?props.existing.problem.mode==='plane'||props.existing.problem.mode==='coordinate':props.docRef.current.dimension==='2d')return <PlanarConstraintWorkbench {...props}/>;
+  return <SpatialConstraintWorkbench {...props}/>;
+}
+function SpatialConstraintWorkbench({docRef,existing,change,close,highlight}:{docRef:RefObject<DrawingDocument>;existing?:DrawingSolutionSet;change:DrawingChange;close:()=>void;highlight:(ids:string[])=>void}) {
   const [step,setStep]=useState(0),[points,setPoints]=useState(existing?.problem.points.join(" ")??""),
     [segments,setSegments]=useState(existing?.problem.segments.map(e=>e.join(" ")).join(", ")??""),
     [conditions,setConditions]=useState<Condition[]>(existing?.problem.conditions??[]),[rowDrafts,setRowDrafts]=useState<Record<string,string>>({}),
@@ -29,6 +37,7 @@ export default function ConstraintWorkbench({docRef,existing,change,close,highli
     [keepPlacement,setKeepPlacement]=useState(!!existing),[side,setSide]=useState<1|-1>(1),[orientationPoint,setOrientationPoint]=useState(""),
     [yaw,setYaw]=useState(-22),[pitch,setPitch]=useState(0),[driver,setDriver]=useState<string|undefined>(existing?.driver),[declarationNotice,setDeclarationNotice]=useState("");
   const [mirrored,setMirrored]=useState(false);
+  const [curves,setCurves]=useState<ConstraintCurve[]>(existing?.problem.curves??[]);
   const rotation=useRef<{pointer:number;x:number;y:number;yaw:number;pitch:number}|null>(null);
   const [editingCondition,setEditingCondition]=useState<string>(),[declareOpen,setDeclareOpen]=useState(false),[fileBusy,setFileBusy]=useState(false),[fileNotice,setFileNotice]=useState(""),[inputKey,setInputKey]=useState(0);
   const dialog=useRef<HTMLElement>(null);
@@ -38,11 +47,11 @@ export default function ConstraintWorkbench({docRef,existing,change,close,highli
   const previewDocRef=useRef(docRef.current),previewDocId=useRef(crypto.randomUUID());
   const invalidate=()=>{revision.current++;solver.cancel();setResult(undefined);setProblem(undefined);setBranch(0);setOrientationPoint("");setDeclarationNotice("");setFileNotice("");setError("");};
   const getProblem=():ConstraintProblem=>{
-    const names=pointNames(points),edges=segmentsFrom(segments,names),list=conditions.flatMap(c=>parseConditions(rowDrafts[c.id]??c.source,names,c.id).map(p=>({...p,enabled:c.enabled})));
+    const names=pointNames(points),edges=segmentsFrom(segments,names),list=conditions.flatMap(c=>parseConditions(rowDrafts[c.id]??c.source,names,c.id,curves).map(p=>({...p,enabled:c.enabled})));
     if(list.length>200)throw new Error("最多支持 200 条条件");
-    return {points:names,segments:edges,conditions:list};
+    const p={points:names,segments:edges,conditions:list,curves};validateProblem(p);return p;
   };
-  const collect=()=>{try{const p=getProblem();setProblem(p);setConditions(p.conditions);setRowDrafts({});setPlaneNames(v=>v.length===3&&v.every(n=>p.points.includes(n))?v:p.points.slice(0,3));setError("");return p;}catch(e){setError(text(e));return undefined;}};
+  const collect=()=>{try{const p=getProblem();setProblem(p);setConditions(p.conditions);setRowDrafts({});setPlaneNames(v=>v.length===3&&v.every(n=>p.points.includes(n))?v:p.points.slice(0,3));if(p.points.length<3)setKeepPlacement(true);setError("");return p;}catch(e){setError(text(e));return undefined;}};
   const calculate=async(continued=false)=>{
     const p=collect();if(!p)return;setFileNotice(v=>v.replace(" · 请重新求解",""));
     const token=++revision.current;
@@ -50,12 +59,12 @@ export default function ConstraintWorkbench({docRef,existing,change,close,highli
     catch(e){if(token===revision.current&&text(e)!=="计算已取消")setError(text(e));}
   };
   const append=(sources:string[])=>{
-    try {const names=pointNames(points),added=sources.flatMap(s=>parseConditions(s,names));if(conditions.length+added.length>200)throw new Error("最多支持 200 条条件");invalidate();setConditions(c=>[...c,...added]);return true;}
+    try {const names=pointNames(points),added=sources.flatMap(s=>parseConditions(s,names,undefined,curves));if(conditions.length+added.length>200)throw new Error("最多支持 200 条条件");invalidate();setConditions(c=>[...c,...added]);return true;}
     catch(e){setError(text(e));return false;}
   };
   const declareShape=(declaration:Declaration)=>{
     try {
-      const p=appendDeclaration(points,segments,conditions,rowDrafts,declaration);
+      const p=appendDeclaration(points,segments,conditions,rowDrafts,declaration,curves);
       invalidate();setPoints(p.points.join(" "));setSegments(p.segments.map(e=>e.join(" ")).join(", "));setConditions(p.conditions);setRowDrafts({});
       setPlaneNames(v=>v.length===3&&v.every(n=>p.points.includes(n))?v:declaration.base.slice(0,3));
       setDeclarationNotice(`已声明${declarationLabel(declaration)}；当前共 ${p.points.length} 个点、${p.segments.length} 条棱、${p.conditions.length} 条条件。`);
@@ -81,10 +90,16 @@ export default function ConstraintWorkbench({docRef,existing,change,close,highli
     if(!previewModel||!problem)return undefined;
     const {set}=previewModel,d={...previewModel.doc,view:{...previewModel.doc.view,angle:yaw,
       camera:{origin:[0,0,0] as Vec3,x:rotate([1,0,0],[pitch,0,0]),y:rotate([0,1,0],[pitch,0,0]),z:rotate([0,0,1],[pitch,0,0])}}};
-    const ps=[...problem.points.map(n=>constraintPoint(set,n)),...constraintLocusPoints(d)].map(p=>project(p,d)),xs=ps.map(p=>p[0]),ys=ps.map(p=>p[1]);
+    const resolved=resolveGeometry(d),bounds:Vec3[]=[...problem.points.map(n=>constraintPoint(set,n)),...constraintLocusPoints(d),...resolved.meshes.flatMap(m=>m.vertices)];
+    for(const curve of resolved.curves.values()) {
+      const plane=d.planes.find(p=>p.id===curve.planeId)!;
+      for(const x of [curve.range[0],curve.range[1]])for(const y of [curve.range[2],curve.range[3]])bounds.push(fromPlane(plane,x,y));
+    }
+    const ps=bounds.map(p=>project(p,d)),xs=ps.map(p=>p[0]),ys=ps.map(p=>p[1]);
     const lo=[Math.min(...xs),Math.min(...ys)],hi=[Math.max(...xs),Math.max(...ys)];
     const size:Vec2=[480,340];d.view.scale=Math.max(2,Math.min(90,380/Math.max(1,hi[0]-lo[0]),250/Math.max(1,hi[1]-lo[1])));d.view.center=[(lo[0]+hi[0])/2,(lo[1]+hi[1])/2];
-    return {set,doc:d,scene:sceneFor(d,[],size),size};
+    const sampled=[...resolveGeometry(d).curves.values()].map(c=>sampleCurve(c,c.range,90,100));
+    return {set,doc:d,scene:sceneFor(d,sampled,size),size};
   },[previewModel,problem,yaw,pitch]);
   previewDocRef.current=preview?.doc??docRef.current;
   const place=()=>{
@@ -99,12 +114,17 @@ export default function ConstraintWorkbench({docRef,existing,change,close,highli
       // Fit the new configuration while preserving the rest of the document.
       const ps=[...resolveGeometry(next).points.values()].filter(p=>p.object?.kind==="point"&&p.object.construction.type!=="origin"&&!p.object.hidden).map(p=>project(p.p,next));
       ps.push(...constraintLocusPoints(next).map(p=>project(p,next)));
+      const resolved=resolveGeometry(next);ps.push(...resolved.meshes.flatMap(m=>m.vertices.map(p=>project(p,next))));
+      for(const curve of resolved.curves.values())if(curve.declaration) {
+        const plane=next.planes.find(p=>p.id===curve.planeId)!;
+        for(const x of [curve.range[0],curve.range[1]])for(const y of [curve.range[2],curve.range[3]])ps.push(project(fromPlane(plane,x,y),next));
+      }
       if(ps.length){const xs=ps.map(p=>p[0]),ys=ps.map(p=>p[1]);next.view={...next.view,center:[(Math.min(...xs)+Math.max(...xs))/2,(Math.min(...ys)+Math.max(...ys))/2],scale:Math.max(2,Math.min(72,650/Math.max(1,Math.max(...xs)-Math.min(...xs)),440/Math.max(1,Math.max(...ys)-Math.min(...ys))))};}
       if(change(next)){highlight([preview.set.id]);close();}
     }catch(e){setError(text(e));}
   };
   const currentBranch=result?.branches[branch];
-  const configuration=():ConstraintConfiguration=>({format:"mathdraw-conditions",version:1,points,segments,
+  const configuration=():ConstraintConfiguration=>({format:"mathdraw-conditions",version:1,points,segments,curves,
     conditions:conditions.map(c=>({source:rowDrafts[c.id]??c.source,enabled:c.enabled})),
     placement:{planeNames,side,orientationPoint,keepPlacement,mirrored,driver,targetPlane}});
   const saveConfiguration=async()=>{
@@ -115,9 +135,10 @@ export default function ConstraintWorkbench({docRef,existing,change,close,highli
     setFileBusy(true);setError("");
     try{
       const file=await configurationFiles.open();if(!file)return;const c=decodeConfiguration(file.content);
+      if(c.mode&&c.mode!=='spatial')throw new Error('这是平面条件配置，请在平面模式打开，不能作为立体条件加载');
       let names:string[]=[];try{names=pointNames(c.points);}catch{/* Incomplete declarations remain editable. */}
-      const rows:Condition[]=c.conditions.map(row=>{try{return {...parseCondition(row.source,names),enabled:row.enabled};}catch{return {id:crypto.randomUUID(),kind:"distance",refs:[],source:row.source,enabled:row.enabled};}});
-      invalidate();setPoints(c.points);setSegments(c.segments);setConditions(rows);setRowDrafts({});setEditingCondition(undefined);setInputKey(v=>v+1);
+      const rows:Condition[]=c.conditions.map(row=>{try{return {...parseCondition(row.source,names,undefined,c.curves??[]),enabled:row.enabled};}catch{return {id:crypto.randomUUID(),kind:"distance",refs:[],source:row.source,enabled:row.enabled};}});
+      invalidate();setPoints(c.points);setSegments(c.segments);setCurves(c.curves??[]);setConditions(rows);setRowDrafts({});setEditingCondition(undefined);setInputKey(v=>v+1);
       setPlaneNames(c.placement.planeNames);setSide(c.placement.side);setOrientationPoint(c.placement.orientationPoint);setKeepPlacement(c.placement.keepPlacement);
       setMirrored(c.placement.mirrored);setDriver(c.placement.driver);setTargetPlane(docRef.current.planes.some(p=>p.id===c.placement.targetPlane)?c.placement.targetPlane!:docRef.current.view.planeId);
       setStep(0);setFileNotice(`已加载 ${file.path.split(/[\\/]/).at(-1)} · 请重新求解`);
@@ -139,7 +160,7 @@ export default function ConstraintWorkbench({docRef,existing,change,close,highli
     <div className="constraint-actions">{!result?.complete&&<button disabled={solver.busy} onClick={()=>void calculate(true)}>继续求解</button>}<button disabled={solver.busy} onClick={()=>void calculate(false)}>重新求解</button></div>
   </>;
   const placement=<section className="constraint-placement"><strong>放置平面</strong>
-    <label className="constraint-inline"><input type="checkbox" checked={keepPlacement} onChange={e=>setKeepPlacement(e.target.checked)}/>{existing?"保持当前放置位置":"保持原始位置"}</label>
+    <label className="constraint-inline"><input type="checkbox" checked={keepPlacement} disabled={(problem?.points.length??0)<3} onChange={e=>setKeepPlacement(e.target.checked)}/>{existing?"保持当前放置位置":"保持原始位置"}</label>
     {!keepPlacement&&<><div className="constraint-plane-points">{[0,1,2].map(i=><label key={i}>平面点 {i+1}<select aria-label={`xOy 平面点 ${i+1}`} value={planeNames[i]??""} onChange={e=>setPlaneNames(v=>{const next=[...v];next[i]=e.target.value;return next;})}>{problem?.points.map(n=><option key={n} value={n}>{n}</option>)}</select></label>)}</div>
       <label>朝向参考点<select value={orientationPoint} onChange={e=>setOrientationPoint(e.target.value)}><option value="">自动选择</option>{problem?.points.filter(n=>!planeNames.includes(n)).map(n=><option key={n}>{n}</option>)}</select></label>
       <label>参考点所在一侧<select value={side} onChange={e=>setSide(Number(e.target.value) as 1|-1)}><option value={1}>平面上方</option><option value={-1}>平面下方</option></select></label>
@@ -157,13 +178,14 @@ export default function ConstraintWorkbench({docRef,existing,change,close,highli
             <label>线段<input aria-label="声明线段" value={segments} placeholder="AB, BC, CA, AP" onChange={e=>{invalidate();setSegments(e.target.value);}}/></label></div>
           </section>
           {declarationNotice&&<div className="constraint-declaration-notice" role="status">{declarationNotice}</div>}
-          <ConditionInput key={inputKey} points={points} append={append} onError={setError}/>
+          <ConstraintCurves points={points} curves={curves} conditions={conditions} change={value=>{invalidate();setCurves(value);}} onError={setError}/>
+          <ConditionInput key={inputKey} points={points} segments={segments} curves={curves} conditions={conditions} append={append} onError={setError}/>
           <section className="constraint-condition-list"><div className="constraint-section-heading"><strong>条件 <small>{conditions.length}</small></strong><small>双击可编辑</small></div><div className="constraint-condition-flow">
             {!conditions.length&&<p className="constraint-empty-list">添加图形或录入第一个条件。</p>}
             {conditions.map((c,i)=><div key={c.id} className={`constraint-condition-chip ${!c.enabled?"disabled":""} ${editingCondition===c.id?"editing":""}`}>
               <input type="checkbox" aria-label={`启用条件 ${i+1}`} checked={c.enabled} onChange={e=>{invalidate();setConditions(v=>v.map(k=>k.id===c.id?{...k,enabled:e.target.checked}:k));}}/>
-              <div className="constraint-condition-value"><div className="constraint-statement" tabIndex={0} role="button" aria-label={`编辑条件 ${i+1}`} onClick={()=>setEditingCondition(c.id)} onDoubleClick={()=>setEditingCondition(c.id)} onKeyDown={e=>{if(e.key==="Enter")setEditingCondition(c.id);}}>{(()=>{try{return parseConditions(rowDrafts[c.id]??c.source,pointNames(points),c.id).map((item,index)=><span className="constraint-statement-item" key={index}>{conditionStatement(item).map((part,j)=>"text" in part?<span key={j}>{part.text}</span>:<FormulaPreview key={j} source={part.math}/>)}</span>);}catch(e){return <small className="constraint-field-error">{text(e)}</small>;}})()}</div>
-              {editingCondition===c.id&&<input autoFocus aria-label={`条件 ${i+1}`} value={rowDrafts[c.id]??c.source} onFocus={()=>{if(existing)highlight(docRef.current.objects.filter(o=>o.kind==="point"&&(o.construction.type==="constraint"&&o.construction.set===existing.id&&c.refs.flat().includes(o.construction.point)||o.constraintSet===existing.id&&!!o.constraintPointName&&c.refs.flat().includes(o.constraintPointName))).map(o=>o.id));}} onChange={e=>{invalidate();setRowDrafts(v=>({...v,[c.id]:e.target.value}));}} onKeyDown={e=>{if(e.key==="Enter"&&!e.nativeEvent.isComposing){try{parseConditions(rowDrafts[c.id]??c.source,pointNames(points));setEditingCondition(undefined);setError("");}catch(err){setError(text(err));}}}}/>}</div>
+              <div className="constraint-condition-value"><div className="constraint-statement" tabIndex={0} role="button" aria-label={`编辑条件 ${i+1}`} onClick={()=>setEditingCondition(c.id)} onDoubleClick={()=>setEditingCondition(c.id)} onKeyDown={e=>{if(e.key==="Enter")setEditingCondition(c.id);}}>{(()=>{try{return parseConditions(rowDrafts[c.id]??c.source,pointNames(points),c.id,curves).map((item,index)=><span className="constraint-statement-item" key={index}>{conditionStatement(item).map((part,j)=>"text" in part?<span key={j}>{part.text}</span>:<FormulaPreview key={j} source={part.math}/>)}</span>);}catch(e){return <small className="constraint-field-error">{text(e)}</small>;}})()}</div>
+              {editingCondition===c.id&&<input autoFocus aria-label={`条件 ${i+1}`} value={rowDrafts[c.id]??c.source} onFocus={()=>{if(existing)highlight(docRef.current.objects.filter(o=>o.kind==="point"&&(o.construction.type==="constraint"&&o.construction.set===existing.id&&c.refs.flat().includes(o.construction.point)||o.constraintSet===existing.id&&!!o.constraintPointName&&c.refs.flat().includes(o.constraintPointName))).map(o=>o.id));}} onChange={e=>{invalidate();setRowDrafts(v=>({...v,[c.id]:e.target.value}));}} onKeyDown={e=>{if(e.key==="Enter"&&!e.nativeEvent.isComposing){try{parseConditions(rowDrafts[c.id]??c.source,pointNames(points),undefined,curves);setEditingCondition(undefined);setError("");}catch(err){setError(text(err));}}}}/>}</div>
               <button title="删除条件" aria-label={`删除条件 ${i+1}`} onClick={()=>{invalidate();setConditions(v=>v.filter(k=>k.id!==c.id));}}>×</button>
             </div>)}
           </div></section>

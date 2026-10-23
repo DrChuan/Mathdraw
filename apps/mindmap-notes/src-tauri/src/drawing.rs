@@ -80,7 +80,7 @@ fn check_json(content: &str) -> Result<(), String> {
         return Err("绘图文件不能超过 8 MB".into());
     }
     let v: serde_json::Value = serde_json::from_str(content).map_err(|_| "绘图 JSON 无效")?;
-    if (v["schemaVersion"] != 1 && v["schemaVersion"] != 2 && v["schemaVersion"] != 3)
+    if (v["schemaVersion"] != 1 && v["schemaVersion"] != 2 && v["schemaVersion"] != 3 && v["schemaVersion"] != 4)
         || v["type"] != "mindgrove-mathdraw"
         || !v["objects"].is_array()
     {
@@ -91,7 +91,7 @@ fn check_json(content: &str) -> Result<(), String> {
 fn validate_recovery(file: &DrawingFile) -> Result<(), String> {
     check_json(&file.content)?;
     validate_drafts(&file.ui_draft)?;
-    if file.source_version.is_some_and(|v| v != 1 && v != 2 && v != 3) {
+    if file.source_version.is_some_and(|v| v != 1 && v != 2 && v != 3 && v != 4) {
         return Err("恢复草稿的源格式版本无效".into());
     }
     Ok(())
@@ -640,13 +640,15 @@ mod tests {
         assert!(check_json(&"x".repeat(LIMIT as usize + 1)).is_err());
     }
     #[test]
-    fn accepts_v2_v3_and_rejects_unknown_versions() {
+    fn accepts_v2_v3_v4_and_rejects_unknown_versions() {
         let mut value: serde_json::Value = serde_json::from_str(&source("v2")).unwrap();
         value["schemaVersion"] = 2.into();
         assert!(check_json(&value.to_string()).is_ok());
         value["schemaVersion"] = 3.into();
         assert!(check_json(&value.to_string()).is_ok());
         value["schemaVersion"] = 4.into();
+        assert!(check_json(&value.to_string()).is_ok());
+        value["schemaVersion"] = 5.into();
         assert!(check_json(&value.to_string()).is_err());
     }
     #[test]
@@ -707,6 +709,8 @@ mod tests {
         file.source_version = Some(3);
         assert!(validate_recovery(&file).is_ok());
         file.source_version = Some(4);
+        assert!(validate_recovery(&file).is_ok());
+        file.source_version = Some(5);
         assert!(validate_recovery(&file).is_err());
     }
     #[cfg(unix)]
@@ -765,9 +769,9 @@ mod tests {
 }
 
 fn check_condition_configuration(content: &str) -> Result<(), String> {
-    if content.len() > 1024 * 1024 { return Err("条件配置不能超过 1 MB".into()); }
+    if content.len() > 8 * 1024 * 1024 { return Err("条件配置不能超过 8 MB".into()); }
     let value: serde_json::Value = serde_json::from_str(content).map_err(vault::err)?;
-    if value["format"].as_str() != Some("mathdraw-conditions") || value["version"].as_u64() != Some(1) {
+    if value["format"].as_str() != Some("mathdraw-conditions") || !matches!(value["version"].as_u64(), Some(1 | 2)) {
         return Err("不是受支持的条件作图配置文件".into());
     }
     Ok(())

@@ -1,5 +1,7 @@
 import type { DrawingCurve, Vec2 } from "./types";
 import { curveFunction } from "./constructions";
+/** A local cursor projection can fail without invalidating the source curve. */
+export class PathProjectionError extends Error {}
 /** Project locally, limiting travel so an invalid branch never silently jumps across the graph. */
 export function pointOnImplicit(curve: DrawingCurve, seed: Vec2): Vec2 {
   const fn = curveFunction(curve),
@@ -29,5 +31,5 @@ export function pointOnImplicit(curve: DrawingCurve, seed: Vec2): Vec2 {
     y -= dy;
     if (Math.hypot(x - seed[0], y - seed[1]) > maxTravel) break;
   }
-  throw new Error("原曲线分支暂时失效，保留原位置；可重新定位来源");
+  throw new PathProjectionError("原曲线分支暂时失效，保留原位置；可重新定位来源");
 }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import Markdown from "../Markdown";
+import { useConstraintMotion } from './useConstraintMotion';
 import type { DrawingDocument, GeometryObject, DrawingNumber, DrawingChange } from "./types";
 import { applyDefinition, definition, commandCatalog } from "./model";
 import { resolveGeometry } from "./geometry";
@@ -9,6 +10,9 @@ import ConstraintSetControls from "./ConstraintSetControls";
 import { exactCoordinates } from "./exactNumber";
 import { FormulaPreview } from "./FormulaPreview";
 import { visibleInObjectList } from "./polyhedra";
+import { selectedBranch } from "./constraints/document";
+import { displayableLocus } from "./constraints/loci";
+import { objectTree,type ObjectTreeNode } from "./objectTree";
 import { vectorCoordinates } from "./vectorCoordinates";
 export interface ExpressionEditor {
   insert: (text: string) => void;
@@ -28,6 +32,11 @@ export const kindName: Record<GeometryObject["kind"], string> = {
   solid: "几何体",
   label: "文字",
 };
+const listFilterKey="mathdraw.object-list.excluded-kinds.v1";
+const listKinds:GeometryObject["kind"][]=["point","segment","line","vector","curve","triangle","polygon","solid","number","label","solutionSet","spatialLocus"];
+function loadListFilters():GeometryObject["kind"][] {
+  try{const value=JSON.parse(localStorage.getItem(listFilterKey)??"[]");return Array.isArray(value)?value.filter(k=>listKinds.includes(k)):[];}catch{return [];}
+}
 export function ExpressionPanel({
   doc,
   selected,
@@ -56,6 +65,10 @@ export function ExpressionPanel({
     [help, setHelp] = useState(false),
     [completion, setCompletion] = useState(-1);
   const [focused,setFocused]=useState(false),[composing,setComposing]=useState(false),[atEnd,setAtEnd]=useState(true),[dismissed,setDismissed]=useState(false);
+  const [excludedKinds,setExcludedKinds]=useState(loadListFilters);
+  const filterKinds=(kinds:GeometryObject["kind"][])=>{
+    setExcludedKinds(kinds);try{localStorage.setItem(listFilterKey,JSON.stringify(kinds));}catch{/* Keep usable for this session if preferences cannot be saved. */}
+  };
   const docRef = useRef(doc);
   docRef.current = doc;
   const input = useRef<HTMLTextAreaElement>(null),
@@ -102,36 +115,13 @@ export function ExpressionPanel({
       setNewProblem((e as Error).message);
     }
   };
-  useEffect(() => {
-    setNewProblem("");
-    setQuery("");
-  }, [doc.id]);
-  return (
-    <aside className="draw-expressions" aria-label="对象与表达式">
-      <div className="expression-heading">
-        <strong>对象与表达式</strong>
-        <span>{doc.objects.filter(visibleInObjectList).length}</span>
-        <button title="命令及参数提示" onClick={() => setHelp(!help)}>
-          ?
-        </button>
-      </div>
-      <input
-        className="expression-search"
-        aria-label="搜索绘图对象"
-        placeholder="搜索对象、定义…"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
-      <div className="expression-list">
-        {doc.objects
-          .filter(visibleInObjectList)
-          .filter((o) =>
-            `${o.symbol} ${o.name} ${definition(doc, o)}`
-              .toLowerCase()
-              .includes(query.toLowerCase()),
-          )
-          .map((obj) => (
-            <ExpressionRow
+  const listObjects=doc.objects.filter(o=>visibleInObjectList(o)||(!o.auxiliary&&!!o.constraintSet));
+  const shownObjects=listObjects.filter(o=>!excludedKinds.includes(o.kind)&&`${o.symbol} ${o.name} ${definition(doc,o)}`.toLowerCase().includes(query.toLowerCase()));
+  const [collapsed,setCollapsed]=useState(new Set<string>());
+  const toggle=(id:string)=>setCollapsed(old=>{const next=new Set(old);if(next.has(id))next.delete(id);else next.add(id);return next;});
+  const renderNode=(node:ObjectTreeNode):React.ReactNode=>{
+    const obj=node.object;
+    const row=obj?(            <ExpressionRow
               key={obj.id}
               doc={doc}
               docRef={docRef}
@@ -150,8 +140,44 @@ export function ExpressionPanel({
               numberValue={results.numbers.get(obj.id)}
               onContext={(x, y) => onContext(obj.id, x, y)}
               onConstraintEdit={onConstraintEdit}
-            />
-          ))}
+            />):null;
+    if(!node.children.length&&!node.label)return <div key={node.id}>{row}</div>;
+    const open=!!query||!collapsed.has(node.id),count=node.children.reduce((n,c)=>n+(c.object?1:c.children.length),0);
+    return <section key={node.id} className={obj?"expression-tree-set":"expression-tree-group"}>
+      <button className="expression-tree-toggle" aria-expanded={open} onClick={()=>toggle(node.id)}>{open?"▾":"▸"} {node.label??`${obj?.symbol??obj?.name} · 条件体系`} <span>{count}</span></button>
+      {open&&<>{obj?<details className="expression-tree-settings"><summary>构型与动点设置</summary>{row}</details>:row}<div className="expression-tree-children">{node.children.map(renderNode)}</div></>}
+    </section>;
+  };
+  useEffect(() => {
+    setNewProblem("");
+    setQuery("");
+  }, [doc.id]);
+  return (
+    <aside className="draw-expressions" aria-label="对象与表达式">
+      <div className="expression-heading">
+        <strong>对象与表达式</strong>
+        <span title="列表中显示 / 全部对象">{shownObjects.length}/{listObjects.length}</span>
+        <button title="命令及参数提示" onClick={() => setHelp(!help)}>
+          ?
+        </button>
+      </div>
+      <input
+        className="expression-search"
+        aria-label="搜索绘图对象"
+        placeholder="搜索对象、定义…"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+      <details className="expression-list-filters">
+        <summary>列表筛选{excludedKinds.length?` · 已排除 ${excludedKinds.length} 类`:""}</summary>
+        <small>仅影响此列表，画布中的对象保持显示。</small>
+        <div>{listKinds.map(kind=><label key={kind}><input type="checkbox" checked={!excludedKinds.includes(kind)}
+          onChange={e=>filterKinds(e.target.checked?excludedKinds.filter(k=>k!==kind):[...excludedKinds,kind])}/>显示{kindName[kind]}</label>)}</div>
+        <button type="button" disabled={!excludedKinds.length} onClick={()=>filterKinds([])}>显示全部类型</button>
+      </details>
+      <div className="expression-list">
+        {objectTree(doc,shownObjects).map(renderNode)}
+        {!!listObjects.length&&!shownObjects.length&&<div className="expression-empty">没有符合搜索或列表筛选的对象。<button type="button" onClick={()=>{setQuery("");filterKinds([]);}}>清除筛选</button></div>}
         {doc.objects.every(o => o.kind === "point" && o.construction.type === "origin") && (
           <div className="expression-empty">
             从工具栏选择工具，在图上点击作图。
@@ -342,6 +368,8 @@ function ExpressionRow({
     ? displaySource.slice(displaySource.indexOf(":") + 1)
     : displaySource;
   const preview = mathPreview(previewSource).replace(/(?<![\\A-Za-z])([A-Za-z]+[0-9]*)(?=\()/g,"\\operatorname{$1}");
+  const locusSet=obj.kind==='spatialLocus'?doc.objects.find(o=>o.id===obj.set):undefined;
+  const spatialLocus=locusSet?.kind==='solutionSet'&&obj.kind==='spatialLocus'?selectedBranch(locusSet).loci.find(l=>l.point===obj.point):undefined;
   const vectorResult=obj.kind==="vector"?vectorCoordinates(doc,obj):undefined;
   return (
     <div
@@ -466,7 +494,7 @@ function ExpressionRow({
           </button>
         )}
         {editing && <FormulaPreview source={preview} />}
-        {resolved?.kind === "curve" && resolved.derived?.type === "locus" && <details className="locus-equation"><summary>{resolved.parametric ? "已确定轨迹方程" : "数值轨迹"}</summary>{resolved.parametric ? <><FormulaPreview source={locusFormula(resolved)}/><small>扫描区间 [{resolved.parametric.tMin}, {resolved.parametric.tMax}]；仅包含该区间经过的部分</small></> : <small>通过有限采样绘制，尚未确定精确方程</small>}</details>}
+        {resolved?.kind === "curve" && resolved.derived?.type === "locus" && <details className="locus-equation"><summary>{resolved.parametric ? "已确定轨迹方程" : "数值轨迹"}</summary>{resolved.parametric ? <><FormulaPreview source={locusFormula(resolved)}/><small>{resolved.locusRangeDescription??`扫描区间 [${resolved.parametric.tMin}, ${resolved.parametric.tMax}]；仅包含该区间经过的部分`}</small></> : <small>通过有限采样绘制，尚未确定精确方程</small>}</details>}
         {result && !error && (
           <div className="expression-result">
             {exactCoordinates(doc.dimension === "2d" ? result.slice(0,2):result).approximate?"≈":"="}
@@ -478,8 +506,9 @@ function ExpressionRow({
         </div>}
         {obj.kind === "number" && <NumberSlider obj={obj} value={numberValue ?? obj.value}
           docRef={docRef} change={change} error={error} editor={editor} />}
+        {obj.kind==='spatialLocus'&&<small>{!displayableLocus(spatialLocus)?'仅有部分条件给出的候选范围，暂不绘制为轨迹。':spatialLocus.kind==='sampled'?'采样轨迹：采样位置已回代全部条件验证。':'解析轨迹'}</small>}
         {obj.kind === "solutionSet"&&<ConstraintSetControls set={obj} docRef={docRef} change={change} edit={()=>onConstraintEdit?.(obj.id)}/>}
-        {obj.kind === "point"&&obj.construction.type === "constraint"&&<small>由条件解集联动；参照结构之外的点可拖动。</small>}
+        {obj.kind === "point"&&obj.construction.type === "constraint"&&<small>由条件解集联动；能否拖动取决于当前参照与自由度。</small>}
         {(problem || error) && (
           <small className="expression-problem" role="alert">
             {problem || error}
@@ -503,12 +532,16 @@ function NumberSlider({ obj, value, docRef, change, error, editor }: {
   const pending = useRef<number | null>(null), frame = useRef(0), finishRef = useRef<() => void>(() => {});
   const editorFlush = useRef(() => finishRef.current());
   const derived = Object.keys(obj.references).length > 0;
+  const motion=useConstraintMotion(docRef,change,setProblem);
+  const owner=docRef.current.objects.find(o=>o.id===obj.constraintSet),managed=owner?.kind==='solutionSet'&&owner.problem.mode==='coordinate';
+  const variable=managed?owner.problem.planar?.unknowns.find(u=>u.object===obj.id&&u.field==='value'):undefined;
   const flushValue = () => {
     frame.current = 0;
     const value = pending.current; pending.current = null;
     if(value === null) return;
     const current = docRef.current, original = current.objects.find(o => o.id === obj.id);
     if(original?.kind !== "number" || Object.keys(original.references).length || original.locked) return;
+    if(managed){if(variable)motion.moveValue(owner.id,variable.id,value);return;}
     if(original.value === value && original.expression === String(value)) return;
     const next = {...current, objects:current.objects.map(o => o.id === obj.id ? {...original,value,expression:String(value)} : o)};
     if (change(next,!recorded.current,"continuous")) { docRef.current = next; recorded.current = true; setProblem(""); }
@@ -522,7 +555,7 @@ function NumberSlider({ obj, value, docRef, change, error, editor }: {
   };
   finishRef.current = finish;
   const begin = () => {
-    if(!active.current) { active.current = true; recorded.current = false; }
+    if(!active.current) { active.current = true; recorded.current = false; if(managed)motion.begin(); }
     editor.current = {flush:editorFlush.current,insert:()=>{}};
   };
   const setValue = (value: number) => {
@@ -544,7 +577,7 @@ function NumberSlider({ obj, value, docRef, change, error, editor }: {
     <div className="number-value">= {Number((live ?? value).toPrecision(10))}{derived && <small> · 关联计算</small>}</div>
     {!derived && <>
       <input type="range" aria-label={`调整数值 ${obj.symbol}`} min={obj.slider.min} max={obj.slider.max}
-        step={obj.slider.step} value={live ?? value} disabled={!!error || obj.locked}
+        step={obj.slider.step} value={live ?? value} disabled={!!error || obj.locked || managed&&(!variable||owner.result.branches[owner.activeBranch].dof===0)}
         onFocus={begin}
         onPointerDown={begin}
         onPointerUp={finish} onPointerCancel={finish}
@@ -556,5 +589,6 @@ function NumberSlider({ obj, value, docRef, change, error, editor }: {
       </div></details>
     </>}
     {problem && <small className="expression-problem">{problem}</small>}
+    {managed&&!variable&&<small>已知条件；请在“按条件作图”中修改。</small>}
   </div>;
 }

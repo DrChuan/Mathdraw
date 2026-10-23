@@ -39,6 +39,7 @@ interface ObjectBase {
 }
 export type PointConstruction =
   | { type:"rotation"; point:string;axis:string;angle:string }
+  | { type:"planeOffset"; plane:DrawingPlaneSource; anchor:string; offset:Vec3 }
   | { type: "planeOrigin"; plane: DrawingPlaneSource }
   | { type: "planeNormal"; plane: DrawingPlaneSource }
   | { type: "constraint"; set: string; point: string }
@@ -81,6 +82,7 @@ export interface DrawingSegment extends ObjectBase {
   relation?: {
     type: "parallel" | "perpendicular" | "bisector";
     reference?: string;
+    plane?: DrawingPlaneSource;
     planeId: string;
     showRightAngle?: boolean;
   };
@@ -102,6 +104,7 @@ export type DrawingPlaneSource =
   | { type:"polygon"; polygon:string }
   | { type:"workplane"; planeId:string };
 export type SolidConstruction =
+  | { type:"roundPoints"; points:string[] }
   | { type: "faces"; faces: string[] }
   | { type: "extrusion"; base: string; direction: Vec3; vector?: string }
   | { type: "apex"; base: string; apex: string }
@@ -113,16 +116,20 @@ export interface DrawingCurve extends ObjectBase {
   planeId: string;
   equation: string;
   autoFoci?: boolean;
+  declaration?:{id:string;points:string[]};
   derived?:
     | { type: "reflection"; source: string; axis: string }
     | { type: "tangent"; curve: string; point: string; branch: number }
-    | { type: "locus"; driver: string; follower: string; min: number; max: number };
+    | { type: "locus"; driver: string; follower: string; min: number; max: number; natural?:boolean };
   /** Computed samples only; never written by construction commands. */
   reflectionInput?: { source: DrawingCurve; a: Vec2; b: Vec2 };
   locusInput?: { document: DrawingDocument; driver:string; follower:string; min:number; max:number };
   resolvedDefinition?: string;
+  locusRangeDescription?:string;
   parametric?: { x: string; y: string; tMin: number; tMax: number };
   limits?: { xMin?: number; xMax?: number; yMin?: number; yMax?: number };
+  /** Resolved spatial curve plane; runtime only. */
+  frame?: WorkPlane;
   circle?: {
     type: "centerPoint" | "centerRadius" | "threePoint" | "incircle";
     points: string[];
@@ -221,7 +228,7 @@ export interface DrawingView {
   camera?: Pose;
 }
 export interface DrawingDocument {
-  schemaVersion: 1 | 2 | 3;
+  schemaVersion: 1 | 2 | 3 | 4;
   type: "mindgrove-mathdraw";
   id: string;
   title: string;
@@ -246,7 +253,7 @@ export interface DrawingFile {
   hash: string | null;
   savedContent?: string;
   uiDraft?: Record<string, string>;
-  sourceVersion?: 1 | 2 | 3;
+  sourceVersion?: 1 | 2 | 3 | 4;
 }
 export interface DrawingAdapter {
   recover(): Promise<DrawingFile | null>;
@@ -284,7 +291,7 @@ export const originPoint = (): DrawingPoint => ({
 });
 export function newDrawing(): DrawingDocument {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     type: "mindgrove-mathdraw",
     id: crypto.randomUUID(),
     title: "未命名绘图",

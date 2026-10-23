@@ -1,6 +1,6 @@
 import { definitionInput, annotationArgument } from "./input";
 import { locusDomain, dependsOn } from "./locus";
-import { tangentCandidates } from "./advanced";
+import { tangentCandidates, pointConstrainedToCurve } from "./advanced";
 import {
   defaultStyle,
   originPoint,
@@ -28,7 +28,9 @@ import { axisId, axisReference } from "./axes";
 import { conicFoci, circleCenter } from "./conics";
 import { exactNumber } from "./exactNumber";
 import { groupClosedFaces } from "./polyhedra";
+import { displayableLocus } from "./constraints/loci";
 import { foldPolygon } from "./fold";
+import { refreshDeclaredCurves,restoreConstraintPoints,restoreConditionSurfaces,constraintBinding } from "./constraints/document";
 const reserved = new Set([
   "x",
   "y",
@@ -83,10 +85,10 @@ export function nextSymbol(
   return candidate;
 }
 export function normalizeDrawing(input: DrawingDocument): DrawingDocument {
-  const doc = groupClosedFaces(structuredClone(input));
+  const doc = groupClosedFaces(refreshDeclaredCurves(restoreConditionSurfaces(restoreConstraintPoints(structuredClone(input)))));
   if(doc.coordinateOriginId&&!doc.objects.some(o=>o.id===doc.coordinateOriginId!.split(":")[0]))delete doc.coordinateOriginId;
   validateDrawing(doc);
-  doc.schemaVersion = 3;
+  doc.schemaVersion = 4;
   if (!doc.coordinateOriginId&&!doc.objects.some(o => o.kind === "point" && o.construction.type === "origin")) {
     const origin = originPoint();
     let originId = "__coordinate_origin__", suffix = 1;
@@ -238,6 +240,7 @@ export function definition(doc: DrawingDocument, obj: GeometryObject): string {
   if (obj.kind === "point") {
     const c = obj.construction;
     if (c.type === "origin") value = "Origin()";
+    else if(c.type==="planeOffset")value=`PlaneOffset(${planeArgs(c.plane)}, ${ref(c.anchor)}, (${c.offset.join(",")}))`;
     else if(c.type==="planeOrigin"||c.type==="planeNormal")value=`${c.type==="planeOrigin"?"PlaneOrigin":"NormalEndpoint"}(${planeArgs(c.plane)})`;
     else if(c.type === "constraint")value=`ConstraintPoint(${ref(c.set)}, ${JSON.stringify(c.point)})`;
     else if (c.type === "focus") value = `Focus(${ref(c.curve)}, ${c.index + 1})`;
@@ -274,7 +277,7 @@ export function definition(doc: DrawingDocument, obj: GeometryObject): string {
       value =
         c.type === "bisector"
           ? `PerpendicularBisector(${obj.points.map(ref).join(", ")})`
-          : `${c.type === "parallel" ? "Parallel" : "Perpendicular"}(${ref(c.reference!)}, ${ref(obj.points[0])})`;
+          : `${c.type === "parallel" ? "Parallel" : "Perpendicular"}(${c.plane?planeArgs(c.plane):ref(c.reference!)}, ${ref(obj.points[0])})`;
     } else
       value = `${obj.kind === "segment" ? "Segment" : obj.kind === "vector" ? "Vector" : obj.ray ? "Ray" : "Line"}(${obj.points.map(ref).join(", ")})`;
   } else if (obj.kind === "polygon" || obj.kind === "triangle")
@@ -282,7 +285,7 @@ export function definition(doc: DrawingDocument, obj: GeometryObject): string {
   else if (obj.kind === "curve") {
     if(obj.derived) {
       const c=obj.derived;
-      value=c.type === "reflection" ? `Reflect(${ref(c.source)}, ${ref(c.axis)})` : c.type === "tangent" ? `Tangent(${ref(c.curve)}, ${ref(c.point)}, ${c.branch+1})` : `Locus(${ref(c.driver)}, ${ref(c.follower)}, ${fmt(c.min)}, ${fmt(c.max)})`;
+      value=c.type === "reflection" ? `Reflect(${ref(c.source)}, ${ref(c.axis)})` : c.type === "tangent" ? `Tangent(${ref(c.curve)}, ${ref(c.point)}, ${c.branch+1})` : `Locus(${ref(c.driver)}, ${ref(c.follower)}${c.natural?"":`, ${fmt(c.min)}, ${fmt(c.max)}`})`;
     } else if(obj.parametric) value=`Parametric(${obj.parametric.x}, ${obj.parametric.y}, ${fmt(obj.parametric.tMin)}, ${fmt(obj.parametric.tMax)})`;
     else if (obj.circle) {
       const c = obj.circle;
@@ -295,6 +298,7 @@ export function definition(doc: DrawingDocument, obj: GeometryObject): string {
     if (!c)
       value = `${{ cube: "Cube", cuboid: "Cuboid", prism: "RegularPrism", pyramid: "RegularPyramid", frustum: "Frustum", cylinder: "Cylinder", cone: "Cone", coneFrustum: "ConeFrustum", sphere: "Sphere" }[obj.shape]}(${[obj.width, obj.depth, obj.height, obj.radius, obj.topRadius, obj.sides, ...obj.origin, ...obj.rotation].map(fmt).join(", ")})`;
     else if(c.type === "faces")value=`Polyhedron(${c.faces.map(ref).join(", ")})`;
+    else if(c.type === "roundPoints")value=`${{cylinder:"CylinderByPoints",cone:"ConeByPoints",coneFrustum:"FrustumByPoints",sphere:"SphereByPoints"}[obj.shape as "cylinder"|"cone"|"coneFrustum"|"sphere"]}(${c.points.map(ref).join(", ")})`;
     else
       value =
         c.type === "extrusion"
@@ -308,6 +312,10 @@ export function definition(doc: DrawingDocument, obj: GeometryObject): string {
   return `${symbol} = ${value}`;
 }
 export const commandCatalog = [
+  ["CylinderByPoints","按点定义圆柱","底面圆心, 顶面圆心, 底面圆上一点"],
+  ["ConeByPoints","按点定义圆锥","底面圆心, 顶点, 底面圆上一点"],
+  ["FrustumByPoints","按点定义圆台","底面圆心, 顶面圆心, 底面圆上一点, 顶面圆上一点"],
+  ["SphereByPoints","按点定义球","球心, 球上一点"],
   ["Fold", "翻折多边形", "多边形, 旋转轴, 可选角度变量（度）；省略时创建滑块"],
   ["Normal", "平面法向量", "平面多边形，或三个点；留空使用当前工作平面"],
   ["Section", "几何体截面", "几何体，三点 / 两条直线 / 直线与点"],
@@ -429,7 +437,8 @@ export function applyDefinition(
 ): DrawingDocument {
   const doc = normalizeDrawing(input),
     old = doc.objects.find((o) => o.id === replaceId);
-  if(old&&(old.kind === "solutionSet"||old.kind === "spatialLocus"||old.kind === "point"&&old.construction.type === "constraint"))
+  if(old?.constraintSet&&doc.objects.some(o=>o.id===old.constraintSet&&o.kind==='solutionSet'&&o.problem.mode==='coordinate'))throw new Error('该对象已纳入条件体系，请在“按条件作图”中编辑定义');
+  if(old&&(old.kind === "solutionSet"||old.kind === "spatialLocus"||old.kind === "point"&&constraintBinding(doc,old)))
     throw new Error("此对象由条件解集管理，请打开“编辑条件”修改，避免破坏关联");
   let text = definitionInput(source.trim()).replace(/([A-Za-z])_\{([A-Za-z0-9]+)\}/g,"$1_$2 ");
   if (!text) throw new Error("请输入定义");
@@ -596,7 +605,10 @@ export function applyDefinition(
       if (args.length !== n)
         throw new Error(`${entry[1]}需要 ${n} 个参数：${entry[2]}`);
     };
-    if(name==="Fold") {
+    if(["CylinderByPoints","ConeByPoints","FrustumByPoints","SphereByPoints"].includes(name)) {
+      const shape=({CylinderByPoints:"cylinder",ConeByPoints:"cone",FrustumByPoints:"coneFrustum",SphereByPoints:"sphere"} as const)[name as "CylinderByPoints"|"ConeByPoints"|"FrustumByPoints"|"SphereByPoints"];
+      count(shape==="sphere"?2:shape==="coneFrustum"?4:3);const solid=solidObject(shape);solid.construction={type:"roundPoints",points:argsPoint(args)};objects=[solid];
+    } else if(name==="Fold") {
       if(args.length<2||args.length>3)throw new Error("翻折需要多边形、旋转轴和可选角度变量");
       const source=ref(args[0]),axis=ref(args[1]),polygon=geometry.objects.get(source);
       if(polygon?.kind!=="polygon"&&polygon?.kind!=="triangle")throw new Error("请选择多边形或三角形");
@@ -613,15 +625,27 @@ export function applyDefinition(
     } else if(name === "Locus") {
       if(args.length!==2&&args.length!==4)throw new Error("轨迹需要主动点、从动点，以及可选扫描起止值");
       const driver=point(args[0]),follower=point(args[1]);
+      if(doc.dimension==='3d') {
+        const a=constraintBinding(doc,doc.objects.find(o=>o.id===driver) as DrawingPoint),b=constraintBinding(doc,doc.objects.find(o=>o.id===follower) as DrawingPoint);
+        if(a&&b&&a.set.id===b.set.id&&displayableLocus(b.set.result.branches[b.set.activeBranch].loci.find(l=>l.point===b.point))) {
+          const old=doc.objects.find(o=>o.kind==='spatialLocus'&&o.set===b.set.id&&o.point===b.point);
+          if(old)return normalizeDrawing({...doc,objects:doc.objects.map(o=>o.id===old.id?{...o,hidden:false}:o)});
+          return normalizeDrawing({...doc,objects:[...doc.objects,{id:crypto.randomUUID(),kind:'spatialLocus',name:`${b.point} 的空间轨迹`,set:b.set.id,point:b.point,style:defaultStyle()}]});
+        }
+        throw Error('尚未得到满足全部条件的空间轨迹；请在按条件作图中计算轨迹。空间轨迹不会投影到当前工作平面来代替');
+      }
       if(!dependsOn(doc,follower,driver))throw new Error("从动点必须通过构造依赖主动点，不能是无关的自由点");
       const range=locusDomain(doc,driver),min=args[2]?scalar(args[2]):range[0],max=args[3]?scalar(args[3]):range[1];
       if(min>=max)throw new Error("扫描起点必须小于终点");
-      objects=[{...makeCurve(),name:"轨迹",autoFoci:false,derived:{type:"locus",driver,follower,min,max},equation:"0",style:{...defaultStyle(),color:"#6955a5"}}];
+      objects=[{...makeCurve(),name:"轨迹",autoFoci:false,derived:{type:"locus",driver,follower,min,max,natural:args.length===2},equation:"0",style:{...defaultStyle(),color:"#6955a5"}}];
     } else if(name === "Tangent") {
       if(args.length!==2&&args.length!==3)throw new Error("切线需要曲线、经过的点和可选序号");
       const curve=ref(args[0]),p=point(args[1]),original=geometry.curves.get(curve);
       if(!original)throw new Error("请选择曲线");
-      const candidates=tangentCandidates(original,toPlane(plane,geometry.points.get(p)!.p));
+      const frame=original.frame??doc.planes.find(k=>k.id===original.planeId)!;
+      const v=geometry.points.get(p)!.p,normal=[frame.u[1]*frame.v[2]-frame.u[2]*frame.v[1],frame.u[2]*frame.v[0]-frame.u[0]*frame.v[2],frame.u[0]*frame.v[1]-frame.u[1]*frame.v[0]];
+      if(Math.abs(v.reduce((n,x,i)=>n+(x-frame.origin[i])*normal[i],0))>1e-7*Math.hypot(...normal))throw Error('切线经过的点必须在曲线平面内');
+      const candidates=tangentCandidates(original,toPlane(original.frame??doc.planes.find(k=>k.id===original.planeId)!,geometry.points.get(p)!.p),pointConstrainedToCurve(doc,p,curve));
       if(!candidates.length)throw new Error("没有实切线；圆内部的点不能向圆作切线");
       objects=candidates.slice(0,32).map((_c,i)=>({...makeCurve(),name:"切线",autoFoci:false,planeId:original.planeId,equation:"0",derived:{type:"tangent" as const,curve,point:p,branch:i}}));
       if(args[2])objects=objects.filter((_o,i)=>i===scalar(args[2])-1);
@@ -769,29 +793,15 @@ export function applyDefinition(
     ) {
       const bis = name === "PerpendicularBisector";
       if (!bis) count(2);
-      const ps: [string, string] = bis
-        ? args.length === 1
-          ? ends(args[0])
-          : (argsPoint(args, 2) as [string, string])
-        : [point(args[1]), point(args[1])];
-      objects = [
-        {
-          id: crypto.randomUUID(),
-          kind: "line",
-          name: entry[1],
-          points: ps,
-          relation: {
-            type: bis
-              ? "bisector"
-              : name === "Parallel"
-                ? "parallel"
-                : "perpendicular",
-            reference: bis ? undefined : ref(args[0]),
-            planeId: plane.id,
-          },
-          style: defaultStyle(),
-        },
-      ];
+      let planeRef:DrawingPlaneSource|undefined;
+      if(!bis)try{planeRef=planeSource([args[0]]);}catch{/* A straight reference is resolved below. */}
+      const ps:[string,string]=bis?(args.length===1?ends(args[0]):argsPoint(args,2) as [string,string]):[point(args[1]),point(args[1])];
+      if(planeRef&&name==='Parallel') {
+        if(doc.dimension!=='3d')throw Error('平行平面仅用于立体模式');
+        const helpers=([[-3,-3,0],[3,-3,0],[3,3,0],[-3,3,0]] as Vec3[]).map(offset=>({...makePoint({type:'planeOffset',plane:planeRef!,anchor:ps[0],offset}),hidden:true,auxiliary:true}));
+        objects=[{id:crypto.randomUUID(),kind:'polygon',name:'平行平面（示意范围）',points:helpers.map(p=>p.id),style:{...defaultStyle(),line:'dashed'},parameters:{source:text,references:{...references},fields:{}}},...helpers];
+      } else objects=[{id:crypto.randomUUID(),kind:'line',name:entry[1],points:ps,relation:{type:bis?'bisector':name==='Parallel'?'parallel':'perpendicular',reference:bis||planeRef?undefined:ref(args[0]),plane:planeRef,planeId:plane.id},style:defaultStyle()}];
+
     } else if (name === "Intersect") {
       if (args.length < 2 || args.length > 3)
         throw new Error("交点需要两个对象和可选序号");

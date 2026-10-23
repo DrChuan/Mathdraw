@@ -1,7 +1,9 @@
 import type { Vec3 } from "../types";
 import type { ConstraintProblem, Positions, SpatialLocus } from "./types";
 import { expandConditions } from "./compile";
+import { dotPointLocus } from "./vectors";
 import { add, sub, mul, dot, cross, norm, unit, perpendicular } from "./math";
+import { curveGeometry,circleThrough,sphereThrough } from "./measures";
 
 export function analyticLoci(problem:ConstraintProblem,p:Positions,reference:string[],scale:number):SpatialLocus[] {
   const fixed=new Set(reference), primitives=expandConditions(problem), result:SpatialLocus[]=[];
@@ -10,10 +12,24 @@ export function analyticLoci(problem:ConstraintProblem,p:Positions,reference:str
     let segment:Vec3[]|undefined, unsupported=false;
     const plane=(o:Vec3,n:Vec3)=>{if(norm(n)>1e-8){n=unit(n);planes.push({n,d:dot(o,n)});}};
     const line=(o:Vec3,d:Vec3)=>{const u=perpendicular(unit(d));plane(o,u);plane(o,cross(unit(d),u));};
+    if(problem.mode==='plane'||problem.mode==='coordinate')plane([0,0,0],[0,0,1]);
     for(const c of primitives.filter(c=>c.refs.flat().includes(point))) {
       if(c.refs.flat().some(n=>n!==point&&!fixed.has(n))){unsupported=true;continue;}
       const otherEdge=(edge:string[])=>edge.includes(point)?p[edge.find(n=>n!==point)!]:undefined;
-      if(c.kind==="distance") {spheres.push({c:otherEdge(c.refs[0])!,r:c.value!});}
+      if(c.kind==="onCurve") {
+        const curve=problem.curves?.find(k=>k.id===c.curve);
+        if(!curve||![...curve.points,...(curve.plane??[])].every(n=>fixed.has(n))){unsupported=true;continue;}
+        try{const g=curveGeometry(curve,p);if(curve.type==="circle"){plane(g.center,g.normal);spheres.push({c:g.center,r:g.radius});}else unsupported=true;}catch{unsupported=true;}
+      } else if(c.kind==="concyclic"||c.kind==="cospherical") {
+        const anchors=c.refs[0].filter(n=>n!==point).map(n=>p[n]);
+        if(c.kind==="concyclic"){const circle=circleThrough(anchors);if(circle){plane(circle.center,circle.normal);spheres.push({c:circle.center,r:circle.radius});}else unsupported=true;}
+        else {const sphere=sphereThrough(anchors);if(sphere.rank===3)spheres.push({c:sphere.center,r:sphere.radius});else unsupported=true;}
+      } else if(c.kind==="vectorDot") {
+        const locus=dotPointLocus(c.refs,c.value!,p,point);
+        if(locus?.plane)plane(locus.plane.origin,locus.plane.normal);
+        if(locus?.sphere)spheres.push({c:locus.sphere.center,r:locus.sphere.radius});
+        if(!locus)unsupported=true;
+      } else if(c.kind==="distance") {spheres.push({c:otherEdge(c.refs[0])!,r:c.value!});}
       else if((c.kind==="equal"||c.kind==="ratio")&&c.refs.filter(r=>r.includes(point)).length===1) {
         const i=c.refs[0].includes(point)?0:1,edge=c.refs[1-i];
         spheres.push({c:otherEdge(c.refs[i])!,r:norm(sub(p[edge[1]],p[edge[0]]))*(c.kind==="equal"?1:i===0?c.value!:1/c.value!)});
@@ -103,4 +119,10 @@ export function locusPaths(l:SpatialLocus):Vec3[][] {
     const t=i*Math.PI/48,n=unit(cross(l.u,l.v));
     return add(l.origin,mul(add(mul(l.u,Math.cos(t)),mul(add(mul(l.v,Math.cos(a)),mul(n,Math.sin(a))),Math.sin(t))),l.radius));
   }));
+}
+
+/** Partial analytic ranges guide correction, but are not trajectories of the
+ * complete system. Only certified loci or jointly verified sampled paths draw. */
+export function displayableLocus(l:SpatialLocus|undefined):l is SpatialLocus {
+  return !!l&&(l.complete||l.kind==="sampled");
 }

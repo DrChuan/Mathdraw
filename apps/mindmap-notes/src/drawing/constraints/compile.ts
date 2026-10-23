@@ -1,12 +1,35 @@
+import { scalarRelation } from './scalarRelations';
 import type { Vec3 } from "../types";
 import type { Condition, ConstraintProblem, Positions } from "./types";
 import { add, sub, mul, dot, cross, norm, unit } from "./math";
+import { polygonArea,solidVolume,circleThrough,sphereThrough,curveGeometry } from "./measures";
 
-export interface Primitive { owner:string; kind:Condition["kind"]|"vectorSum"|"homothety"; refs:string[][]; value?:number;alternateValue?:number }
+export interface Primitive { owner:string; kind:Condition["kind"]|"vectorSum"|"homothety"|"curveDefinition"; refs:string[][]; value?:number;alternateValue?:number;coefficients?:number[];solid?:Condition["solid"];curve?:string }
 export function expandConditions(problem:ConstraintProblem):Primitive[] {
   const out:Primitive[]=[];
   for(const c of problem.conditions.filter(c=>c.enabled)) {
-    const put=(kind:Primitive["kind"],refs:string[][],value?:number)=>out.push({owner:c.id,kind,refs,value,alternateValue:kind===c.kind?c.alternateValue:undefined});
+    const put=(kind:Primitive["kind"],refs:string[][],value?:number)=>out.push({owner:c.id,kind,refs,value,alternateValue:kind===c.kind?c.alternateValue:undefined,coefficients:kind===c.kind?c.coefficients:undefined,solid:c.solid,curve:c.curve});
+    if(c.kind==="volume") {
+      out.push(...expandConditions({...problem,curves:[],conditions:[{...c,kind:c.solid!,solid:undefined,value:undefined}]}));put("volume",c.refs,c.value);continue;
+    }
+    if(c.kind==="area"||c.kind==="concyclic") {
+      for(let i=3;i<c.refs[0].length;i++)put("coplanar",[[...c.refs[0].slice(0,3),c.refs[0][i]]]);
+      put(c.kind,c.refs,c.value);continue;
+    }
+    if(["cylinder","cone","coneFrustum","sphere"].includes(c.kind)) {
+      const [o,t,a,b]=c.refs[0];
+      if(c.kind!=="sphere")put("perpendicular",[[o,t],[o,a]]);
+      if(c.kind==="coneFrustum"){put("parallel",[[o,a],[t,b]]);put("perpendicular",[[o,t],[t,b]]);}
+      put(c.kind,c.refs);continue;
+    }
+    if(c.kind==="convexPolygon"||c.kind==="congruent"||c.kind==="similar") {
+      for(const polygon of c.refs)for(let i=3;i<polygon.length;i++)put("coplanar",[[polygon[0],polygon[1],polygon[2],polygon[i]]]);
+      if(c.kind==="congruent") {
+        const [a,b]=c.refs;
+        for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++)put("equal",[[a[i],a[j]],[b[i],b[j]]]);
+      } else put(c.kind,c.refs);
+      continue;
+    }
     if(!["parallelogram","rectangle","rhombus","square","prism","pyramid","frustum","cube"].includes(c.kind)){put(c.kind,c.refs,c.value);continue;}
     const p=c.refs[0], [a,b,d,e]=p;
     if(["parallelogram","rectangle","rhombus","square"].includes(c.kind)) {
@@ -26,22 +49,61 @@ export function expandConditions(problem:ConstraintProblem):Primitive[] {
       put("perpendicular",[edges[0],edges[1]]);put("perpendicular",[edges[0],edges[2]]);put("perpendicular",[edges[1],edges[2]]);
     }
   }
+  for(const c of problem.curves??[])out.push({owner:c.id,kind:"curveDefinition",curve:c.id,refs:[...c.points,...(c.plane??[])].map(n=>[n])});
   return out;
 }
 export const flatten=(names:string[],p:Positions)=>names.flatMap(n=>p[n]);
 export const positions=(names:string[],x:number[]):Positions=>Object.fromEntries(names.map((n,i)=>[n,x.slice(i*3,i*3+3) as Vec3]));
 export function problemScale(p:ConstraintProblem) {
-  const lengths=p.conditions.filter(c=>c.enabled&&c.kind==="distance").map(c=>c.value!).sort((a,b)=>a-b);
-  return lengths.length?lengths[Math.floor(lengths.length/2)]:1;
+  const lengths=p.conditions.filter(c=>c.enabled&&["distance","circumradius","concyclic","cospherical"].includes(c.kind)&&c.value!==undefined).map(c=>c.value!);
+  lengths.push(...p.conditions.filter(c=>c.enabled&&["area","volume"].includes(c.kind)).map(c=>c.value!**(c.kind==="area"?.5:1/3)),...(p.curves??[]).filter(c=>c.value).map(c=>c.value!/(c.type==="ellipse"?2:1)));lengths.sort((a,b)=>a-b);
+  const dots=p.conditions.filter(c=>c.enabled&&c.kind==="vectorDot"&&c.value).map(c=>Math.sqrt(Math.abs(c.value!)));
+  return lengths.length?lengths[Math.floor(lengths.length/2)]:dots[0]??1;
 }
 export function evaluator(problem:ConstraintProblem) {
   const primitives=expandConditions(problem), scale=problemScale(problem), indices=new Map(problem.points.map((n,i)=>[n,i*3]));
+  const scalars=new Map(problem.conditions.filter(c=>c.kind==='scalarEquation').map(c=>[c.id,scalarRelation(c.source,problem.points)]));
   const point=(x:number[],name:string):Vec3=>{const i=indices.get(name)!;return [x[i],x[i+1],x[i+2]];};
   const singleResidual=(c:Primitive,x:number[]):number[]=>{
     const refs=c.refs.map(r=>r.map(n=>point(x,n))), v=(r:Vec3[])=>sub(r[1],r[0]);
     const dir=(r:Vec3[])=>r.length===2?unit(v(r)):unit(cross(v(r),sub(r[2],r[0])));
     const angle=(c.value??0)*Math.PI/180;
     switch(c.kind) {
+      case 'scalarEquation':try{return [scalars.get(c.owner)!.residual(positions(problem.points,x))];}catch{return [1e4];}
+      case "curveDefinition": {
+        const curve=problem.curves!.find(k=>k.id===c.curve)!,ps=curve.points.map(n=>point(x,n));
+        const plane=curve.plane?.map(n=>point(x,n)),out=plane?ps.map(q=>dot(sub(q,plane[0]),unit(cross(sub(plane[1],plane[0]),sub(plane[2],plane[0]))))/scale):[];
+        if(plane)out.push(Math.max(0,1e-4-norm(cross(unit(sub(plane[1],plane[0])),unit(sub(plane[2],plane[0]))))));
+        if(curve.method==="threePoint")out.push(Math.max(0,1e-4-norm(cross(unit(sub(ps[1],ps[0])),unit(sub(ps[2],ps[0]))))));
+        if(curve.type==="ellipse")out.push(Math.max(0,(norm(sub(ps[1],ps[0]))-curve.value!)/scale+1e-5));
+        return out;
+      }
+      case "onCurve": {
+        const curve=problem.curves!.find(k=>k.id===c.curve)!;
+        try {
+          const geometry=curveGeometry(curve,positions(problem.points,x)),q=sub(refs[0][0],geometry.center),u=dot(q,geometry.u),v=dot(q,geometry.v);
+          return [dot(q,geometry.normal)/scale,(Math.hypot(u/geometry.a,v/geometry.b)-1)];
+        }catch{return [1,1];}
+      }
+      case "area":return [(polygonArea(refs[0])-c.value!)/Math.max(c.value!,scale*scale*1e-12)];
+      case "volume":return [(solidVolume(c.solid!,refs[0])-c.value!)/Math.max(c.value!,scale**3*1e-12)];
+      case "circumradius": {
+        const [a,b,d]=refs[0],area=norm(cross(sub(b,a),sub(d,a)))/2;
+        const radius=norm(sub(b,a))*norm(sub(d,a))*norm(sub(d,b))/Math.max(4*area,scale*scale*1e-15);
+        return [(radius-c.value!)/Math.max(c.value!,scale*1e-12)];
+      }
+      case "concyclic": {
+        const circle=circleThrough(refs[0]);if(!circle)return Array(refs[0].length+1).fill(1);
+        return [...refs[0].map(q=>(norm(sub(q,circle.center))-circle.radius)/scale),c.value===undefined?0:(circle.radius-c.value)/Math.max(c.value,scale*1e-12)];
+      }
+      case "cospherical": {
+        const sphere=sphereThrough(refs[0]);
+        return [...refs[0].map(q=>(norm(sub(q,sphere.center))-sphere.radius)/scale),c.value===undefined?0:(sphere.rank===3?sphere.radius-c.value:Math.max(0,sphere.radius-c.value))/Math.max(c.value,scale*1e-12)];
+      }
+      case "cylinder":case "cone":case "sphere":return [];
+      case "coneFrustum": {
+        const [o,t,a,b]=refs[0];return [Math.max(0,-dot(unit(sub(a,o)),unit(sub(b,t))))];
+      }
       case "distance":return [(norm(v(refs[0]))-c.value!)/Math.max(c.value!,scale*1e-12)];
       case "equal": {const a=norm(v(refs[0])),b=norm(v(refs[1]));return [(a-b)/Math.max(a,b,scale*1e-12)];}
       case "ratio": {const a=norm(v(refs[0])),b=c.value!*norm(v(refs[1]));return [(a-b)/Math.max(a,b,scale*1e-12)];}
@@ -72,6 +134,27 @@ export function evaluator(problem:ConstraintProblem) {
         return [...mul(cross(unit(d),delta),1/Math.max(norm(d),scale*1e-12)),Math.min(0,t),Math.max(0,t-1)];
       }
       case "division":return mul(sub(refs[0][0],add(refs[1][0],mul(v(refs[1]),c.value!/(1+c.value!)))),1/scale);
+      case "vectorRelation":return mul(refs.reduce((sum,r,i)=>add(sum,mul(v(r),c.coefficients![i])),[0,0,0] as Vec3),1/(scale*Math.max(1,...c.coefficients!.map(Math.abs))));
+      case "vectorDot":return [(dot(v(refs[0]),v(refs[1]))-c.value!)/Math.max(scale*scale,Math.abs(c.value!),1e-24)];
+      case "similar": {
+        const [a,b]=refs,baseA=norm(sub(a[1],a[0])),baseB=norm(sub(b[1],b[0]));
+        const out:number[]=[];
+        for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++) {
+          const x=norm(sub(a[j],a[i]))*baseB,y=norm(sub(b[j],b[i]))*baseA;
+          out.push((x-y)/Math.max(x,y,scale*scale*1e-24));
+        }
+        return out;
+      }
+      case "convexPolygon": {
+        const p=refs[0],normal=unit(cross(sub(p[1],p[0]),sub(p[2],p[0]))),out:number[]=[];
+        // Every other vertex must lie strictly on the same side of each
+        // oriented edge. Local turn signs alone would also admit star polygons.
+        for(let i=0;i<p.length;i++)for(let j=0;j<p.length;j++)if(j!==i&&j!==(i+1)%p.length) {
+          const e=sub(p[(i+1)%p.length],p[i]),d=sub(p[j],p[i]);
+          out.push(Math.min(0,dot(cross(e,d),normal)/Math.max(norm(e)*norm(d),scale*scale*1e-24)-1e-4));
+        }
+        return out;
+      }
       case "coplanar": {const [a,b,c,d]=refs[0];return [dot(cross(unit(sub(b,a)),unit(sub(c,a))),unit(sub(d,a)))];}
       case "vectorSum":return mul(sub(add(refs[0][0],refs[0][1]),add(refs[0][2],refs[0][3])),1/scale);
       case "homothety": {
@@ -103,6 +186,13 @@ export function evaluator(problem:ConstraintProblem) {
     else if(c.kind==="vertexAngle"){line([refs[1][0],refs[0][0]]);line([refs[1][0],refs[2][0]]);}
     else if(c.kind==="dihedral"){plane([...refs[0],refs[1][0]]);plane([...refs[0],refs[2][0]]);}
     else if(c.kind==="onSegment"||c.kind==="division")line(refs[1]);
+    else if(c.kind==="vectorDot")refs.forEach(line);
+    else if(["convexPolygon","congruent","similar","area","concyclic","circumradius"].includes(c.kind))for(const polygon of refs){plane(polygon);polygon.forEach((p,i)=>line([p,polygon[(i+1)%polygon.length]]));}
+    else if(c.kind==="cospherical"){const sphere=sphereThrough(refs[0]);lengths.push(sphere.radius/scale);}
+    else if(c.kind==="volume")return degeneracy({...c,kind:c.solid!,solid:undefined},x);
+    else if(["cylinder","cone","coneFrustum","sphere"].includes(c.kind)) {
+      const p=refs[0];if(c.kind==="sphere")line(p);else{line([p[0],p[1]]);line([p[0],p[2]]);if(c.kind==="coneFrustum")line([p[1],p[3]]);}
+    }
     else if(["prism","pyramid","frustum","regularPolygon"].includes(c.kind)) {
       const p=refs[0],n=c.kind==="pyramid"?p.length-1:c.kind==="regularPolygon"?p.length:p.length/2,base=c.kind==="pyramid"?p.slice(1):p.slice(0,n);
       plane(base);for(let i=0;i<n;i++)line([base[i],base[(i+1)%n]]);
@@ -128,9 +218,11 @@ export function evaluator(problem:ConstraintProblem) {
   // Template vertex order describes a simple polygon, not a self-crossing wire.
   // Check this discrete property on publication rather than putting a changing
   // number of terms into the finite-difference residual vector.
-  const crossedBase=(c:Condition,x:number[])=>{
-    if(!["prism","pyramid","frustum","regularPolygon"].includes(c.kind))return false;
-    const names=c.refs[0],base=c.kind==="pyramid"?names.slice(1):c.kind==="regularPolygon"?names:names.slice(0,names.length/2),ps=base.map(n=>point(x,n)),n=ps.length;
+  const crossedBase=(c:Condition,x:number[]):boolean=>{
+    if(c.kind==="congruent"||c.kind==="similar")return c.refs.some(refs=>crossedBase({...c,kind:"convexPolygon",refs:[refs]},x));
+    if(c.kind==="volume")return crossedBase({...c,kind:c.solid!,solid:undefined},x);
+    if(!["prism","pyramid","frustum","regularPolygon","convexPolygon","area"].includes(c.kind))return false;
+    const names=c.refs[0],base=c.kind==="pyramid"?names.slice(1):["regularPolygon","convexPolygon","area"].includes(c.kind)?names:names.slice(0,names.length/2),ps=base.map(n=>point(x,n)),n=ps.length;
     const normal=unit(cross(sub(ps[1],ps[0]),sub(ps[2],ps[0]))),tolerance=scale*1e-8;
     for(let i=0;i<n;i++)for(let j=i+1;j<n;j++) {
       if(norm(sub(ps[i],ps[j]))<=tolerance)return true;
@@ -152,6 +244,10 @@ export function evaluator(problem:ConstraintProblem) {
   ];
   const verify=(x:number[])=>{
     const errors=conditions.map(c=>({id:c.id,error:Math.max(0,...primitives.filter(p=>p.owner===c.id).flatMap(p=>residual(p,x)).map(Math.abs)),degenerate:degeneracy(c,x).some(n=>n<1e-7)||crossedBase(c,x)}));
+    for(const curve of problem.curves??[]) {
+      let degenerate=false;try{curveGeometry(curve,positions(problem.points,x));}catch{degenerate=true;}
+      errors.push({id:curve.id,error:Math.max(0,...primitives.filter(p=>p.owner===curve.id).flatMap(p=>residual(p,x)).map(Math.abs)),degenerate});
+    }
     const valid=x.every(v=>Number.isFinite(v)&&Math.abs(v)<=1e9)&&errors.every(e=>e.error<3e-6&&!e.degenerate);
     return {valid,errors,max:Math.max(0,...errors.map(e=>e.error))};
   };
@@ -176,7 +272,8 @@ export function contradictions(p:ConstraintProblem):string[] {
     const r=c.refs[0];
     if(c.kind==="pyramid")planes.push(r.slice(1));
     else if(c.kind==="prism"||c.kind==="frustum")planes.push(r.slice(0,r.length/2),r.slice(r.length/2));
-    else if(["rectangle","parallelogram","rhombus","square","regularPolygon","coplanar"].includes(c.kind))planes.push(r);
+    else if(["rectangle","parallelogram","rhombus","square","regularPolygon","convexPolygon","coplanar"].includes(c.kind))planes.push(r);
+    else if(c.kind==="congruent"||c.kind==="similar")planes.push(...c.refs);
   }
   const collinear=active.flatMap(c=>c.kind==="collinear"?[c.refs[0]]:c.kind==="onSegment"||c.kind==="division"?[c.refs.flat()]:[]);
   const closures=planes.map(points=>{

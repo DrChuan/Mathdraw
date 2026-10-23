@@ -4,6 +4,9 @@ import { evaluator,expandConditions,flatten,problemScale } from "./compile";
 import { add,sub,mul,dot,cross,norm,unit,perpendicular } from "./math";
 import { metricNetworks,distanceKey,type MetricNetwork } from "./metric";
 import { intersectLoci,type PlaneEquation,type SphereEquation } from "./intersections";
+import { affineVectorPoints,dotPointLocus } from "./vectors";
+import { curveGeometry,circleThrough,sphereThrough,polygonArea } from "./measures";
+import { incidenceFrame } from "./incidence";
 
 interface Step { positions:Positions; finite:boolean; steps:string[] }
 export interface ConstructionPlan { solutions:Positions[]; seeds:Positions[]; finite:boolean; steps:string[] }
@@ -29,7 +32,7 @@ export function planConstructions(problem:ConstraintProblem,deadline:number,opti
   const partialChecks=new Map<string,ReturnType<typeof evaluator>>();
   const valid=(p:Positions)=>{
     const names=problem.points.filter(n=>p[n]),key=names.join("|");let check=partialChecks.get(key);
-    if(!check){check=evaluator({...problem,points:names,conditions:problem.conditions.filter(c=>c.refs.flat().every(n=>p[n]))});partialChecks.set(key,check);}
+    if(!check){const curves=problem.curves?.filter(c=>[...c.points,...(c.plane??[])].every(n=>p[n]));check=evaluator({...problem,points:names,curves,conditions:problem.conditions.filter(c=>c.refs.flat().every(n=>p[n])&&(c.kind!=="onCurve"||curves?.some(k=>k.id===c.curve)))});partialChecks.set(key,check);}
     return check.verify(flatten(names,p)).valid;
   };
   const loci=(point:string,p:Positions,network:MetricNetwork)=>{
@@ -40,6 +43,7 @@ export function planConstructions(problem:ConstraintProblem,deadline:number,opti
       if(planes.length>cap){planes.length=cap;exhaustive=false;}
     };
     const line=(o:Vec3,d:Vec3)=>{if(norm(d)<1e-12)return;const n=perpendicular(d);plane(o,n);plane(o,cross(d,n));};
+    if(problem.mode==='plane'||problem.mode==='coordinate')plane([0,0,0],[0,0,1]);
     for(const anchor of problem.points.filter(n=>p[n])) {
       const radius=network.get(distanceKey(point,anchor));if(radius!==undefined){used=true;spheres.push({center:p[anchor],radius});}
     }
@@ -54,9 +58,29 @@ export function planConstructions(problem:ConstraintProblem,deadline:number,opti
         used=true;spheres.push({center:sub(p[base[j]],mul(sub(p[base[j]],p[base[i]]),ratio)),radius});
       }
     }
+    for(const c of primitives.filter(c=>c.kind==="similar"))for(let side=0;side<2;side++) {
+      const moving=c.refs[side],base=c.refs[1-side],index=moving.indexOf(point);
+      if(index<0||!base.every(n=>p[n]))continue;
+      const ratio=similarity([base,moving],p,network);if(ratio===undefined)continue;
+      moving.forEach((name,i)=>{if(i!==index&&p[name]){used=true;spheres.push({center:p[name],radius:ratio*norm(sub(p[base[i]],p[base[index]]))});}});
+    }
     for(const c of primitives.filter(c=>c.refs.flat().includes(point)&&c.refs.flat().every(n=>n===point||p[n]))) {
       const refs=c.refs,edgeOrigin=(r:string[])=>p[r.find(n=>n!==point)!];
-      if(c.kind==="equal"||c.kind==="ratio") {
+      if(c.kind==="onCurve"&&c.refs[0][0]===point) {
+        const curve=problem.curves?.find(k=>k.id===c.curve);if(!curve||![...curve.points,...(curve.plane??[])].every(n=>p[n]))continue;
+        try{const geometry=curveGeometry(curve,p);if(curve.type==="circle"){used=true;spheres.push({center:geometry.center,radius:geometry.radius});plane(geometry.center,geometry.normal);}}catch{/* Source geometry is not yet constructible. */}
+      } else if(c.kind==="concyclic"||c.kind==="cospherical") {
+        const anchors=c.refs[0].filter(n=>n!==point).map(n=>p[n]);
+        if(c.kind==="concyclic") {const circle=circleThrough(anchors);if(circle){used=true;spheres.push({center:circle.center,radius:circle.radius});plane(circle.center,circle.normal);}}
+        else {const sphere=sphereThrough(anchors);if(sphere.rank===3){used=true;spheres.push({center:sphere.center,radius:sphere.radius});}}
+      } else if(c.kind==="volume"&&c.solid==="pyramid"&&c.refs[0][0]===point) {
+        const base=c.refs[0].slice(1).map(n=>p[n]),area=polygonArea(base),n=unit(cross(sub(base[1],base[0]),sub(base[2],base[0])));
+        if(area>1e-12)alternatives([1,-1].map(sign=>({n,d:dot(base[0],n)+sign*3*c.value!/area})));
+      } else if(c.kind==="vectorDot") {
+        const locus=dotPointLocus(refs,c.value!,p,point);
+        if(locus?.plane)plane(locus.plane.origin,locus.plane.normal);
+        if(locus?.sphere){used=true;spheres.push(locus.sphere);}
+      } else if(c.kind==="equal"||c.kind==="ratio") {
         const i=refs.findIndex(r=>r.includes(point));
         if(refs[1-i].includes(point)) {
           const a=edgeOrigin(refs[0]),b=edgeOrigin(refs[1]),ratio=c.kind==="equal"?1:c.value!,square=ratio*ratio;
@@ -130,6 +154,14 @@ export function planConstructions(problem:ConstraintProblem,deadline:number,opti
   for(const network of metrics.networks) {
     if(Date.now()>deadline){exhaustive=false;break;}
     let start:Step|undefined=options?{positions:{...options.anchors},finite:true,steps:["保持已选参照结构与当前动点的目标位置"]}:undefined;
+    const round=problem.conditions.find(c=>c.enabled&&["cylinder","cone","coneFrustum","sphere"].includes(c.kind));
+    if(round&&!start) {
+      const [o,t,a,b]=round.refs[0],radiusName=round.kind==="sphere"?t:a,r=network.get(distanceKey(o,radiusName)),h=round.kind==="sphere"?undefined:network.get(distanceKey(o,t)),s=round.kind==="coneFrustum"?network.get(distanceKey(t,b)):undefined;
+      const positions:Positions={[o]:[0,0,0],[radiusName]:[r??scale,0,0]};
+      if(round.kind!=="sphere")positions[t]=[0,0,h??scale];
+      if(round.kind==="coneFrustum")positions[b]=[s??scale*.6,0,h??scale];
+      start={positions,finite:!!r&&(round.kind==="sphere"||!!h)&&(round.kind!=="coneFrustum"||!!s),steps:["由圆面半径及轴线高度解析构造曲面几何体；缺少尺寸时保留自由度"]};
+    }
     // A regular polygon is a construction, not n unrelated coordinate guesses.
     const regular=problem.conditions.find(c=>c.enabled&&(c.kind==="regularPolygon"||c.kind==="square"||c.kind==="cube"));
     if(regular&&!start) {
@@ -151,6 +183,10 @@ export function planConstructions(problem:ConstraintProblem,deadline:number,opti
         {positions:{[problem.points[0]]:[0,0,0]},finite:false,steps:[]};
     }
     let states=[start];
+    if(!options) {
+      const frame=incidenceFrame(problem,start.positions);
+      if(frame)states=[{positions:frame.positions,finite:false,steps:[...start.steps,...frame.steps]}];
+    }
     if(regular?.kind==="cube"&&!options)states.push({...start,positions:Object.fromEntries(Object.entries(start.positions).map(([name,p])=>[name,[p[0],p[1],-p[2]] as Vec3]))});
     for(let pass=0;pass<problem.points.length&&states.length;pass++) {
       if(Date.now()>deadline){exhaustive=false;break;}
@@ -158,6 +194,11 @@ export function planConstructions(problem:ConstraintProblem,deadline:number,opti
       for(const state of states) {
         const p=state.positions,pending=problem.points.filter(n=>!p[n]);
         if(!pending.length){next.push(state);continue;}
+        const affine=affineVectorPoints(primitives,p);
+        if(Object.keys(affine).length) {
+          const q={...p,...affine};if(valid(q))next.push({...state,positions:q,steps:[...state.steps,`${Object.keys(affine).join("、")}：解析消元向量及定比分点关系`]});
+          progress=true;continue;
+        }
         const division=primitives.find(c=>c.kind==="division"&&c.refs.flat().filter(n=>!p[n]).length===1);
         if(division) {
           const [m,a,b]=division.refs.flat(),t=division.value!/(1+division.value!),unknown=[m,a,b].find(n=>!p[n])!;

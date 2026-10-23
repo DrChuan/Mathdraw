@@ -672,3 +672,21 @@
 .drawing-app .draw-pitch-control input[type=range]{writing-mode:vertical-lr;direction:rtl;appearance:slider-vertical;-webkit-appearance:slider-vertical;width:22px;min-width:22px;max-width:22px;height:150px;min-height:150px;max-height:150px;margin:2px 0;padding:0;accent-color:#568873;cursor:ns-resize}
 .drawing-app .draw-pitch-control button{font-size:11px;padding:4px 5px;min-height:26px}
 .draw-canvas:has(.draw-pitch-control) .active-tool-prompt{max-width:calc(100% - 115px)}
+
+.expression-list-filters{margin:0 12px 9px;padding:7px 9px;background:#f6f8f6;border:1px solid #e0e7e1;border-radius:6px;font-size:12px;flex-shrink:0}
+.expression-list-filters>summary{cursor:pointer;color:#466354;user-select:none}
+.expression-list-filters>small{display:block;color:#718076;margin:7px 0}
+.expression-list-filters>div{display:grid;grid-template-columns:1fr 1fr;gap:5px 8px}
+.drawing-app .expression-list-filters label{display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:5px;margin:0;font-size:12px}
+.drawing-app .expression-list-filters input[type=checkbox]{width:13px;height:13px;flex:0 0 13px;min-width:0;margin:0;accent-color:#34685a}
+.expression-list-filters>button{margin-top:8px;font-size:12px}
+
+.expression-tree-set{border-bottom:1px solid var(--border,#d9e1d9)}
+.expression-tree-toggle{display:flex;align-items:center;gap:6px;width:100%;border:0;border-radius:0;background:transparent;padding:7px 8px;text-align:left;font-size:12px;color:inherit}
+.expression-tree-toggle span{margin-left:auto;opacity:.55;font-size:11px}
+.expression-tree-group>.expression-tree-toggle{padding:5px 8px;background:#f2f6f2;color:#617367}
+.expression-tree-children{margin-left:9px;border-left:1px solid #e0e7e0}
+.expression-tree-children .expression-row{padding:8px 7px;gap:5px}
+.expression-tree-group:has(>.expression-tree-toggle+div:empty){opacity:.7}
+.expression-tree-settings>summary{cursor:pointer;font-size:11px;padding:5px 10px;color:#6c7f71}
+.expression-tree-settings .expression-row{border:0}

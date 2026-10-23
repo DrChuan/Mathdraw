@@ -501,6 +501,26 @@ fn drawing_standalone(app: &tauri::AppHandle) -> bool {
     app.config().identifier == "lab.chuan.mathdraw"
 }
 #[tauri::command]
+async fn drawing_check_update(webview:tauri::Webview,source:String)->Result<Option<serde_json::Value>,String>{
+    use tauri_plugin_updater::UpdaterExt;
+    if webview.label()!="drawing" {return Err("仅绘图窗口可检查更新".into());}
+    // Each source gets its own timeout. No arbitrary endpoints or credentials
+    // from the frontend; package signatures remain enforced by the updater.
+    let (endpoint,seconds)=match source.as_str(){
+        "gitee"=>("https://gitee.com/liu_chuanning/mathdraw/raw/master/latest.json",4),
+        "github"=>("https://github.com/DrChuan/Mathdraw/releases/latest/download/latest.json",8),
+        _=>return Err("更新来源无效".into()),
+    };
+    let updater=webview.updater_builder().endpoints(vec![endpoint.parse().map_err(|e|format!("{e}"))?])
+        .map_err(|e|e.to_string())?.timeout(std::time::Duration::from_secs(seconds)).build().map_err(|e|e.to_string())?;
+    let update=updater.check().await.map_err(|e|e.to_string())?;
+    Ok(update.map(|update|{
+        let metadata=serde_json::json!({"currentVersion":update.current_version,"version":update.version,"body":update.body,"rawJson":update.raw_json});
+        let rid=webview.resources_table().add(update);
+        let mut metadata=metadata;metadata["rid"]=rid.into();metadata
+    }))
+}
+#[tauri::command]
 fn drawing_update_restart(app:tauri::AppHandle,window:tauri::WebviewWindow)->Result<(),String>{
     if window.label()!="drawing" || !drawing_standalone(&app){return Err("仅独立绘图程序可更新重启".into());}
     app.state::<AppState>().exit_allowed.store(true,Ordering::SeqCst);
@@ -629,7 +649,8 @@ pub fn run() {
             drawing::drawing_check_text,
             drawing::drawing_conditions_open,
             drawing::drawing_conditions_save,
-            drawing_update_restart
+            drawing_update_restart,
+            drawing_check_update
         ])
         .build(tauri::generate_context!())
         .expect("无法启动 Mindgrove")

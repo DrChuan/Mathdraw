@@ -1,6 +1,6 @@
 import { constraintHidden, selectedBranch } from "./constraints/document";
 import { angleMark, defaultAngleRadius } from "./angleMark";
-import { locusPaths } from "./constraints/loci";
+import { locusPaths, displayableLocus } from "./constraints/loci";
 import { world } from "./constraints/math";
 import type {
   DrawingDocument,
@@ -108,7 +108,7 @@ export function toolStep(state: ToolState): string {
   if (t === "parallel" || t === "perpendicular")
     return state.references.length
       ? "请选择经过的点，也可直接点击尚未创建的交点"
-      : state.points.length ? "已选经过的点，请选择参考直线、坐标轴或边" : "请选择经过的点或参考线，顺序不限；交点可直接点击";
+      : state.points.length ? "已选经过的点，请选择参考直线、坐标轴、边或平面" : "请选择经过的点或参考线 / 平面，顺序不限；交点可直接点击";
   if (t === "polygon")
     return n < 3
       ? `请选择第 ${n + 1} 个顶点（至少三个）`
@@ -174,6 +174,11 @@ export interface Hit {
 }
 /** A frame's plane selection must not be intercepted by axes, edges or point labels. */
 export function toolHits(state:ToolState,hits:Hit[]):Hit[] {
+  if((state.tool==="parallel"||state.tool==="perpendicular")&&!state.references.length&&state.points.length)return hits.filter(h=>h.kind==="edge"||h.kind==="curve"||h.kind==="face");
+  if((state.tool==="parallel"||state.tool==="perpendicular")&&state.references.length)return hits.filter(h=>h.kind==="point"||h.kind==="edge"||h.kind==="curve");
+  if(state.tool==='intersect')return hits.filter(h=>h.kind==='edge'||h.kind==='curve');
+  if(state.tool==='area'||state.tool==='perimeter')return hits.filter(h=>h.kind==='face'||h.kind==='curve');
+  if(state.tool==='tangent'&&!state.references.length)return hits.filter(h=>h.kind==='curve');
   if(state.tool==="fold")return hits.filter(h=>h.kind===(state.base?"edge":"face")||!!state.base&&h.kind==="curve");
   if(state.tool==="normal"||state.tool.startsWith("section")&&!state.base)return hits.filter(h=>h.kind==="face");
   if(state.tool==="sectionLines"||state.tool==="sectionLinePoint"&&!state.references.length)return hits.filter(h=>h.kind==="edge"||h.kind==="curve");
@@ -320,7 +325,7 @@ export function hitTest(
     if (!visible(result.id)) continue;
     const curve = geometry.curves.get(result.id);
     if (!curve || curve.style.line === "hidden") continue;
-    const plane = doc.planes.find((p) => p.id === curve.planeId)!;
+    const plane = curve.frame??doc.planes.find((p) => p.id === curve.planeId)!;
     let best: Hit | undefined;
     for (const path of result.paths)
       for (let i = 1; i < path.length; i++) {
@@ -344,7 +349,7 @@ export function hitTest(
   }
   for(const obj of geometry.objects.values())if(obj.kind === "spatialLocus"&&visible(obj.id)) {
     const set=geometry.objects.get(obj.set);if(set?.kind!=="solutionSet")continue;
-    const locus=selectedBranch(set)?.loci.find(l=>l.point===obj.point);if(!locus)continue;
+    const locus=selectedBranch(set)?.loci.find(l=>l.point===obj.point);if(!displayableLocus(locus))continue;
     let best:Hit|undefined;
     for(const path of locusPaths(locus))for(let i=1;i<path.length;i++) {
       const a=world(path[i-1],set.placement),b=world(path[i],set.placement),f=nearestOnSegment(q,screenPoint(doc,size,a),screenPoint(doc,size,b));
@@ -462,7 +467,7 @@ export function pointOnPath(
     curve = geometry.curves.get(path);
   if (curve) {
     if(curve.locusInput)throw new Error("数值轨迹仅用于显示，请在来源构造上创建关联点");
-    const plane = doc.planes.find((p) => p.id === curve.planeId)!,
+    const plane = curve.frame??doc.planes.find((p) => p.id === curve.planeId)!,
       uv = toPlane(plane, position),
       type = equation(curve.equation).type;
     if(curve.parametric) return {type:"onPath",path,parameter:nearestParameter(curve,uv,previous)};
@@ -721,7 +726,7 @@ export function toolTarget(s:ToolState):string {
  if(t==="tangent")return s.references.length?"切线经过的点":"曲线";
  if(t==="reflect")return s.references.length?"需要对称的图形":"对称轴";
  if(t==="locus")return n?"从动点（依赖主动点）":"主动点（路径上的点）";
- if(t==="parallel"||t==="perpendicular")return s.references.length?"经过的点":n?"参考直线或边":"经过的点或参考线";
+ if(t==="parallel"||t==="perpendicular")return s.references.length?"经过的点":n?"参考直线、边或平面":"经过的点或参考线 / 平面";
  if(t==="area"||t==="perimeter")return "三角形、多边形或圆";
  if(t==="intersect")return s.references.length?"第二个图形":"交叉处或第一个图形";
  if(t==="circle"||t==="circleRadius")return n?"圆上一点":"圆心";

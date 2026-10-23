@@ -1,14 +1,35 @@
 import type { DrawingDocument, DrawingPoint, Vec2, Vec3 } from "./types";
-import { resolveGeometry, toPlane, fromPlane, dependencies } from "./geometry";
-import { equation, parseExpression, evaluate, isLineEquation } from "./expression";
+import { resolveGeometry, toPlane, fromPlane, dependencies,coordinateAxis } from "./geometry";
+import { equation, parseExpression, evaluate } from "./expression";
 import { expressionText } from "./advanced";
 import { circleCenter, conicPath } from "./conics";
 import { curveFunction } from "./constructions";
 import { implicitConicLocus } from "./implicitLocus";
+import { conicCoefficients } from "./conics";
+import { rationalConicLocus,simplifyLocusExpression,compactLocusParameter,rationalExpression } from "./locusAlgebra";
+import { withinCurve } from "./parametric";
 
 type Coordinates=[string,string,string];
 const num=(p:Vec3):Coordinates=>p.map(v=>`(${v})`) as Coordinates;
 const mix=(a:Coordinates,b:Coordinates,t:string):Coordinates=>a.map((v,i)=>`(${v}+(${b[i]}-${v})*(${t}))`) as Coordinates;
+const simple=(source:string)=>simplifyLocusExpression(source);
+const plus=(a:Coordinates,b:Coordinates):Coordinates=>a.map((v,i)=>simple(`(${v})+(${b[i]})`)) as Coordinates;
+const minus=(a:Coordinates,b:Coordinates):Coordinates=>a.map((v,i)=>simple(`(${v})-(${b[i]})`)) as Coordinates;
+const scaled=(a:Coordinates,k:string):Coordinates=>a.map(v=>simple(`(${v})*(${k})`)) as Coordinates;
+const scalarProduct=(a:Coordinates,b:Coordinates)=>simple(a.map((v,i)=>`(${v})*(${b[i]})`).join("+"));
+const vectorProduct=(a:Coordinates,b:Coordinates):Coordinates=>[0,1,2].map(i=>simple(`(${a[(i+1)%3]})*(${b[(i+2)%3]})-(${a[(i+2)%3]})*(${b[(i+1)%3]})`)) as Coordinates;
+
+/** Exclude unrelated scene objects from a tracing job. A tangent branch or
+ * complex solid outside this dependency closure cannot break/delay the locus. */
+export function locusDocument(doc:DrawingDocument,driver:string,follower:string):DrawingDocument {
+  const objects=new Map(doc.objects.map(o=>[o.id,o])),needed=new Set<string>();
+  const visit=(id:string)=>{
+    const key=id.split(":")[0];if(needed.has(key))return;needed.add(key);
+    const o=objects.get(key);if(o)dependencies(o).forEach(visit);
+  };
+  visit(driver);visit(follower);
+  return {...doc,objects:doc.objects.filter(o=>needed.has(o.id))};
+}
 export function locusDomain(doc:DrawingDocument,id:string):[number,number] {
   const p=doc.objects.find(o=>o.id===id);if(p?.kind!=="point") throw new Error("主动对象必须是点");
   const c=p.construction;
@@ -24,7 +45,7 @@ export function locusDomain(doc:DrawingDocument,id:string):[number,number] {
       throw new Error("该隐式路径没有唯一的扫描参数，请先使用参数曲线上的主动点");
     }
     const edge=g.edges.find(e=>e.id===c.path);
-    if(edge) return g.objects.get(edge.owner)?.kind==="line" ? [-5,5] : [0,1];
+    if(edge) {const o=g.objects.get(edge.owner);return o?.kind==="line" ? o.ray?[0,5]:[-5,5] : [0,1];}
   }
   if(c.type==="curveCoordinate") {
     const path=resolveGeometry(doc).curves.get(c.curve);
@@ -32,23 +53,64 @@ export function locusDomain(doc:DrawingDocument,id:string):[number,number] {
   }
   throw new Error("轨迹需要沿一条路径运动的主动点。请先在线、圆或曲线上创建一个点；孤立自由点没有唯一轨迹");
 }
+export function naturalLocusParameter(doc:DrawingDocument,driver:string,xy:[string,string]) {
+  const point=doc.objects.find(o=>o.id===driver);if(point?.kind!=="point")return;
+  const c=point.construction;let unbounded=c.type==="onAxis",ray=false;
+  if(c.type==="onPath") {
+    const g=resolveGeometry(doc),path=g.curves.get(c.path),edge=g.edges.find(e=>e.id===c.path),line=edge&&g.objects.get(edge.owner);
+    if(line?.kind==="line"){unbounded=true;ray=!!line.ray;}
+    if(path&&!path.parametric&&!path.reflectionInput&&!path.limits&&path.followView!==false) {
+      const q=conicCoefficients(path.equation);
+      if(q)unbounded=q[1]*q[1]-4*q[0]*q[2]>=-1e-12;
+      else {
+        const parsed=equation(path.equation);
+        if(parsed.type!=="implicit") {
+          const f=expressionText(parsed.ast,{x:"t",y:"t",u:"t",v:"t"}),r=rationalExpression(f);
+          unbounded=!!r&&r.denominator.length===1;
+        }
+      }
+    }
+  }
+  if(!unbounded)return;
+  const exact=compactLocusParameter(xy);if(!exact)return;
+  return {xy:exact,min:ray?0:-Math.PI/2,max:Math.PI/2};
+}
 export function dependsOn(doc:DrawingDocument,follower:string,driver:string):boolean {
   const seen=new Set<string>();
   const visit=(id:string):boolean=>{if(id===driver)return true;if(seen.has(id))return false;seen.add(id);const o=doc.objects.find(o=>o.id===id.split(":")[0]);return !!o&&dependencies(o).some(visit);};
   return follower!==driver&&visit(follower);
 }
 /** Exact coordinate composition; unsupported relations fall back to numerical tracing, never curve fitting. */
+const exactCache=new Map<string,[string,string]|null>();
 export function exactLocus(doc:DrawingDocument,driver:string,follower:string,planeId:string):[string,string]|null {
-  const g=resolveGeometry(doc),plane=doc.planes.find(p=>p.id===planeId)!,active=new Set<string>();
+  const key=JSON.stringify([driver,follower,planeId,doc.objects,doc.planes,doc.coordinateFrame,doc.coordinateOriginId,doc.dimension,doc.view.mode,doc.view.planeId]);
+  if(exactCache.has(key)){const value=exactCache.get(key)!;exactCache.delete(key);exactCache.set(key,value);return value;}
+  const value=composeExactLocus(doc,driver,follower,planeId);
+  if(key.length<=65536){exactCache.set(key,value);if(exactCache.size>16)exactCache.delete(exactCache.keys().next().value!);}
+  return value;
+}
+function composeExactLocus(doc:DrawingDocument,driver:string,follower:string,planeId:string):[string,string]|null {
+  const g=resolveGeometry(doc),active=new Set<string>(),pointMemo=new Map<string,Coordinates>(),lineMemo=new Map<string,[Coordinates,Coordinates]>(),lineActive=new Set<string>();
+  const local=(p:Coordinates,planeId:string):[string,string]=>{const pl=doc.planes.find(p=>p.id===planeId)!;return [pl.u,pl.v].map(v=>scalarProduct(minus(p,num(pl.origin)),num(v))) as [string,string];};
   const fromLocal=(x:string,y:string,planeId:string):Coordinates=>{const p=doc.planes.find(p=>p.id===planeId)!;return p.origin.map((v,i)=>`(${v}+${p.u[i]}*(${x})+${p.v[i]}*(${y}))`) as Coordinates;};
   const pathPoint=(p:DrawingPoint):Coordinates=>{
     const c=p.construction;
-    if(c.type==="onAxis") {const axis=g.edges.find(e=>g.objects.get(e.owner)?.symbol===`${c.axis}Axis`&&e.owner===`@axis:${c.axis}${c.planeId?`:${c.planeId}`:""}`);if(!axis)throw Error();return mix(num(g.points.get(axis.a)!.p),num(g.points.get(axis.b)!.p),"t");}
+    if(c.type==="onAxis") {const axis=coordinateAxis(doc,c.axis,c.planeId);return plus(num(axis.origin),scaled(num(axis.direction),"t"));}
     if(c.type!=="onPath"&&c.type!=="curveCoordinate")throw Error();
     const path=g.curves.get(c.type==="onPath"?c.path:c.curve);
     if(!path){if(c.type!=="onPath")throw Error();const edge=g.edges.find(e=>e.id===c.path);if(!edge)throw Error();return mix(num(g.points.get(edge.a)!.p),num(g.points.get(edge.b)!.p),"t");}
     if(path.limits&&Object.values(path.limits).some(v=>v!==undefined))throw Error();
-    if(path.parametric)return fromLocal(path.parametric.x,path.parametric.y,path.planeId);
+    if(path.parametric){if(c.type!=="onPath")throw Error();return fromLocal(path.parametric.x,path.parametric.y,path.planeId);}
+    if(c.type==="curveCoordinate") {
+      const coefficients=conicCoefficients(path.equation);
+      if(coefficients) {
+        const [A,B,C,D,E,F]=coefficients,a=c.axis==="x"?C:A;
+        const b=simple(`(${B})*t+(${c.axis==="x"?E:D})`),k=simple(`(${c.axis==="x"?A:C})*t^2+(${c.axis==="x"?D:E})*t+(${F})`);
+        if(c.branch>1||a===0&&c.branch!==0)throw Error();
+        const other=a===0?simple(`-(${k})/(${b})`):simple(`(-(${b})+(${(c.branch===0?-1:1)*Math.sign(a)})*sqrt((${b})^2-4*(${a})*(${k})))/(2*(${a}))`);
+        return fromLocal(c.axis==="x"?"t":other,c.axis==="x"?other:"t",path.planeId);
+      }
+    }
     if(c.type==="onPath"){const conic=conicPath(path,c.seed??toPlane(doc.planes.find(p=>p.id===path.planeId)!,g.points.get(driver)!.p));if(conic)return fromLocal(conic.x,conic.y,path.planeId);}
     const parsed=equation(path.equation),center=c.type==="onPath"?circleCenter(path.equation):null;
     if(center){const fn=curveFunction(path),a=fn(center[0]+1,center[1])-fn(...center),r=Math.sqrt(-fn(...center)/a);return fromLocal(`(${center[0]}+${r}*cos(t))`,`(${center[1]}+${r}*sin(t))`,path.planeId);}
@@ -58,50 +120,110 @@ export function exactLocus(doc:DrawingDocument,driver:string,follower:string,pla
     const f=expressionText(parsed.ast,{[axis]:"t",[axis==="x"?"u":"v"]:"t"});
     return fromLocal(parsed.type==="y"?"t":f,parsed.type==="y"?f:"t",path.planeId);
   };
+  const line=(id:string):[Coordinates,Coordinates]=>{
+    const cached=lineMemo.get(id);if(cached)return cached;
+    if(lineActive.has(id))throw Error();lineActive.add(id);
+    try {
+      const o=doc.objects.find(o=>o.id===id);let result:[Coordinates,Coordinates];
+      if(!dependsOn(doc,id,driver)&&id!==driver) {const ref=g.straightReference(id);result=[num(ref.a),num(ref.b)];}
+      else if(o?.kind==="line"||o?.kind==="segment"||o?.kind==="vector") {
+        if(!o.relation)result=[pos(o.points[0]),pos(o.points[1])];
+        else {
+          const r=o.relation,pl=doc.planes.find(p=>p.id===r.planeId)!,normal=num([pl.u[1]*pl.v[2]-pl.u[2]*pl.v[1],pl.u[2]*pl.v[0]-pl.u[0]*pl.v[2],pl.u[0]*pl.v[1]-pl.u[1]*pl.v[0]]);
+          if(r.type==="bisector") {
+            const a=pos(o.points[0]),b=pos(o.points[1]),center=scaled(plus(a,b),"0.5");
+            result=[center,plus(center,vectorProduct(normal,minus(b,a)))];
+          } else {
+            const ref=line(r.reference!),a=pos(o.points[0]);let d=minus(ref[1],ref[0]);
+            if(r.type==="perpendicular")d=vectorProduct(normal,d);
+            result=[a,plus(a,d)];
+          }
+        }
+      } else if(o?.kind==="curve"&&o.derived?.type==="tangent") {
+        const c=o.derived,point=doc.objects.find(o=>o.id===c.point),curve=g.curves.get(c.curve);
+        if(!curve||c.branch>1||dependsOn(doc,c.curve,driver)||point?.kind!=="point"||
+          !(point.construction.type==="onPath"&&point.construction.path===c.curve||point.construction.type==="curveCoordinate"&&point.construction.curve===c.curve))throw Error();
+        const coefficients=conicCoefficients(curve.equation);if(!coefficients)throw Error();
+        const [A,B,C,D,E]=coefficients,a=pos(c.point),[x,y]=local(a,curve.planeId);
+        const dx=simple(`2*(${A})*(${x})+(${B})*(${y})+(${D})`),dy=simple(`(${B})*(${x})+2*(${C})*(${y})+(${E})`),pl=doc.planes.find(p=>p.id===curve.planeId)!;
+        result=[a,plus(a,plus(scaled(num(pl.u),`-(${dy})`),scaled(num(pl.v),dx)))];
+      } else throw Error();
+      lineMemo.set(id,result);return result;
+    }finally{lineActive.delete(id);}
+  };
+  const substitute=(source:string,point:DrawingPoint):string=>{
+    const parameters=point.parameters!;
+    let result=source.replace(/\b([xyz])\(\s*([A-Za-z][A-Za-z0-9_]*)\s*\)/g,(_m,a,n)=>`(${pos(parameters.references[n])[a==="x"?0:a==="y"?1:2]})`);
+    const constants:Record<string,string>={};
+    for(const [name,id] of Object.entries(parameters.references))if(g.numbers.has(id)) {
+      if(dependsOn(doc,id,driver))throw Error();constants[name]=String(g.numbers.get(id));
+    }
+    result=expressionText(parseExpression(result,["t",...Object.keys(constants)]),constants);
+    return simple(result);
+  };
   const pos=(id:string):Coordinates=>{
+    const cached=pointMemo.get(id);if(cached)return cached;
+    const p=compute(id).map(simple) as Coordinates;pointMemo.set(id,p);return p;
+  };
+  const compute=(id:string):Coordinates=>{
     if(id===driver)return pathPoint(doc.objects.find(o=>o.id===id) as DrawingPoint);
     if(active.has(id))throw Error();active.add(id);
     try {
       if(!dependsOn(doc,id,driver))return num(g.points.get(id)!.p);
       const o=doc.objects.find(o=>o.id===id);if(o?.kind!=="point")throw Error();const c=o.construction;
       if(c.type==="alias")return pos(c.point);
-      if(c.type==="division")return mix(pos(c.a),pos(c.b),String(c.t));
-      if(c.type==="center"&&c.center==="centroid"){const ps=c.points.map(pos);return ps[0].map((v,i)=>`((${v}+${ps[1][i]}+${ps[2][i]})/3)`) as Coordinates;}
-      if(c.type==="reflection") {
-        if(dependsOn(doc,c.axis,driver))throw Error();
-        const edge=g.edges.find(e=>e.id===c.axis);let a:Vec3,b:Vec3;
-        if(edge){a=g.points.get(edge.a)!.p;b=g.points.get(edge.b)!.p;}
-        else {
-          const curve=g.curves.get(c.axis);if(!curve||curve.parametric||!isLineEquation(curve.equation))throw Error();
-          const f=curveFunction(curve),v=f(0,0),x=f(1,0)-v,y=f(0,1)-v,n=x*x+y*y;if(n<1e-18)throw Error();
-          const plane=doc.planes.find(p=>p.id===curve.planeId)!;
-          a=fromPlane(plane,-v*x/n,-v*y/n);b=fromPlane(plane,-v*x/n-y/Math.sqrt(n),-v*y/n+x/Math.sqrt(n));
+      if(c.type==="division")return plus(pos(c.a),scaled(minus(pos(c.b),pos(c.a)),typeof o.parameters?.fields["construction.t"]==="string"?substitute(o.parameters.fields["construction.t"],o):String(c.t)));
+      if(c.type==="intersection") {
+        const [a,b]=line(c.first),[p,q]=line(c.second),u=minus(b,a),v=minus(q,p),w=minus(p,a),n=vectorProduct(u,v),square=scalarProduct(n,n);
+        const t=simple(`(${scalarProduct(vectorProduct(w,v),n)})/(${square})`),s=simple(`(${scalarProduct(vectorProduct(w,u),n)})/(${square})`);
+        const first=plus(a,scaled(u,t)),second=plus(p,scaled(v,s));
+        if(minus(first,second).some(v=>!Number.isFinite(Number(v))||Math.abs(Number(v))>1e-8))throw Error();
+        return first;
+      }
+      if(c.type==="center") {
+        const [a,b,d]=c.points.map(pos);
+        if(c.center==="centroid")return scaled(plus(plus(a,b),d),"1/3");
+        const u=minus(b,a),v=minus(d,a),n=vectorProduct(u,v),den=simple(`2*(${scalarProduct(n,n)})`);
+        if(c.center==="incenter") {
+          const lengths=[minus(b,d),minus(a,d),minus(a,b)].map(v=>`sqrt(${scalarProduct(v,v)})`),sum=simple(lengths.join("+"));
+          return scaled(plus(plus(scaled(a,lengths[0]),scaled(b,lengths[1])),scaled(d,lengths[2])),`1/(${sum})`);
         }
-        const d=b.map((v,i)=>v-a[i]),n=d.reduce((s,v)=>s+v*v,0),p=pos(c.point),t=`((${p.map((v,i)=>`(${v}-${a[i]})*${d[i]}`).join("+")})/${n})`;
-        return p.map((v,i)=>`(2*(${a[i]}+${d[i]}*${t})-${v})`) as Coordinates;
+        const center=plus(a,scaled(plus(scaled(vectorProduct(v,n),scalarProduct(u,u)),scaled(vectorProduct(n,u),scalarProduct(v,v))),`1/(${den})`));
+        return c.center==="orthocenter"?minus(plus(plus(a,b),d),scaled(center,"2")):center;
+      }
+      if(c.type==="reflection") {
+        const [a,b]=line(c.axis),d=minus(b,a),p=pos(c.point),t=simple(`(${scalarProduct(minus(p,a),d)})/(${scalarProduct(d,d)})`);
+        return minus(scaled(plus(a,scaled(d,t)),"2"),p);
       }
       if(c.type==="free"&&o.parameters?.fields["construction.position"]) {
         const field=o.parameters.fields["construction.position"];if(typeof field==="string")throw Error();
-        const values=field.coordinates.map(s=>s.replace(/\b([xyz])\(\s*([A-Za-z][A-Za-z0-9_]*)\s*\)/g,(_m,a,n)=>pos(o.parameters!.references[n])[a==="x"?0:a==="y"?1:2]));
+        const values=field.coordinates.map(s=>substitute(s,o));
         return field.planeId?fromLocal(values[0],values[1],field.planeId):values as Coordinates;
       }
       throw Error();
     } finally {active.delete(id);}
   };
-  try {const p=pos(follower),q=p.map((v,i)=>`(${v}-${plane.origin[i]})`),xy=[plane.u,plane.v].map(d=>`(${q.map((v,i)=>`${d[i]}*${v}`).join("+")})`) as [string,string];for(const s of xy)if(s.length>1900)throw Error();return xy.map(s=>expressionText(parseExpression(s,["t"]))) as [string,string];}catch{return null;}
+  try {const p=pos(follower),xy=local(p,planeId);for(const s of xy)if(s.length>1900)throw Error();return xy;}catch{return null;}
 }
 export function sampleLocus(doc:DrawingDocument,driver:string,follower:string,planeId:string,min:number,max:number,budgetMs:number):Vec2[][] {
   const plane=doc.planes.find(p=>p.id===planeId)!,paths:Vec2[][]=[],start=performance.now();let current:Vec2[]=[];
-  const base={...doc,objects:doc.objects.filter(o=>!(o.kind==="curve"&&o.derived?.type==="locus"))};
+  let base=locusDocument(doc,driver,follower);
   const original=base.objects.find(o=>o.id===driver) as DrawingPoint;
   const initial=resolveGeometry(base),c=original.construction,path=c.type==="onPath"?initial.curves.get(c.path):undefined,center=path?circleCenter(path.equation):null,conic=path&&!path.parametric?conicPath(path,c.type==="onPath"?c.seed??toPlane(plane,initial.points.get(driver)!.p):[0,0]):null;
+  const conicAst=conic?{x:parseExpression(conic.x,["t"]),y:parseExpression(conic.y,["t"])}:undefined;
+  if(!base.objects.some(o=>o.kind==="curve"&&o.derived?.type==="locus"))base={...base,objects:base.objects.map(o=>o.kind==="point"&&o.id!==driver&&!dependsOn(base,o.id,driver)&&initial.points.has(o.id)
+    ?{...o,construction:{type:"free" as const,position:initial.points.get(o.id)!.p},parameters:undefined}:o)};
   const flush=()=>{if(current.length>1)paths.push(current);current=[];};
   for(let i=0;i<=192;i++) {
     if(performance.now()-start>budgetMs)throw new Error("轨迹计算超时，请缩小扫描区间或简化依赖构造");
     const t=min+(max-min)*i/192;let construction:DrawingPoint["construction"];
     if(c.type==="onAxis"||c.type==="onPath")construction={...c,parameter:t};
     else if(c.type==="curveCoordinate")construction={...c,value:t};else throw Error("主动点没有扫描路径");
-    if(construction.type==="onPath"&&conic){construction={...construction,seed:[evaluate(parseExpression(conic.x,["t"]),{t}),evaluate(parseExpression(conic.y,["t"]),{t})]};}
+    if(construction.type==="onPath"&&conicAst&&path){
+      const uv:Vec2=[evaluate(conicAst.x,{t}),evaluate(conicAst.y,{t})];
+      if(!withinCurve(path,uv)||path.followView===false&&(uv[0]<path.range[0]||uv[0]>path.range[1]||uv[1]<path.range[2]||uv[1]>path.range[3])){flush();continue;}
+      construction={type:"free",position:fromPlane(doc.planes.find(p=>p.id===path.planeId)!,...uv)};
+    }
     else if(construction.type==="onPath"&&center&&path){const fn=curveFunction(path),r=Math.sqrt(-fn(...center)/(fn(center[0]+1,center[1])-fn(...center)));construction={...construction,seed:[center[0]+r*Math.cos(t),center[1]+r*Math.sin(t)]};}
     try {
       const g=resolveGeometry({...base,objects:base.objects.map(o=>o.id===driver?{...original,construction,parameters:undefined}:o)}),p=g.points.get(follower)?.p;
@@ -111,11 +233,12 @@ export function sampleLocus(doc:DrawingDocument,driver:string,follower:string,pl
       current.push(q);
     }catch {flush();}
   }
-  flush();return paths;
+  flush();if(!paths.length)throw new Error("当前扫描区间内没有有效轨迹，请检查从动点是否失效，或调整主动点的扫描范围");return paths;
 }
 
 /** Algebraic elimination only for polynomial coordinates with one affine coordinate. */
 export function cartesianLocus(xy:[string,string]):string|undefined {
+  const rational=rationalConicLocus(xy);if(rational)return rational;
   const conic=implicitConicLocus(xy);if(conic)return conic;
   const direct=polynomialLocus(xy);if(direct)return direct;
   // A coordinate-defined follower may depend polynomially on just sin(t) or cos(t).

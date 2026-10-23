@@ -6,7 +6,8 @@ import { exportSvg, sceneFor } from "../scene";
 import { hitTest, screenPoint } from "../interaction";
 import { parseCondition } from "./input";
 import { solveConstraints } from "./solver";
-import { installSolutionSet, solutionSetObject, selectedBranch, placeOnPlane, constraintLocusPoints, mirrorSolutionSet } from "./document";
+import { installSolutionSet, solutionSetObject, selectedBranch, placeOnPlane, constraintLocusPoints, mirrorSolutionSet,constraintBinding,constraintPoint } from "./document";
+import { evaluator,flatten } from "./compile";
 import { applyCoordinateFrame } from "./rebase";
 import { local, add, cross } from "./math";
 import type { ConstraintProblem } from "./types";
@@ -21,6 +22,25 @@ const withFrame=(d:DrawingDocument)=>{
   d.coordinateFrame=frameFromDirections(origin,add(origin,x),add(origin,y),planeFromPoints(origin,add(origin,x),add(origin,y),"test"));return d;
 };
 describe("constraint document integration",()=>{
+  it("protects ordinary reference records and restores legacy free-coordinate drift",()=>{
+    const set=make(["A","B","C","D","E"],["onSegment(E,CD)","midpoint(D,AB)","AE=6","perpendicular(AE,BC)"]),doc=normalizeDrawing(installSolutionSet(newDrawing(),set));
+    for(const name of ["A","E"]) {
+      const point=doc.objects.find(o=>o.kind==="point"&&o.constraintPointName===name);
+      if(point?.kind!=="point")throw new Error("missing reference point");
+      expect(point.construction.type).toBe("free");expect(constraintBinding(doc,point)?.movable).toBe(false);
+      expect(()=>applyDefinition(doc,"(3,4,0)",point.id)).toThrow(/条件解集/);
+    }
+    const damaged=structuredClone(doc),e=damaged.objects.find(o=>o.kind==="point"&&o.constraintPointName==="E");
+    if(e?.kind!=="point")throw new Error("missing E");e.construction={type:"free",position:[7,8,9]};
+    near(resolveGeometry(damaged).points.get(e.id)!.p,constraintPoint(set,"E"));
+    const reopened=normalizeDrawing(JSON.parse(JSON.stringify(damaged))),restored=reopened.objects.find(o=>o.id===e.id);
+    expect(restored?.kind==="point"&&restored.construction.type==="free"&&restored.construction.position).toEqual(constraintPoint(set,"E"));
+    const result=solveConstraints({id:2,problem:set.problem,previous:set.result,budget:400,move:{point:"B",target:[8,4,0],branch:0}});
+    // Match the live motion path: replace only the root result, not every child.
+    const moved={...reopened,objects:reopened.objects.map(o=>o.id===set.id?{...set,result}:o)},geometry=resolveGeometry(moved);
+    const actual=Object.fromEntries(moved.objects.flatMap(o=>o.kind==="point"&&o.constraintPointName?[[o.constraintPointName,geometry.points.get(o.id)!.p]]:[]));
+    expect(evaluator(set.problem).verify(flatten(set.problem.points,actual)).valid).toBe(true);
+  });
   it("reverses xOy winding while preserving height, references and save/reopen",()=>{
     const set=make(["A","B","C","D"],["AB=2","AC=2","AD=2","BC=2","BD=2","CD=2"]);
     let doc=normalizeDrawing(installSolutionSet(newDrawing(),set));doc=applyDefinition(doc,"M=Midpoint(C,D)");
@@ -50,7 +70,7 @@ describe("constraint document integration",()=>{
   it("persists linked points, only declared segments, and a 3d sphere locus",()=>{
     const set=make(["A","B","C","P"],["AB=3","AC=4","BC=5","AP=2"],[["A","B"]]);
     const doc=normalizeDrawing(installSolutionSet(newDrawing(),set)),reopened=normalizeDrawing(JSON.parse(JSON.stringify(doc)));
-    expect(doc.schemaVersion).toBe(3);expect(doc.objects.filter(o=>o.kind==="segment")).toHaveLength(1);
+    expect(doc.schemaVersion).toBe(4);expect(doc.objects.filter(o=>o.kind==="segment")).toHaveLength(1);
     expect(doc.objects.filter(o=>o.kind==="spatialLocus")).toHaveLength(1);
     expect(doc.objects.filter(o=>o.kind==="point"&&o.construction.type==="constraint")).toHaveLength(1);
     expect(doc.objects.filter(o=>o.kind==="point"&&o.construction.type==="free"&&o.constraintSet===set.id)).toHaveLength(3);
@@ -109,9 +129,8 @@ describe("constraint document integration",()=>{
     doc=applyDefinition(doc,"M=Midpoint(A,C)");
     const reduced=make(["A","B"],["AB=3"],[["A","B"]]);reduced.id=set.id;
     expect(()=>installSolutionSet(doc,reduced)).toThrow(/外部对象/);
-    // Fixed reference points intentionally remain editable ordinary points.
-    const edited=applyDefinition(doc,"(0,0,0)",aid),a=edited.objects.find(o=>o.id===aid);
-    expect(a?.kind==="point"&&a.construction.type).toBe("free");
+    // Ordinary presentation does not permit bypassing the owning conditions.
+    expect(()=>applyDefinition(doc,"(0,0,0)",aid)).toThrow(/条件解集/);
   });
 });
 describe("whole drawing coordinate rebase",()=>{

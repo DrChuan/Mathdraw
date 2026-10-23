@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { runUpdate } from "./updateFlow";
-import { check, type Update } from "@tauri-apps/plugin-updater";
+import { runUpdate,checkUpdateSources } from "./updateFlow";
+import { Update } from "@tauri-apps/plugin-updater";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -13,10 +13,12 @@ export default function UpdateNotice({ready,beforeInstall,locked}:{ready:boolean
     if(checking.current||running.current)return;
     checking.current=true;
     try {
-      const next=await check({timeout:15000});
+      // Gitee is preferred; GitHub is a bounded background fallback. Neither
+      // check blocks editing, and “no update” on a stale mirror still falls back.
+      const next=await checkUpdateSources(source=>invoke<ConstructorParameters<typeof Update>[0]|null>('drawing_check_update',{source}).then(data=>data?new Update(data):null));
       if(!alive.current){await next?.close();return;}
       await current.current?.close();current.current=next;setUpdate(next);setError("");
-      setNotice(next?"":manual?"当前已是最新版本。":"");
+      setNotice(next?"":manual?"当前可访问的更新源暂无新版本。":"");
     }catch(e){if(manual&&alive.current){setNotice("无法检查更新，请稍后重试。");setError(String(e));}}
     finally{checking.current=false;}
   };

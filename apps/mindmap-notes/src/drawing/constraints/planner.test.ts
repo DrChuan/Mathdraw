@@ -7,6 +7,8 @@ import { intersectLoci } from "./intersections";
 import { distanceKey,metricNetworks } from "./metric";
 import { norm,sub } from "./math";
 import { analyticLoci } from "./loci";
+import { driverChoices,referenceChoices } from "./reference";
+import { rigidMotion } from "./rigidMotion";
 import type { ConstraintProblem } from "./types";
 
 const problem=(names:string,sources:string[]):ConstraintProblem=>{
@@ -22,6 +24,70 @@ const solve=(p:ConstraintProblem)=>{
 const triangle=["AB=3","AC=4","BC=5"];
 
 describe("construction-first planning",()=>{
+  it("allows a former reference member to drive after an explicit frame change",()=>{
+    for(const [names,conditions,driver,anchor] of [
+      ["A B C D E",["onSegment(E,CD)","midpoint(D,AB)","AE=6","perpendicular(AE,BC)"],"E","A"],
+      ["K L M Q",["KL=3","KM=4","LM=5","KQ=2"],"K","L"],
+    ] as const) {
+      const p=problem(names,[...conditions]),initial=solve(p),branch=initial.branches[0];
+      expect(driverChoices(branch,p.points)).toContain(driver);
+      expect(referenceChoices(branch)).toContainEqual([anchor]);
+      const switched=solveConstraints({id:4,problem:p,previous:initial,budget:800,reference:{branch:0,points:[anchor]}}),b=switched.branches[0];
+      expect(b.reference).toEqual([anchor]);expect(b.dof).toBeGreaterThan(0);
+      const o=b.positions[anchor],q=b.positions[driver],target=[o[0]-(q[1]-o[1]),o[1]+q[0]-o[0],q[2]] as [number,number,number];
+      const moved=solveConstraints({id:5,problem:p,previous:switched,budget:400,move:{point:driver,target,branch:0}});
+      expect(evaluator(p).verify(flatten(p.points,moved.branches[0].positions)).valid).toBe(true);
+      expect(norm(sub(moved.branches[0].positions[driver],target))).toBeLessThan(1e-7);
+      expect(moved.branches[0].positions[anchor]).toEqual(o);expect(moved.method).toBe("construction");
+    }
+    const rigid=solve(problem("A B C",["AB=3","AC=4","BC=5"]));
+    expect(driverChoices(rigid.branches[0],["A","B","C"])).toEqual([]);
+  });
+  it("uses generic rigid motions without moving fixed anchors or stretching geometry",()=>{
+    const p={A:[2,3,4],B:[2,3,8],P:[4,3,6],Q:[2,5,6]} as Record<string,[number,number,number]>;
+    const aroundAxis=rigidMotion(p,["A","B"],"P",[2,5,6],1)!;
+    expect(aroundAxis.A).toEqual(p.A);expect(aroundAxis.B).toEqual(p.B);
+    for(const a of Object.keys(p))for(const b of Object.keys(p))expect(norm(sub(aroundAxis[a],aroundAxis[b]))).toBeCloseTo(norm(sub(p[a],p[b])),10);
+    expect(rigidMotion(p,["A","B","Q"],"P",[2,5,6],1)).toBeUndefined();
+    expect(rigidMotion(p,["A"],"P",[100,3,4],1)).toBeUndefined();
+    const opposite=rigidMotion(p,["A"],"P",[0,3,2],1)!;
+    expect(norm(sub(opposite.P,[0,3,2]))).toBeLessThan(1e-8);
+  });
+  it("accepts user-selected fixed subsets and preserves every condition during deformation",()=>{
+    for(const [names,sources,anchors,driver] of [
+      ["A B C D E",["onSegment(E,CD)","midpoint(D,AB)","AE=6","perpendicular(AE,BC)"],["C","D"],"E"],
+      ["U V W M T",["onSegment(T,WM)","division(M,UV,2)","UT=5","perpendicular(TU,VW)"],["W","M"],"T"],
+    ] as const) {
+      const p=problem(names,[...sources]),initial=solve(p);
+      const framed=solveConstraints({id:6,problem:p,previous:initial,budget:800,reference:{branch:0,points:[...anchors]}}),b=framed.branches[0];
+      expect(b.reference).toEqual(anchors);expect(b.dof).toBeGreaterThan(0);
+      const [a,c]=anchors.map(n=>b.positions[n]),target=a.map((v,i)=>v+.6*(c[i]-v)) as [number,number,number];
+      const moved=solveConstraints({id:7,problem:p,previous:framed,budget:1000,move:{point:driver,target,branch:0}}).branches[0];
+      for(const n of anchors)expect(moved.positions[n]).toEqual(b.positions[n]);
+      expect(norm(sub(moved.positions[driver],target))).toBeLessThan(1e-6);
+      expect(evaluator(p).verify(flatten(p.points,moved.positions)).valid).toBe(true);
+      const locked=solveConstraints({id:8,problem:p,previous:framed,budget:300,reference:{branch:0,points:[...p.points]}});
+      expect(locked.branches[0].dof).toBe(0);expect(driverChoices(locked.branches[0],p.points)).toEqual([]);
+      const unlocked=solveConstraints({id:9,problem:p,previous:locked,budget:300,reference:{branch:0,points:[anchors[0]]}});
+      expect(unlocked.branches[0].dof).toBeGreaterThan(0);
+      for(const points of [[],[anchors[0],anchors[0]],["missing"]])expect(()=>solveConstraints({id:10,problem:p,previous:initial,reference:{branch:0,points}})).toThrow(/固定点/);
+    }
+  });
+  it("constructs a segment-incidence/division/perpendicular loop and preserves its free family",()=>{
+    const p=problem("A B C D E",["onSegment(E,CD)","midpoint(D,AB)","AE=6","perpendicular(AE,BC)"]),r=solve(p);
+    expect(r.complete).toBe(false);expect(r.branches[0].dof).toBeGreaterThan(0);expect(r.branches[0].reference).toEqual(["A","E"]);
+    for(const point of ["A","E"])expect(()=>solveConstraints({id:2,problem:p,previous:r,budget:300,move:{point,target:[1,2,0],branch:0}})).toThrow(/参照/);
+    for(const [point,target] of [["B",[8,4,0]],["D",[4,2,0]]] as const) {
+      const moved=solveConstraints({id:3,problem:p,previous:r,budget:400,move:{point,target:[...target],branch:0}});
+      expect(evaluator(p).verify(flatten(p.points,moved.branches[0].positions)).valid).toBe(true);
+      expect(moved.method).toBe("construction");
+      expect(norm(sub(moved.branches[0].positions[point],[...target]))).toBeLessThan(1e-8);
+    }
+    // The rule recognizes incidence relations and ratios, not the point names
+    // or a single hard-coded midpoint configuration.
+    const renamed=problem("U V W M T",["division(M,UV,2)","onSegment(T,WM)","UT=5","perpendicular(VW,TU)"]);
+    solve(renamed);
+  });
   it("constructs SSS/SAS without numerical search and propagates equalities and ratios",()=>{
     for(const sources of [triangle,["AB=2","BC=2","vertexAngle(A,B,C,120)"],["AB=3","AC/AB=2","vertexAngle(B,A,C,90)"]]) {
       const p=problem("A B C",sources),r=solve(p);expect(r.complete).toBe(true);expect(r.branches).toHaveLength(1);expect(r.branches[0].dof).toBe(0);

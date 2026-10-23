@@ -1,3 +1,4 @@
+import {localMobility} from './mobility';
 import type { Vec3 } from "../types";
 import { validateProblem } from "./input";
 import { contradictions, evaluator, flatten, positions, problemScale } from "./compile";
@@ -5,6 +6,8 @@ import { add, sub, mul, dot, cross, norm, unit, perpendicular, local, rowBasis, 
 import { analyticLoci, nearestLocus } from "./loci";
 import { constructRightPrism } from "./construction";
 import { planConstructions } from "./planner";
+import { rigidMotion } from "./rigidMotion";
+import { solvePlanar } from './planar';
 import type { ConstraintProblem, ConstraintResult, Positions, SolutionBranch, SolveRequest } from "./types";
 
 type Fixed = Map<number,number>;
@@ -34,8 +37,8 @@ function initial(problem:ConstraintProblem,random:()=>number):number[] {
   for(const c of problem.conditions.filter(c=>c.enabled)) {
     const points=c.refs[0], assign=(values:Vec3[])=>points.forEach((n,i)=>{p[n]=mul(values[i],scale);seeded.add(n);});
     if(c.kind==="cube")assign([[0,0,0],[1,0,0],[1,1,0],[0,1,0],[0,0,1],[1,0,1],[1,1,1],[0,1,1]]);
-    else if(["prism","pyramid","frustum","regularPolygon"].includes(c.kind)) {
-      const n=c.kind==="pyramid"?points.length-1:c.kind==="regularPolygon"?points.length:points.length/2;
+    else if(["prism","pyramid","frustum","regularPolygon","convexPolygon"].includes(c.kind)) {
+      const n=c.kind==="pyramid"?points.length-1:["regularPolygon","convexPolygon"].includes(c.kind)?points.length:points.length/2;
       const baseNames=c.kind==="pyramid"?points.slice(1):points.slice(0,n);
       const regular=c.kind==="regularPolygon"||problem.conditions.some(k=>k.enabled&&k.kind==="regularPolygon"&&k.refs[0].length===n&&k.refs[0].every((name,i)=>name===baseNames[i]));
       const radius=scale/(2*Math.sin(Math.PI/n));
@@ -141,12 +144,12 @@ function analyze(problem:ConstraintProblem,x:number[],deadline:number,random:()=
   }
   const {rigid,reference,rigidityPending}=chosen??rigidity(problem,x,samples),raw=positions(problem.points,x),p=chosen?raw:canonical(raw,reference),flat=flatten(problem.points,p);
   const fixed=fixedCoordinates(problem.points,p,reference),variables=flat.map((_,i)=>i).filter(i=>!fixed.has(i));
-  const j=jacobian(v=>e.values(v,false),flat).map(row=>variables.map(i=>row[i]));
-  const dof=Math.max(0,variables.length-rowBasis(j).length);
-  const loci=analyticLoci(problem,p,reference,e.scale);
+  const mobility=localMobility(v=>{const q=[...flat];variables.forEach((index,k)=>q[index]=v[k]);return e.values(q,false);},variables.map(i=>flat[i]),e.scale,Math.max(deadline,Date.now()+80));
+  const dof=mobility.dof;
+  const loci=dof?analyticLoci(problem,p,reference,e.scale):[];
   // Trace a one-dimensional solution family with a tangent hyperplane
   // corrector. Every stored point comes from a jointly verified configuration.
-  if(dof===1&&Date.now()<deadline&&problem.points.some(n=>!reference.includes(n)&&!loci.some(l=>l.point===n))) {
+  if(dof===1&&Date.now()<deadline&&problem.points.some(n=>!reference.includes(n)&&!loci.some(l=>l.point===n&&l.complete))) {
     const paths:Record<string,Vec3[][]>=Object.fromEntries(problem.points.filter(n=>!reference.includes(n)).map(n=>[n,[]]));
     for(const sign of [-1,1]) {
       let current=[...flat],previous:number[]|undefined;
@@ -167,10 +170,11 @@ function analyze(problem:ConstraintProblem,x:number[],deadline:number,random:()=
       }
       for(const name of Object.keys(paths))paths[name].push(trace.map(p=>p[name]));
     }
-    for(const [name,traces] of Object.entries(paths))if(!loci.some(l=>l.point===name)&&traces.some(t=>t.length>2))
-      loci.push({point:name,kind:"sampled",origin:p[name],u:[1,0,0],v:[0,1,0],radius:e.scale,paths:traces,complete:false});
+    for(const [name,traces] of Object.entries(paths))if(!loci.some(l=>l.point===name&&l.complete)&&traces.some(t=>t.length>2))
+      {const old=loci.findIndex(l=>l.point===name);if(old>=0)loci.splice(old,1);
+      loci.push({point:name,kind:"sampled",origin:p[name],u:[1,0,0],v:[0,1,0],radius:e.scale,paths:traces,complete:false});}
   }
-  return {positions:p,rigid,reference,dof,loci,residual:e.verify(flat).max,rigidityPending};
+  return {positions:p,rigid,reference,dof,loci,residual:e.verify(flat).max,rigidityPending,mobility:{version:1,linear:mobility.linear,removed:mobility.removed,checked:mobility.checked}};
 }
 function branchEquivalent(a:SolutionBranch,b:SolutionBranch,scale:number) {
   if(a.dof===0&&b.dof===0)return Object.keys(a.positions).every(n=>norm(sub(a.positions[n],b.positions[n]))<scale*2e-4);
@@ -188,8 +192,17 @@ function branchEquivalent(a:SolutionBranch,b:SolutionBranch,scale:number) {
   }
   return true;
 }
+/** Refresh old first-order counts without changing coordinates or constraints. */
+export function refreshSpatialMobility(problem:ConstraintProblem,branch:SolutionBranch):SolutionBranch {
+  if(problem.mode==='plane'||problem.mode==='coordinate'||branch.mobility?.version===1)return branch;
+  const e=evaluator(problem),flat=flatten(problem.points,branch.positions),fixed=fixedCoordinates(problem.points,branch.positions,branch.reference),indices=flat.map((_,i)=>i).filter(i=>!fixed.has(i));
+  const mobility=localMobility(v=>{const next=[...flat];indices.forEach((index,i)=>next[index]=v[i]);return e.values(next,false);},indices.map(i=>flat[i]),e.scale,Date.now()+100);
+  return {...branch,dof:mobility.dof,loci:mobility.dof?branch.loci:[],mobility:{version:1,linear:mobility.linear,removed:mobility.removed,checked:mobility.checked}};
+}
 export function solveConstraints(request:SolveRequest):ConstraintResult {
+  if(request.problem.mode==='plane'||request.problem.mode==='coordinate')return solvePlanar(request);
   const started=Date.now(),problem=request.problem;validateProblem(problem);
+  if(request.refreshMobility&&request.previous){const result=structuredClone(request.previous);result.branches=result.branches.map(b=>refreshSpatialMobility(problem,b));result.elapsed=Date.now()-started;return result;}
   const alternatives=problem.conditions.filter(c=>c.enabled&&c.alternateValue!==undefined);
   if(alternatives.length) {
     const issues=contradictions(problem);if(issues.length)return {branches:[],status:"contradiction",complete:true,attempts:0,elapsed:Date.now()-started,diagnostics:issues};
@@ -222,8 +235,9 @@ export function solveConstraints(request:SolveRequest):ConstraintResult {
   const random=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return state/4294967296;};
   if(request.reference&&request.previous) {
     const result=structuredClone(request.previous),branch=result.branches[request.reference.branch],reference=request.reference.points;
-    if(!branch||!Array.isArray(reference)||!reference.length||new Set(reference).size!==reference.length||reference.some(n=>!problem.points.includes(n))||
-      ![branch.reference,...branch.rigid].some(g=>g.length===reference.length&&g.every(n=>reference.includes(n))))throw new Error("请选择已识别的参照结构");
+    // A user may fix any subset of the current valid configuration. This can
+    // reduce its freedoms; it never relaxes a condition or changes coordinates.
+    if(!branch||!Array.isArray(reference)||!reference.length||new Set(reference).size!==reference.length||reference.some(n=>!problem.points.includes(n)))throw new Error("请选择至少一个有效且不重复的固定点");
     const flat=flatten(problem.points,branch.positions);if(!e.verify(flat).valid)throw new Error("当前构型已失效，请重新求解条件");
     result.branches[request.reference.branch]=analyze(problem,flat,deadline,random,{...branch,reference:[...reference]});
     result.elapsed=Date.now()-started;
@@ -233,8 +247,15 @@ export function solveConstraints(request:SolveRequest):ConstraintResult {
     const result=structuredClone(request.previous),branch=result.branches[request.move.branch];
     if(!branch||!problem.points.includes(request.move.point))throw new Error("动点或构型已失效");
     if(branch.reference.includes(request.move.point))throw new Error("此点属于参照结构，请先切换参照结构或选择其他动点");
+    const refreshed=refreshSpatialMobility(problem,branch);Object.assign(branch,refreshed);
+    if(branch.dof===0)throw Error(branch.mobility?.removed?'当前构型在极值或相切处被条件锁定，没有可连续拖动的自由度':'当前参照下没有可连续拖动的自由度');
     const fixed=fixedCoordinates(problem.points,branch.positions,branch.reference),index=problem.points.indexOf(request.move.point)*3;
     const locus=branch.loci.find(l=>l.point===request.move!.point),target=locus?nearestLocus(locus,request.move.target):request.move.target;
+    const transported=rigidMotion(branch.positions,branch.reference,request.move.point,target,e.scale);
+    if(transported) {
+      const check=e.verify(flatten(problem.points,transported));
+      if(check.valid){branch.positions=transported;branch.residual=check.max;result.elapsed=Date.now()-started;return result;}
+    }
     // A point on an explicit locus, and followers constructible from it, do not
     // need an optimizer for each pointer movement. Preserve the reference frame
     // and prefer the nearest continuous position for dependent points.
@@ -324,7 +345,7 @@ export function solveConstraints(request:SolveRequest):ConstraintResult {
   if(!branches.length) {
     const worst=bestErrors.filter(e=>e.error>3e-6||e.degenerate).sort((a,b)=>b.error-a.error).slice(0,4);
     diagnostics.push("尚未找到满足全部条件的解；这不代表已证明无解。可继续搜索或检查以下条件。");
-    diagnostics.push(...worst.map(w=>`${problem.conditions.find(c=>c.id===w.id)?.source}：${w.degenerate?"图形退化":`归一化误差 ${w.error.toPrecision(3)}`}`));
+    diagnostics.push(...worst.map(w=>`${problem.conditions.find(c=>c.id===w.id)?.source??`曲线 ${problem.curves?.find(c=>c.id===w.id)?.name??w.id}`}：${w.degenerate?"图形退化":`归一化误差 ${w.error.toPrecision(3)}`}`));
   } else {
     diagnostics.push(`已找到 ${branches.length} 个可行构型，尚未证明穷尽。`);
     if(branches.some(b=>b.dof>0))diagnostics.push("保留参照结构之外的连续自由度；轨迹上的移动会重新校验整组条件。");

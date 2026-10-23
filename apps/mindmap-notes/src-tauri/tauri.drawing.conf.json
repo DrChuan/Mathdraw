@@ -27,6 +27,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENBRTVBQ0I1QzE0MTBENDUKUldSRkRVSEJ0YXpseW5OckVZVGZSL0R4UFRsN3ExbjdNNURIVTRpR0x3cnMxZDg1TSs0UnVYeVIK",
       "endpoints": [
+        "https://gitee.com/liu_chuanning/mathdraw/raw/master/latest.json",
         "https://github.com/DrChuan/Mathdraw/releases/latest/download/latest.json"
       ],
       "windows": {

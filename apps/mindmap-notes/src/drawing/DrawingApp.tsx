@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
+import { hasConstraintMotions,settleConstraintMotions } from './constraintPending';
 import UpdateNotice from "./UpdateNotice";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -26,7 +27,7 @@ import { isLineEquation } from "./expression";
 import { sceneFor, exportSvg, labelPlainText } from "./scene";
 import { drawingAdapter as adapter } from "./adapter";
 import DrawingWorkbench from "./DrawingWorkbench";
-import { constraintLocusPoints } from "./constraints/document";
+import { constraintLocusPoints,refreshDeclaredCurves,constraintHidden } from "./constraints/document";
 import "./drawing.css";
 import "./workbench.css";
 type Intent = "close" | "quit" | "new" | "new2d" | "new3d" | "open";
@@ -57,8 +58,9 @@ export default function DrawingApp() {
     [expressionProblem, setExpressionProblem] = useState("");
   draftsRef.current = drafts;
   const flushEditor = useRef<(() => void) | null>(null);
+  const settlingIntent=useRef<Intent|null>(null);
   const [legacy, setLegacy] = useState(false);
-  const sourceVersion = useRef<1 | 2 | 3>(3), saveLock = useRef(false);
+  const sourceVersion = useRef<1 | 2 | 3 | 4>(4), saveLock = useRef(false);
 
   const [curveMoving, setCurveMoving] = useState(false);
   const [fontError, setFontError] = useState(""),
@@ -116,7 +118,7 @@ export default function DrawingApp() {
   const commit: DrawingChange = useCallback((next: DrawingDocument, history = true, phase?: "continuous" | "complete") => {
     try {
       if (phase) setCurveMoving(phase === "continuous");
-      next = phase === "continuous" ? validateDrawing(next) : normalizeDrawing(next);
+      next = phase === "continuous" ? validateDrawing(refreshDeclaredCurves(next)) : normalizeDrawing(next);
       if (stringify(next) === stringify(docRef.current)) return true;
       if (history) {
         undoStack.current.push(stringify(docRef.current));
@@ -171,7 +173,7 @@ export default function DrawingApp() {
       snapshot.path = null;
       snapshot.hash = null;
       snapshot.savedContent = content;
-      snapshot.sourceVersion = 3;
+      snapshot.sourceVersion = 4;
     }
     const next = recoveryQueue.current
       .catch(() => {})
@@ -182,7 +184,7 @@ export default function DrawingApp() {
   const install = useCallback((loaded: DrawingFile, recovered = false) => {
     const raw = validateDrawing(JSON.parse(loaded.content));
     sourceVersion.current = loaded.sourceVersion ?? raw.schemaVersion;
-    setLegacy(sourceVersion.current < 3);
+    setLegacy(sourceVersion.current < 4);
     const parsed = normalizeDrawing(raw);
     draftsRef.current = Object.fromEntries(
       Object.entries(loaded.uiDraft ?? {}).filter(
@@ -270,7 +272,7 @@ export default function DrawingApp() {
   const curves = useMemo(
     () =>
       [...previewCurves.values()]
-        .filter((o): o is DrawingCurve => !o.hidden)
+        .filter((o): o is DrawingCurve => !o.hidden&&!constraintHidden(currentDoc.objects,o))
         .map((c) => {
           if (
             c.followView !== false &&
@@ -324,6 +326,7 @@ export default function DrawingApp() {
       saveLock.current = true;
       setBusy(true);
       try {
+        await settleConstraintMotions(docRef.current.id);
         if (legacy) saveAs = true;
         const content = stringify(docRef.current);
         const result = await adapter.save(
@@ -337,10 +340,10 @@ export default function DrawingApp() {
         setFile(fileRef.current);
         savedText.current = content;
         setLegacy(false);
-        sourceVersion.current = 3;
+        sourceVersion.current = 4;
         setHistoryTick((t) => t + 1);
         await recoverSave();
-        setStatus("已保存绘图文件");
+        setStatus(legacy?"已另存为 v4；旧版程序无法读取新格式，原文件已保留":"已保存绘图文件");
         return true;
       } catch (e) {
         setError(message(e));
@@ -393,10 +396,16 @@ export default function DrawingApp() {
     },
     [recoverSave, install],
   );
-  const requestIntent = useCallback(
+  const requestIntent = useCallback<(action:Intent)=>void>(
     (action: Intent) => {
       if(updateLock.current)return;
       flushEditor.current?.();
+      if(hasConstraintMotions(docRef.current.id)){
+        if(settlingIntent.current){if(action==='quit')settlingIntent.current='quit';return;}
+        settlingIntent.current=action;
+        void settleConstraintMotions(docRef.current.id).then(()=>{const next=settlingIntent.current;settlingIntent.current=null;if(next)requestIntent(next);}).catch(e=>{const next=settlingIntent.current;settlingIntent.current=null;setError(message(e));if(next==='quit')void invoke('drawing_finish_close',{exit:true,approved:false});});
+        return;
+      }
       if (!readyRef.current) {
         setError("恢复草稿正在加载，请稍候");
         if (action === "quit")
@@ -520,6 +529,7 @@ export default function DrawingApp() {
   };
   const exportDrawing = async (format: "svg" | "png" | "clipboard") => {
     flushEditor.current?.();
+    try{await settleConstraintMotions(docRef.current.id);}catch(e){setError(message(e));return;}
     if (docRef.current !== doc || curvePending) {
       setError("曲线正在计算，请稍候再导出");
       return;
@@ -574,7 +584,7 @@ export default function DrawingApp() {
   ].filter(Boolean);
   return (
     <div className="drawing-app">
-      <UpdateNotice ready={ready} locked={value=>{updateLock.current=value;}} beforeInstall={async()=>{flushEditor.current?.();await recoverSave();}}/>
+      <UpdateNotice ready={ready} locked={value=>{updateLock.current=value;}} beforeInstall={async()=>{flushEditor.current?.();await settleConstraintMotions(docRef.current.id);await recoverSave();}}/>
 
       <DrawingWorkbench
         key={doc.id}

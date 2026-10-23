@@ -80,7 +80,7 @@ export function ToolBar({ tool, choose, dimension, preset, parametric }: {
   const activate = (t: Tool) => { choose(t); setOpen(""); };
   const buttons = (items: Entry[]) => items.map(([id,label,hint]) =>
     <button key={id} className={id === tool ? "active" : ""} aria-pressed={id === tool}
-      title={hint} onClick={() => activate(id)}>{label}</button>);
+      title={dimension==="3d"&&id==="perpendicular"?"线外点：作到参考线的垂线；选平面：作平面法线；在线上时需先选包含参考线的工作平面":dimension==="3d"&&id==="parallel"?"选直线：作平行线；选平面：创建过点的平行平面":hint} onClick={() => activate(id)}>{dimension==="3d"&&id==="bisector"?"垂直平分线（工作平面）":dimension==="3d"&&id==="locus"?"条件空间轨迹":dimension==="3d"&&id==="parallel"?"平行线 / 平面":dimension==="3d"&&id==="perpendicular"?"垂线 / 平面法线":label}</button>);
   const dropdown = (id: string, label: string, children: ReactNode) => <div className="drawing-tool-group">
     <button className={id === "circle" && circles.some(([t]) => t === tool) ? "active" : ""}
       aria-expanded={open === id} onClick={() => setOpen(open === id ? "" : id)}>{label}<ChevronDown size={13} /></button>
@@ -126,7 +126,7 @@ export function ToolBar({ tool, choose, dimension, preset, parametric }: {
         <small>自定义：在左侧“新增定义”输入 LaTeX 方程，如 y=x^2</small>
       </>}
       {category === "space" && <>{buttons(spatial.filter(([id])=>!id.startsWith("section")))}
-        {dropdown("section", "截面", spatial.filter(([id])=>id.startsWith("section")).map(([id,label,hint])=><button role="menuitem" key={id} title={hint} onClick={()=>activate(id)}>{label.replace("截面 · ","")}</button>))}
+        {dropdown("section", "截面", spatial.filter(([id])=>id.startsWith("section")).map(([id,label,hint])=><button role="menuitem" key={id} title={dimension==="3d"&&id==="perpendicular"?"线外点：作到参考线的垂线；选平面：作平面法线；在线上时需先选包含参考线的工作平面":dimension==="3d"&&id==="parallel"?"选直线：作平行线；选平面：创建过点的平行平面":hint} onClick={()=>activate(id)}>{label.replace("截面 · ","")}</button>))}
         {dropdown("solid", "几何体模板", [["cube","正方体"],["cuboid","长方体"],["prism","正棱柱"],["pyramid","正棱锥"],["frustum","正棱台"],["cylinder","圆柱"],["cone","圆锥"],["coneFrustum","圆台"],["sphere","球"]].map(([id,label]) =>
           <button role="menuitem" key={id} onClick={() => { preset("solid",id); setOpen(""); }}>{label}</button>))}</>}
     </div>

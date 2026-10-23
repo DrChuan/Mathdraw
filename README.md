@@ -35,7 +35,9 @@ Windows 可双击根目录“打包数学绘图Windows.cmd”，附加 `-Unsigne
 
 ## 发布
 
-当前 Mac 构建机可双击根目录“发布Mathdraw.command”，选择版本位数后打包并发布到 GitHub。配置和重试说明见 [一键发布说明](scripts/README-mathdraw-release.md)。
+当前 Mac 构建机可双击根目录“发布Mathdraw.command”，选择版本位数后打包并发布到 GitHub 和 Gitee。配置和重试说明见 [一键发布说明](scripts/README-mathdraw-release.md)。
 
 签名密钥和本机构建缓存不随源码分发。发布更新必须安全配置原签名密钥，不能用新密钥替代。
 
+
+条件作图用法见 [平面条件作图说明](docs/平面条件作图说明.md) 和 [曲线与度量](docs/按条件作图-曲线与度量.md)；计算实现与限制见 [计算逻辑与解析求解演进](docs/按条件作图计算逻辑与解析求解演进.md)。

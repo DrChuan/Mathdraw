@@ -50,7 +50,7 @@ macOS / Windows 本地笔记桌面程序。React、Tauri 2、Rust；应用界面
 
 ## 独立数学绘图 Mathdraw（2026-10-18）
 
-双击 `artifacts/mathdraw/Mathdraw.app` 即可直接进入绘图；也可使用根目录的“启动数学绘图.command”（Windows 为同名 `.cmd`）。不需要打开笔记库。独立版使用自己的恢复草稿与设置；笔记版“工具 → 数学绘图”继续可用，两者共用 `.mathdraw.json` 文件格式。
+双击 `数学绘图/产物/Mathdraw.app` 即可直接进入绘图；也可使用数学绘图项目中的“启动数学绘图.command”（Windows 为同名 `.cmd`）。不需要打开笔记库。独立版使用自己的恢复草稿与设置；笔记版“工具 → 数学绘图”继续可用，两者共用 `.mathdraw.json` 文件格式。
 
 - 选中 x/y 轴可直接作平行线、垂线和交点；轴不进入对象列表。定义中可用 `xAxis`、`yAxis`，引用会保存所用工作平面的身份。隐藏坐标系不会破坏已有构造。选中垂线后，在旁边操作条勾选“显示垂直符号”，图面和导出都会显示直角标记。
 - “方程曲线 → 参数曲线”，或输入 `Parametric(cos(t), sin(t), 0, 2*pi)`。四个参数依次为 x(t)、y(t)、参数起点、终点，支持当前工作平面、LaTeX、关联数值、曲线上的点、指定坐标及求交。
@@ -104,7 +104,7 @@ macOS / Windows 本地笔记桌面程序。React、Tauri 2、Rust；应用界面
 需要 Node.js 22.12+ 或 26，以及 Rust 稳定版。Mac 需要 Xcode Command Line Tools；Windows 需要 Visual Studio C++ Build Tools 与 WebView2。
 
 ```sh
-cd apps/mindmap-notes
+cd 枝间
 npm ci
 npm run desktop       # 独立桌面窗口，开发模式
 npm run bundle        # 当前平台桌面包
@@ -112,7 +112,7 @@ npm test              # 大纲转换、公式保留和格式校验
 cargo test --manifest-path src-tauri/Cargo.toml --lib
 ```
 
-根目录 `npm run notes` 或「启动枝间.command」会打开本地应用，尚未打包时先构建。根目录原有 `npm start` 仍启动世界史应用。
+在本项目目录运行 `npm run desktop`、`npm run bundle` 或 `npm test`。也可从工作区根目录运行 `npm run notes` 打开应用，尚未打包时会先构建；根目录 `npm start` 用于启动世界史。
 
 macOS `.app` 输出：`src-tauri/target/release/bundle/macos/Mindgrove.app`；Mac 通用版可用 `npm run bundle -- --target universal-apple-darwin --bundles app` 构建，输出位于 `target/universal-apple-darwin/release/bundle/macos/`，须先安装两个 Mac Rust 目标。Windows NSIS/MSI 位于 `src-tauri/target/release/bundle/`。构建必须在对应操作系统完成；仓库提供 macOS/Windows GitHub Actions 工作流。当前未配置开发者证书或自动更新服务；内部使用的包为本地构建，公开分发前需签名和公证。
 
@@ -184,7 +184,7 @@ macOS `.app` 输出：`src-tauri/target/release/bundle/macos/Mindgrove.app`；Ma
 - 原点 O 使用普通点名逻辑，立体模式隐藏坐标轴时仍可显示、拖动、切换点名。旧原点在首次载入新版时恢复默认点名；之后的点名选择正常保存。
 - 点的自动圆点规则：两条或以上可见路径经过，或位于有限线段/向量的端点、射线起点时隐藏；单条路径内部和孤立点显示。无限直线的两个定义点不当作端点。在点属性中可以覆盖为“始终显示/始终隐藏”，随源文件保存；选中手柄不受影响。
 - 新增定义输入命令前两个字母后自动补全，支持定义左侧的命名。唯一匹配显示灰色斜体尾部，Tab 采纳并进入参数括号；多个匹配显示候选列表，可点击或用上下键、Tab/Enter 选择。Esc 先关闭自动提示，中文组词时暂停补全。
-- Windows 打包入口：项目根目录 `打包数学绘图Windows.cmd`；详细说明见 `scripts/README-windows-packaging.md`。脚本默认生成独立 Mathdraw 的 x64 NSIS 安装 EXE 和程序 EXE，可选择同时打包 Mindgrove。
+- Windows 打包入口：`数学绘图/打包数学绘图Windows.cmd`；详细说明见 [Windows 打包说明](../数学绘图/scripts/README-windows-packaging.md)。脚本默认生成独立 Mathdraw 的 x64 NSIS 安装 EXE 和程序 EXE，可选择同时打包 Mindgrove。
 
 ### 建系吸附、法向量与截面（0.2.4）
 
@@ -199,3 +199,10 @@ macOS `.app` 输出：`src-tauri/target/release/bundle/macos/Mindgrove.app`；Ma
 - 声明使用成行点名输入；条件列表显示自然语言和公式，源命令按需编辑；输入控件统一为 30px。
 - 立体工具新增多边形翻折与角度滑块，保护引用、撤销和保存联动。
 - 提前检测“已知垂直、又指定同一平面非直角线面角”的矛盾。示例和计算边界见 [本轮使用说明](CONDITION_UPDATES.md)。
+
+### 轨迹工具改进（2026-10-22）
+
+- 支持解析串联直线交点、平行线 / 垂线、圆锥曲线上一点处的切线、动轴反射、分点、三角形四心及坐标表达式。不能解析的构造保留数值追踪。
+- 有理参数轨迹通过多项式系数消元识别直线、圆及其他圆锥曲线，不通过采样点拟合方程。完整构造未变化时复用解析结果；数值采样只重算从动点所需的依赖，并预编译扫描表达式。
+- `Locus(A,C)`：对支持完整重参数化的无界来源路径按自然范围绘制；`Locus(A,C,-2,2)`：只绘制指定区间。旧文件保留原来保存的区间。
+- 示例“轨迹.mathdraw.json”中，A 在 `4y=x²` 上，F 为焦点，B 是 A 处切线与 `y=-2` 的交点，C 是 B 到 FA 的垂足。解析轨迹为 `x²+y²−2y=0`，即圆 `x²+(y−1)²=1`。原构造在个别参数处可能失效；轨迹所在曲线包含相应极限位置，这些极限位置不等于有效的原构造点。

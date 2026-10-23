@@ -23,7 +23,7 @@ import { plotBounds } from "./viewport";
 import { axisId, axisReference } from "./axes";
 import { selectedBranch, constraintHidden } from "./constraints/document";
 import { world } from "./constraints/math";
-import { locusPaths } from "./constraints/loci";
+import { locusPaths, displayableLocus } from "./constraints/loci";
 export interface ScenePath {
   color?: string;
   id: string;
@@ -314,11 +314,12 @@ export function sceneFor(
       !obj ||
       obj.kind !== "curve" ||
       obj.hidden ||
+      constraintHidden(objects,obj) ||
       resolved.errors.has(obj.id) ||
       obj.style.line === "hidden"
     )
       continue;
-    const plane = doc.planes.find((p) => p.id === obj.planeId)!;
+    const plane = obj.frame??doc.planes.find((p) => p.id === obj.planeId)!;
     for (const path of result.paths) {
       if (doc.dimension === "3d" && visibleMeshes.length) {
         for (let i = 1; i < path.length; i++)
@@ -341,7 +342,7 @@ export function sceneFor(
   }
   for(const obj of objects.values())if(obj.kind === "spatialLocus" && !obj.hidden) {
     const set=objects.get(obj.set);if(set?.kind!=="solutionSet"||set.hidden)continue;
-    const locus=selectedBranch(set)?.loci.find(l=>l.point===obj.point);if(!locus)continue;
+    const locus=selectedBranch(set)?.loci.find(l=>l.point===obj.point);if(!displayableLocus(locus))continue;
     const display=["line","plane"].includes(locus.kind)?{...locus,radius:Math.max(locus.radius,Math.max(...size)/doc.view.scale)}:locus;
     const mode=doc.edgeStyles[obj.id]??obj.style.line;if(mode === "hidden")continue;
     for(const path of locusPaths(display)) {

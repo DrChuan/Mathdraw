@@ -1,0 +1,136 @@
+import { createPortal } from 'react-dom';
+import { useEffect,useMemo,useRef,useState,type RefObject } from 'react';
+import type { DrawingChange,DrawingDocument,DrawingSolutionSet,GeometryObject } from './types';
+import type { ConstraintProblem,ConstraintResult,Condition,ConstraintCurve,PlanarContext } from './constraints/types';
+import { cross } from './constraints/math';
+import { pointNames,segmentsFrom,parseConditions,validateProblem } from './constraints/input';
+import { planarContext,contextPoints,unknownFields,unknownValue,objectSymbol,addPlanarDefinition,planarDefinition,coordinatePlane,renamePlanarSource } from './constraints/planarModel';
+import { parsePlanarInput } from './constraints/planarExpressions';
+import { solutionSetObject,installSolutionSet } from './constraints/document';
+import { configurationFiles,decodeConfiguration,type ConstraintConfiguration } from './constraints/configuration';
+import { conditionStatement } from './constraints/statement';
+import { applyDefinition } from './model';
+import { resolveGeometry,project } from './geometry';
+import { sceneFor,pathData,arrowData,labelPlainText } from './scene';
+import { sampleCurve } from './curves';
+import { mathPreview,symbolLatex } from './mathPreview';
+import { exactNumber } from './exactNumber';
+import { FormulaPreview } from './FormulaPreview';
+import ConditionInput from './ConditionInput';
+import ConstraintCurves from './ConstraintCurves';
+import ConstraintSetControls from './ConstraintSetControls';
+import { useConstraintSolver } from './useConstraintSolver';
+import './constraints.css';
+type Props={docRef:RefObject<DrawingDocument>;existing?:DrawingSolutionSet;change:DrawingChange;close:()=>void;highlight:(ids:string[])=>void};
+const message=(e:unknown)=>e instanceof Error?e.message:String(e);
+export default function PlanarConstraintWorkbench(props:Props){
+  const [fileTarget,setFileTarget]=useState<HTMLSpanElement|null>(null);
+  const [mode,setMode]=useState<'coordinate'|'plane'>(props.existing?.problem.mode==='plane'?'plane':'coordinate');
+  const [loaded,setLoaded]=useState<{configuration:ConstraintConfiguration;sequence:number}>();
+  return <div className="constraint-overlay" onKeyDown={e=>{e.stopPropagation();if(e.nativeEvent.isComposing){if(['Enter','Escape'].includes(e.key))e.preventDefault();return;}if(e.key==='Escape')props.close();}}><section className="constraint-dialog planar-constraint-dialog" role="dialog" aria-modal="true" aria-label="平面按条件作图">
+    <header><strong>平面按条件作图</strong><div className="constraint-file-actions"><span ref={setFileTarget} className="planar-file-actions"/><button className={mode==='coordinate'?'active':''} onClick={()=>setMode('coordinate')}>有坐标</button><button className={mode==='plane'?'active':''} onClick={()=>setMode('plane')}>无坐标</button><button onClick={()=>props.close()} aria-label="关闭条件作图">×</button></div></header>
+    {(['coordinate','plane'] as const).map(m=><PlanarWorkspace key={m} {...props} fileTarget={fileTarget} existing={props.existing?.problem.mode===m?props.existing:undefined} mode={m} active={mode===m} loaded={loaded?.configuration.mode===m?loaded:undefined} load={c=>{if(c.version===1||c.mode==='spatial')throw Error('这是立体条件配置，请在立体模式打开');setLoaded({configuration:c,sequence:Date.now()});setMode(c.mode as 'plane'|'coordinate');}}/>)}
+  </section></div>;
+}
+function PlanarWorkspace({docRef,existing,change,close,highlight,mode,active,load,loaded,fileTarget}:Props&{fileTarget:HTMLSpanElement|null;mode:'coordinate'|'plane';active:boolean;load:(c:ConstraintConfiguration)=>void;loaded?:{configuration:ConstraintConfiguration;sequence:number}}){
+  const [context,setContext]=useState<PlanarContext>(()=>mode==='coordinate'?planarContext(docRef.current):existing?.problem.planar??({...planarContext({...docRef.current,objects:docRef.current.objects.filter(o=>o.kind==='point'&&o.construction.type==='origin')}),document:{...structuredClone(docRef.current),objects:[]}}));
+  const [points,setPoints]=useState(mode==='coordinate'?contextPoints(context).join(' '):existing?.problem.points.join(' ')??''),[segments,setSegments]=useState(existing?.problem.segments.map(s=>s.join(' ')).join(', ')??''),[curves,setCurves]=useState<ConstraintCurve[]>(mode==='coordinate'?context.inheritedCurves??[]:existing?.problem.curves??[]),[conditions,setConditions]=useState<Condition[]>(mode==='coordinate'?context.inheritedConditions??[]:existing?.problem.conditions??[]);
+  const [step,setStep]=useState(0),[error,setError]=useState(''),[notice,setNotice]=useState(''),[definition,setDefinition]=useState(''),[editObject,setEditObject]=useState<string>(),[search,setSearch]=useState('');
+  const [result,setResult]=useState<ConstraintResult|undefined>(undefined),[problem,setProblem]=useState<ConstraintProblem|undefined>(existing?.problem),[branch,setBranch]=useState(existing?.activeBranch??0),[fileBusy,setFileBusy]=useState(false);
+  const [shape,setShape]=useState(false),[shapeKind,setShapeKind]=useState('triangle'),[shapeNames,setShapeNames]=useState('A B C');
+  const solver=useConstraintSolver(docRef.current.id),revision=useRef(0),baseline=useRef(JSON.stringify(docRef.current)),rootId=useRef(existing?.id??crypto.randomUUID()),previewRef=useRef(docRef.current),container=useRef<HTMLDivElement>(null);
+  const [inputKey,setInputKey]=useState(0),[editing,setEditing]=useState<string>(),[rowSource,setRowSource]=useState('');
+  useEffect(()=>{if(!active){revision.current++;solver.cancel();}else container.current?.focus();},[active]);
+  const invalidate=()=>{revision.current++;solver.cancel();setResult(undefined);setProblem(undefined);setError('');setNotice('');};
+  useEffect(()=>{if(!loaded)return;try{const c=loaded.configuration;invalidate();setContext(c.planar??{...context,equations:[],unknowns:[]});setPoints(c.points);setSegments(c.segments);setCurves(c.curves??[]);setConditions(c.conditions.flatMap(v=>parseConditions(v.source,pointNames(c.points),undefined,c.curves??[]).map(p=>({...p,enabled:v.enabled}))));setStep(0);setInputKey(v=>v+1);setNotice('已加载自包含配置；确认前请检查对象名称及条件。');}catch(e){setError(message(e));}},[loaded?.sequence]);
+  const append=(sources:string[])=>{
+    try{const names=pointNames(points,mode==='coordinate'?2000:50),parsed=sources.map(s=>mode==='coordinate'?parsePlanarInput(s,names,curves):{conditions:parseConditions(s,names,undefined,curves),equations:[]});
+      const added=parsed.flatMap(p=>p.conditions),equations=parsed.flatMap(p=>p.equations);if(conditions.length+context.equations.length+added.length+equations.length>200)throw Error('最多支持 200 条条件');
+      invalidate();setConditions(v=>[...v,...added]);setContext(v=>({...v,equations:[...v.equations,...equations]}));return true;
+    }catch(e){setError(message(e));return false;}
+  };
+  const getProblem=():ConstraintProblem=>{const names=pointNames(points,mode==='coordinate'?2000:50);if(mode==='coordinate'&&contextPoints(context).some(n=>!names.includes(n)))throw Error('已纳入的点不能只从点名栏移除，请修改其对象定义');const p:ConstraintProblem={mode,points:names,segments:segmentsFrom(segments,names),conditions,curves,planar:context};validateProblem(p);return p;};
+  const calculate=async(continued=false)=>{
+    try{const p=getProblem(),token=++revision.current;setError('');setProblem(p);const next=await solver.solve({problem:p,previous:continued?result:undefined,budget:continued?8000:2000});if(token!==revision.current)return;setResult(next);setBranch(0);setStep(1);}catch(e){if(message(e)!=='计算已取消')setError(message(e));}
+  };
+  const preview=useMemo<{set:DrawingSolutionSet;doc:DrawingDocument;scene:ReturnType<typeof sceneFor>}|{error:string}|undefined>(()=>{
+    if(!result?.branches.length||!problem)return;
+    try{
+      const set={...solutionSetObject(problem,result),id:rootId.current,activeBranch:branch,placement:(()=>{const p=coordinatePlane(context.document);return {origin:p.origin,x:p.u,y:p.v,z:cross(p.u,p.v)};})()};
+      const base=mode==='coordinate'?context.document:{...context.document,objects:[]},doc=installSolutionSet(base,set),g=resolveGeometry(doc),ps=[...g.points.values()].map(p=>project(p.p,doc));
+      if(ps.length){const x=ps.map(p=>p[0]),y=ps.map(p=>p[1]),xmin=Math.min(...x),xmax=Math.max(...x),ymin=Math.min(...y),ymax=Math.max(...y);doc.view={...doc.view,center:[(xmin+xmax)/2,(ymin+ymax)/2],scale:Math.max(2,Math.min(70,380/Math.max(1,xmax-xmin),240/Math.max(1,ymax-ymin)))};}
+      const samples=[...g.curves.values()].map(c=>sampleCurve(c,c.range,100,120));return {set,doc,scene:sceneFor(doc,samples,[480,340])};
+    }catch(e){return {error:message(e)};}
+  },[result,problem,branch,mode,context]);
+  previewRef.current=preview&&'doc'in preview?preview.doc:docRef.current;
+  const place=()=>{
+    try{if(!preview||!('set'in preview))throw Error(preview?.error??'请先求解条件');if(JSON.stringify(docRef.current)!==baseline.current)throw Error('画布在预览期间已变化，请关闭并重新打开条件作图，避免覆盖新编辑');
+      const members=new Set(problem?.planar?.document.objects.map(o=>o.id)),names=new Set(problem?.planar?.document.objects.map(objectSymbol));
+      const collisions=docRef.current.objects.filter(o=>!members.has(o.id)&&o.id!==existing?.id&&o.constraintSet!==existing?.id&&names.has(objectSymbol(o)));
+      if(collisions.length)throw Error(`存在同名对象：${collisions.map(objectSymbol).join('、')}。请在定义列表重命名后再确认。`);
+      const next=installSolutionSet(docRef.current,preview.set);next.view={...next.view,center:preview.doc.view.center,scale:preview.doc.view.scale};if(change(next)){highlight([preview.set.id]);close();}
+    }catch(e){setError(message(e));}
+  };
+  const save=async()=>{setFileBusy(true);try{const p=getProblem();const c:ConstraintConfiguration={format:'mathdraw-conditions',version:2,mode,points,segments,curves,planar:p.planar,conditions:conditions.map(c=>({source:c.source,enabled:c.enabled})),placement:{planeNames:[],side:1,orientationPoint:'',keepPlacement:true,mirrored:false}};const path=await configurationFiles.save(c);if(path)setNotice('条件配置已保存');}catch(e){setError(message(e));}finally{setFileBusy(false);}};
+  const open=async()=>{setFileBusy(true);try{const file=await configurationFiles.open();if(file)load(decodeConfiguration(file.content));}catch(e){setError(message(e));}finally{setFileBusy(false);}};
+  const angleEdges=useMemo(()=>{
+    const names=new Map(context.document.objects.filter(o=>o.kind==='point').map(o=>[o.id,objectSymbol(o)]));
+    const edges:[string,string][]=[];
+    for(const o of context.document.objects){
+      const ids='points'in o&&Array.isArray(o.points)?o.points:[];
+      const pairs=['segment','vector','line'].includes(o.kind)&&ids.length===2?[[ids[0],ids[1]]]:['polygon','triangle'].includes(o.kind)?ids.map((id,i)=>[id,ids[(i+1)%ids.length]]):[];
+      for(const [a,b]of pairs)if(names.has(a)&&names.has(b))edges.push([names.get(a)!,names.get(b)!]);
+    }return edges;
+  },[context.document]);
+  const definitionErrors=useMemo(()=>resolveGeometry(context.document).errors,[context.document]);
+  const submitDefinition=()=>{try{const next=editObject?{...context,document:applyDefinition(context.document,definition,editObject)}:addPlanarDefinition(context,definition);next.unknowns=next.unknowns.flatMap(u=>{const o=next.document.objects.find(o=>o.id===u.object);return o&&unknownFields(o).includes(u.field)?[{...u,initial:unknownValue(next.document,o,u.field)}]:[];});const before=context.document.objects.find(o=>o.id===editObject),after=next.document.objects.find(o=>o.id===editObject),from=before&&objectSymbol(before),to=after&&objectSymbol(after),oldNames=points.split(/\s+/).filter(Boolean);
+    invalidate();if(from&&to&&from!==to){const rename=(s:string)=>renamePlanarSource(s,from,to,oldNames);setConditions(v=>v.map(c=>({...c,refs:c.refs.map(r=>r.map(n=>n===from?to:n)),source:rename(c.source)})));next.equations=next.equations.map(e=>({...e,source:rename(e.source)}));setSegments(rename(segments));setCurves(v=>v.map(c=>({...c,name:c.name===from?to:c.name,points:c.points.map(n=>n===from?to:n),plane:c.plane?.map(n=>n===from?to:n)})));}
+    setContext(next);const added=contextPoints(next);setPoints(v=>[...new Set([...v.split(/\s+/).filter(Boolean).map(n=>n===from?to!:n),...added])].join(' '));setDefinition('');setEditObject(undefined);}catch(e){setError(message(e));}};
+  const toggleUnknown=(o:GeometryObject,field:string,checked:boolean)=>{invalidate();setContext(c=>({...c,unknowns:checked?[...c.unknowns,{id:`${o.id}.${field}`,object:o.id,field,initial:unknownValue(c.document,o,field),min:o.kind==='number'?o.slider.min:undefined,max:o.kind==='number'?o.slider.max:undefined}]:c.unknowns.filter(u=>u.id!==`${o.id}.${field}`)}));};
+  const addShape=()=>{try{const n=pointNames(shapeNames);if(shapeKind==='triangle'&&n.length!==3||['rectangle','parallelogram','square'].includes(shapeKind)&&n.length!==4)throw Error('顶点数量与图形不符');const all=[...new Set([...points.split(/\s+/).filter(Boolean),...n])],source=[`${shapeKind==='polygon'||shapeKind==='triangle'?'convexPolygon':shapeKind}(${n.join(',')})`],added=source.flatMap(s=>parseConditions(s,all));invalidate();setPoints(all.join(' '));setSegments(v=>[v,...n.map((p,i)=>`${p} ${n[(i+1)%n.length]}`)].filter(Boolean).join(', '));setConditions(v=>[...v,...added]);setShape(false);}catch(e){setError(message(e));}};
+  const editCondition=(id:string,source:string)=>{setEditing(id);setRowSource(source);};
+  const finishEdit=()=>{if(!editing)return;try{const names=pointNames(points,mode==='coordinate'?2000:50),parsed=mode==='coordinate'?parsePlanarInput(rowSource,names,curves):{conditions:parseConditions(rowSource,names,undefined,curves),equations:[]};invalidate();setConditions(v=>[...v.filter(c=>c.id!==editing),...parsed.conditions]);setContext(c=>({...c,equations:[...c.equations.filter(e=>e.id!==editing),...parsed.equations]}));setEditing(undefined);}catch(e){setError(message(e));}};
+  return <div hidden={!active} className="planar-constraint-workspace" ref={container} tabIndex={-1}>
+    {active&&fileTarget&&createPortal(<><button disabled={solver.busy||fileBusy} onClick={()=>void open()}>加载配置</button><button disabled={solver.busy||fileBusy} onClick={()=>void save()}>保存配置</button></>,fileTarget)}
+    <nav><button className={step===0?'active':''} onClick={()=>setStep(0)}>1 声明与条件</button><button className={step===1?'active':''} disabled={!result} onClick={()=>setStep(1)}>2 解集与轨迹</button></nav>
+    {notice&&<div role="status" className="constraint-file-notice">{notice}</div>}
+    <div className={`constraint-content ${step===0?'input-page':'result-page'}`}>
+    {step===0?<div className="constraint-editor">
+      {mode==='coordinate'&&<section className="planar-objects"><div className="constraint-section-heading"><strong>对象 <small>{context.document.objects.length}</small></strong><input aria-label="筛选已纳入对象" value={search} onChange={e=>setSearch(e.target.value)} placeholder="搜索对象"/></div>
+        <div className="planar-object-list">{(['point','line','curve','number','other'] as const).map(group=>{
+          const objects=context.document.objects.filter(o=>(group==='line'?['line','segment','vector'].includes(o.kind):group==='other'?!['point','line','segment','vector','curve','number'].includes(o.kind):o.kind===group)&&`${o.name} ${o.symbol??''}`.toLowerCase().includes(search.toLowerCase()));
+          return objects.length>0&&<details key={group} open={group==='point'||group==='curve'||group==='number'}><summary>{{point:'点',line:'线与向量',curve:'曲线',number:'变量',other:'其他对象'}[group]} · {objects.length}</summary>{objects.map(o=><div className="planar-object-row" key={o.id}><button title="编辑原定义" onClick={()=>{setDefinition(planarDefinition(context.document,o));setEditObject(o.id);}}><FormulaPreview source={mathPreview(planarDefinition(context.document,o))}/></button>{o.hidden&&<small>隐藏</small>}{definitionErrors.has(o.id)&&<small role="alert" className="expression-problem">{definitionErrors.get(o.id)}</small>}{unknownFields(o).map(field=>{const u=context.unknowns.find(u=>u.id===`${o.id}.${field}`);return <label key={field} className="planar-unknown"><span><input type="checkbox" checked={!!u} onChange={e=>toggleUnknown(o,field,e.target.checked)}/>{field.replace('preset.','').replace('circle.','')} 待求</span>{u&&<span className="planar-bounds">{(['min','max'] as const).map(bound=><input key={bound} type="number" aria-label={`${objectSymbol(o)} ${field} ${bound==='min'?'下界':'上界'}`} placeholder={bound==='min'?'下界':'上界'} value={u[bound]??''} onChange={e=>{invalidate();const value=e.target.value===''?undefined:Number(e.target.value);setContext(c=>({...c,unknowns:c.unknowns.map(v=>v.id===u.id?{...v,[bound]:value}:v)}));}}/>)}</span>}</label>;})}</div>)}</details>;
+        })}</div>
+        <form className="planar-definition" onSubmit={e=>{e.preventDefault();submitDefinition();}}><input aria-label="添加或修改条件对象定义" value={definition} onChange={e=>setDefinition(e.target.value)} placeholder="A=(?, ?)；m=?；c: x^2/a^2+y^2/b^2=1"/><button type="submit">{editObject?'修改定义':'添加对象'}</button>{editObject&&<button type="button" onClick={()=>{setEditObject(undefined);setDefinition('');}}>取消编辑</button>}</form>
+        {definition&&<FormulaPreview source={mathPreview(definition)}/>}<small>已有定义作为已知条件；勾选“待求”可反求独立坐标或参数。数值近似搜索需要上下界。</small>
+      </section>}
+      <section className="planar-declarations"><div className="constraint-section-heading"><strong>{mode==='coordinate'?'点与补充线段':'点与线段'}</strong><button onClick={()=>setShape(true)}>＋ 声明平面图形</button></div><div className="constraint-declarations"><label>点名<input aria-label="声明平面点名" value={points} onChange={e=>{invalidate();setPoints(e.target.value);}} placeholder="A B C D"/></label><label>线段<input aria-label="声明平面线段" value={segments} onChange={e=>{invalidate();setSegments(e.target.value);}} placeholder="AB, BC, CA"/></label></div></section>
+      {mode==='plane'&&<ConstraintCurves planar points={points} curves={curves} conditions={conditions} change={c=>{invalidate();setCurves(c);}} onError={setError}/>}
+      <ConditionInput key={inputKey} mode={mode} points={points} segments={segments} angleEdges={mode==='coordinate'?angleEdges:undefined} curves={curves} conditions={conditions} append={append} onError={setError}/>
+      {mode==='coordinate'&&<CoordinateConditionForm append={append}/>}
+      <details className="planar-search"><summary>近似搜索范围（解析求解无需设置）</summary><small>此处只限定数值搜索，不作为几何条件。限制位置请添加坐标不等式。</small>
+        {mode==='plane'?<label>搜索尺寸：已知长度尺度的倍数<input type="number" value={context.searchScale??20} min={1} max={1000000} onChange={e=>{invalidate();setContext(c=>({...c,searchScale:Number(e.target.value)}));}}/></label>:points.split(/\s+/).filter(n=>n&&!contextPoints(context).includes(n)).map(n=><div key={n} className="planar-search-row"><strong>{n}</strong>{(['xMin','xMax','yMin','yMax']as const).map((field,i)=><label key={field}>{['x 下界','x 上界','y 下界','y 上界'][i]}<input type="number" value={context.searchBounds?.[n]?.[field]??''} onChange={e=>{invalidate();setContext(c=>({...c,searchBounds:{...c.searchBounds,[n]:{...c.searchBounds?.[n],[field]:e.target.value===''?undefined:Number(e.target.value)}}}));}}/></label>)}</div>)}
+      </details>
+      <section><div className="constraint-section-heading"><strong>条件 · {conditions.length+context.equations.length}</strong></div><div className="constraint-condition-flow">
+        {conditions.map(c=><div className="constraint-condition-chip" key={c.id}><input aria-label={`启用 ${c.source}`} type="checkbox" checked={c.enabled} onChange={e=>{invalidate();setConditions(v=>v.map(x=>x.id===c.id?{...x,enabled:e.target.checked}:x));}}/><button onClick={()=>editCondition(c.id,c.source)}>{conditionStatement(c).map((p,i)=>'math'in p?<FormulaPreview key={i} source={p.math}/>:<span key={i}>{p.text}</span>)}</button><button aria-label={`删除 ${c.source}`} onClick={()=>{invalidate();setConditions(v=>v.filter(x=>x.id!==c.id));}}>×</button></div>)}
+        {context.equations.map(q=><div className="constraint-condition-chip" key={q.id}><input aria-label={`启用 ${q.source}`} type="checkbox" checked={q.enabled} onChange={e=>{invalidate();setContext(c=>({...c,equations:c.equations.map(x=>x.id===q.id?{...x,enabled:e.target.checked}:x)}));}}/><button onClick={()=>editCondition(q.id,q.source)}><FormulaPreview source={mathPreview(q.source)}/></button><button aria-label={`删除 ${q.source}`} onClick={()=>{invalidate();setContext(c=>({...c,equations:c.equations.filter(x=>x.id!==q.id)}));}}>×</button></div>)}
+      </div>{editing&&<form className="planar-definition" onSubmit={e=>{e.preventDefault();finishEdit();}}><input aria-label="编辑平面条件" value={rowSource} onChange={e=>setRowSource(e.target.value)}/><button>确定</button><button type="button" onClick={()=>setEditing(undefined)}>取消</button></form>}</section>
+    </div>:<><div className="constraint-visual">{preview&&'scene'in preview?<svg viewBox="0 0 480 340" aria-label="平面条件图形预览">{preview.scene.paths.map((p,i)=><g key={i}><path d={pathData(p.points)} fill="none" stroke={p.color??'#24314a'} strokeWidth={p.width} strokeDasharray={p.dashed?'5 4':undefined}/>{p.arrow&&<path d={arrowData(p.points)} fill={p.color??'#24314a'}/>}</g>)}{preview.scene.dots.map(p=><circle key={p.id} cx={p.p[0]} cy={p.p[1]} r={p.radius} fill="#24314a"/>)}{preview.scene.texts.map((t,i)=><text key={i} x={t.p[0]} y={t.p[1]} fontSize={t.fontSize} fontFamily="Times New Roman" fontStyle={t.italic?'italic':'normal'}>{labelPlainText(t.text)}</text>)}</svg>:<p>{preview?.error??'尚未找到可行构型'}</p>}</div><aside className="constraint-result-controls">
+      <strong>{result?.precision==='algebraic'?'精确代数解':result?.precision==='construction'?'解析构造':'近似求解'}</strong>{result?.approximationReason&&<p>{result.approximationReason}</p>}
+      {preview&&'set'in preview&&<ConstraintSetControls set={preview.set} docRef={previewRef} change={next=>{const s=next.objects.find(o=>o.id===rootId.current);if(s?.kind!=='solutionSet')return false;setResult(s.result);setBranch(s.activeBranch);return true;}} edit={()=>setStep(0)}/>}
+      {result?.branches[branch]?.values&&Object.entries(result.branches[branch].values!).filter(([id])=>!id.startsWith('point.')).map(([id,v])=>{const u=context.unknowns.find(u=>u.id===id),o=context.document.objects.find(o=>o.id===u?.object),exact=result.branches[branch].exactValues?.[id];return <div key={id}><small>{o&&objectSymbol(o)} {u?.field}</small><FormulaPreview source={exact?.expression?mathPreview(exact.expression):String(Number(v.toPrecision(10)))}/>{exact&&!exact.expression&&<small>代数实根 · {exact.polynomial.join(', ')}；隔离区间 [{exact.interval.join(', ')}]</small>}</div>;})}
+      {mode==='coordinate'&&result?.branches[branch]&&<details><summary>点坐标</summary>{Object.entries(result.branches[branch].positions).map(([name,p])=>{const o=context.document.objects.find(o=>o.kind==='point'&&objectSymbol(o)===name),b=result.branches[branch],parts=[0,1].map(axis=>b.exactValues?.[o?`${o.id}.${axis?'y':'x'}`:`point.${name}.${axis}`]?.expression??exactNumber(p[axis]).source);return <FormulaPreview key={name} source={`${symbolLatex(name)}=(${parts.map(mathPreview).join(',')})`}/>;})}</details>}
+      {result?.diagnostics.map((s,i)=><p key={i}>{s}</p>)}<button disabled={solver.busy} onClick={()=>void calculate(true)}>继续求解</button>
+    </aside></>}
+    </div>
+    {(error||solver.error)&&<div role="alert" className="constraint-error">{error||solver.error}</div>}
+    <footer><span>{solver.busy?'二维求解中…':result?.branches[branch]?`${result.branches[branch].dof} 个${mode==='plane'?'构型':''}自由度${mode==='plane'?'（不计整图平移、旋转）':''}`:''}</span>{solver.busy?<button onClick={()=>{revision.current++;solver.cancel();}}>取消求解</button>:<><button disabled={fileBusy} onClick={()=>void calculate(false)}>求解条件</button>{step===1&&<button disabled={!preview||!('set'in preview)||fileBusy} className="primary" onClick={place}>{existing?'更新图形':'放入绘图区'}</button>}</>}</footer>
+    {shape&&<div className="constraint-shape-overlay" onKeyDown={e=>{e.stopPropagation();if(e.key==='Escape'&&!e.nativeEvent.isComposing)setShape(false);}}><section role="dialog" aria-modal="true" aria-label="声明平面图形" className="constraint-shape-modal"><header><strong>声明平面图形</strong><button onClick={()=>setShape(false)}>×</button></header><div className="constraint-curve-form"><label>图形<select value={shapeKind} onChange={e=>{setShapeKind(e.target.value);setShapeNames(e.target.value==='triangle'?'A B C':'A B C D');}}>{[['triangle','三角形'],['polygon','凸多边形'],['rectangle','矩形'],['parallelogram','平行四边形'],['square','正方形'],['regularPolygon','正多边形']].map(([v,n])=><option value={v} key={v}>{n}</option>)}</select></label><label>顶点（依次）<input value={shapeNames} onChange={e=>setShapeNames(e.target.value)}/></label><button onClick={addShape}>加入</button></div></section></div>}
+  </div>;
+}
+function CoordinateConditionForm({append}:{append:(s:string[])=>boolean}){
+  const [kind,setKind]=useState('equation'),[fields,setFields]=useState<string[]>(['','']),[value,setValue]=useState('1');
+  const definitions:Record<string,{name:string;labels:string[]}>= {equation:{name:'坐标 / 参数等式与范围',labels:['表达式']},onCurve:{name:'点在曲线或直线上',labels:['点','曲线或直线']},intersection:{name:'两图形交点',labels:['交点','第一图形','第二图形']},tangent:{name:'直线与曲线相切',labels:['直线','曲线']},center:{name:'曲线中心',labels:['中心点','曲线']},focus:{name:'焦点',labels:['焦点','曲线','焦点序号（1 / 2）']},directrix:{name:'准线',labels:['直线','曲线','序号（1 / 2）']},a:{name:'半实轴 / 长半轴',labels:['曲线']},b:{name:'半虚轴 / 短半轴',labels:['曲线']},eccentricity:{name:'离心率',labels:['曲线']},focalDistance:{name:'焦距（两焦点距离）',labels:['曲线']},radius:{name:'圆半径',labels:['圆']},p:{name:'抛物线参数 p',labels:['曲线']}};
+  const source=()=>kind==='equation'?fields[0]:['a','b','eccentricity','focalDistance','radius','p'].includes(kind)?`${kind}(${fields[0]})=${value}`:`${kind}(${definitions[kind].labels.map((_,i)=>fields[i]??'').join(',')})`;
+  return <section className="planar-coordinate-conditions"><strong>坐标与圆锥曲线条件</strong><form className="constraint-full-form" onSubmit={e=>{e.preventDefault();append([source()]);}}><label>条件类型<select value={kind} onChange={e=>{setKind(e.target.value);setFields([]);}}>{Object.entries(definitions).map(([k,v])=><option key={k} value={k}>{v.name}</option>)}</select></label>{definitions[kind].labels.map((label,i)=><label key={i}>{label}<input value={fields[i]??''} onChange={e=>setFields(v=>{const q=[...v];q[i]=e.target.value;return q;})} placeholder={kind==='equation'?'x(A)=2；a>0':undefined}/></label>)}{['a','b','eccentricity','focalDistance','radius','p'].includes(kind)&&<label>数值<input value={value} onChange={e=>setValue(e.target.value)}/></label>}<button>加入条件</button></form></section>;
+}

@@ -62,7 +62,7 @@ describe("definitions and identity", () => {
     d.schemaVersion = 1;
     d.objects = [pointObject("原来的中文名称", [0, 0, 0])];
     const n = normalizeDrawing(d);
-    expect(n.schemaVersion).toBe(3);
+    expect(n.schemaVersion).toBe(4);
     expect(n.objects.find(o=>o.id===d.objects[0].id)?.id).toBe(d.objects[0].id);
     expect(n.objects.find(o=>o.id===d.objects[0].id)?.name).toBe("原来的中文名称");
     expect(n.objects.find(o=>o.id===d.objects[0].id)?.symbol).toBe("A");

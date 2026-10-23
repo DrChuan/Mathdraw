@@ -1,0 +1,5 @@
+import{describe,it,expect}from'vitest';import{trackConstraintMotion,hasConstraintMotions,settleConstraintMotions}from'./constraintPending';
+describe('constraint save barrier',()=>{
+ it('waits for a committed motion and its queued successor but ignores another preview document',async()=>{const finish=trackConstraintMotion('doc'),preview=trackConstraintMotion('preview');let saved=false;const wait=settleConstraintMotions('doc').then(()=>{saved=true;});await Promise.resolve();expect(saved).toBe(false);const second=trackConstraintMotion('doc');finish();await Promise.resolve();expect(saved).toBe(false);second();await wait;expect(hasConstraintMotions('doc')).toBe(false);expect(hasConstraintMotions('preview')).toBe(true);preview();});
+ it('rejects a close/save timeout without losing the pending operation',async()=>{const finish=trackConstraintMotion('stuck');await expect(settleConstraintMotions('stuck',5)).rejects.toThrow(/暂未保存或关闭/);expect(hasConstraintMotions('stuck')).toBe(true);finish();await settleConstraintMotions('stuck');});
+});

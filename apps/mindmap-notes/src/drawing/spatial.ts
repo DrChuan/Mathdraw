@@ -110,3 +110,23 @@ export function sectionLoops(mesh:{vertices:Vec3[];faces:[number,number,number][
   if(!loops.length)throw new Error("该平面与几何体没有非零面积的截面（可能相离或仅相切）");
   loops.sort((a,b)=>b.length-a.length);return loops;
 }
+
+/** A spatial perpendicular is the line through the point and its orthogonal
+ * projection on the reference, not the 90-degree turn of a screen vector. */
+export function relationDirection(type:'parallel'|'perpendicular'|'bisector',a:Vec3,
+  line:{a:Vec3;b:Vec3}|undefined,plane:PlaneGeometry|undefined,workplane:WorkPlane,spatial:boolean):Vec3 {
+  if(plane){if(type!=='perpendicular')throw Error('过点平行于平面有无数条直线；请创建平行平面或选择平面内的方向');return unit(cross(plane.u,plane.v));}
+  if(!line)throw Error('请选择参考直线、边或平面');
+  const d=sub(line.b,line.a);if(norm(d)<1e-10)throw Error('参考直线方向失效');
+  if(type==='parallel')return unit(d);
+  const n=cross(workplane.u,workplane.v);
+  if(spatial&&type==='perpendicular'){
+    const foot=add(line.a,mul(d,dot(sub(a,line.a),d)/dot(d,d))),delta=sub(foot,a);
+    if(norm(delta)>1e-8*Math.max(1,norm(sub(a,line.a)),norm(d)))return unit(delta);
+  }
+  // At a point ON the line (and for the perpendicular bisector), 3D has a
+  // pencil of choices. Only a containing workplane makes the requested line unique.
+  if(spatial&&(Math.abs(dot(d,unit(n)))>1e-7*norm(d)||Math.abs(dot(sub(a,workplane.origin),unit(n)))>1e-7))
+    throw Error(type==='bisector'?'空间线段的垂直平分对象是平面；要作垂直平分线，请先选择包含线段的工作平面':'点在参考直线上，空间垂线不唯一；请先选择包含参考线的工作平面');
+  const result=cross(n,d);if(norm(result)<1e-10)throw Error('请先选择包含参考线的工作平面');return unit(result);
+}
