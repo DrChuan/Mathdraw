@@ -1,0 +1,1254 @@
+{
+  "schemaVersion": 4,
+  "type": "mindgrove-mathdraw",
+  "id": "b3703ad3-1c17-4950-83b9-e850c544b76b",
+  "title": "未命名绘图",
+  "dimension": "3d",
+  "objects": [
+    {
+      "id": "e35da874-a3e2-4a7f-86cb-0d3883425b03",
+      "name": "O",
+      "symbol": "O",
+      "kind": "point",
+      "construction": {
+        "type": "origin"
+      },
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "showName": true,
+      "dot": "auto",
+      "coordinates": "none",
+      "labelOffset": [
+        -17,
+        19
+      ],
+      "hidden": true
+    },
+    {
+      "id": "74a4cffb-8f59-4a50-ab8e-be96a780c593",
+      "name": "条件作图解集",
+      "kind": "solutionSet",
+      "problem": {
+        "points": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E",
+          "F",
+          "R",
+          "P",
+          "Q"
+        ],
+        "segments": [
+          [
+            "A",
+            "B"
+          ],
+          [
+            "A",
+            "D"
+          ],
+          [
+            "A",
+            "C"
+          ],
+          [
+            "B",
+            "C"
+          ],
+          [
+            "C",
+            "D"
+          ],
+          [
+            "B",
+            "E"
+          ],
+          [
+            "E",
+            "F"
+          ],
+          [
+            "A",
+            "F"
+          ],
+          [
+            "B",
+            "F"
+          ],
+          [
+            "D",
+            "F"
+          ],
+          [
+            "F",
+            "R"
+          ],
+          [
+            "C",
+            "E"
+          ],
+          [
+            "P",
+            "Q"
+          ]
+        ],
+        "conditions": [
+          {
+            "id": "9e658b09-a493-4bc5-9976-c3e659691e8f",
+            "kind": "convexPolygon",
+            "refs": [
+              [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            ],
+            "source": "convexPolygon(A B C D)",
+            "enabled": true
+          },
+          {
+            "id": "b64246f8-a3d9-4fa0-a417-fef73a1cf9e3",
+            "kind": "parallelogram",
+            "refs": [
+              [
+                "A",
+                "B",
+                "E",
+                "F"
+              ]
+            ],
+            "source": "parallelogram(A B E F)",
+            "enabled": true
+          },
+          {
+            "id": "bfa165da-9887-4195-8189-d20342f0b6c0",
+            "kind": "division",
+            "refs": [
+              [
+                "P"
+              ],
+              [
+                "B",
+                "F"
+              ]
+            ],
+            "value": 1,
+            "source": "division(P,B F, 1)",
+            "enabled": true
+          },
+          {
+            "id": "3124d504-6026-496f-8390-00f711123188",
+            "kind": "division",
+            "refs": [
+              [
+                "Q"
+              ],
+              [
+                "F",
+                "R"
+              ]
+            ],
+            "value": 1,
+            "source": "division(Q,F R, 1)",
+            "enabled": true
+          },
+          {
+            "id": "b983093f-6692-4240-8264-6efba029791f",
+            "kind": "onSegment",
+            "refs": [
+              [
+                "R"
+              ],
+              [
+                "C",
+                "D"
+              ]
+            ],
+            "source": "onSegment(R,C D)",
+            "enabled": true
+          },
+          {
+            "id": "9edbe643-8c74-4dfa-a3a7-122e1ebdf822",
+            "kind": "distance",
+            "refs": [
+              [
+                "C",
+                "R"
+              ]
+            ],
+            "value": 2,
+            "source": "CR = 2",
+            "enabled": true
+          },
+          {
+            "id": "abcb3fb5-262e-47d0-be90-0684cae2b48d",
+            "kind": "distance",
+            "refs": [
+              [
+                "D",
+                "R"
+              ]
+            ],
+            "value": 2,
+            "source": "DR = 2",
+            "enabled": true
+          },
+          {
+            "id": "971b75ce-df50-4286-91d9-c501da9d8a1f",
+            "kind": "distance",
+            "refs": [
+              [
+                "A",
+                "C"
+              ]
+            ],
+            "value": 2.8284271247461903,
+            "source": "AC = 2\\sqrt2",
+            "enabled": true
+          },
+          {
+            "id": "190c5dec-ae55-482d-905b-afc310ee2532",
+            "kind": "distance",
+            "refs": [
+              [
+                "A",
+                "D"
+              ]
+            ],
+            "value": 2.8284271247461903,
+            "source": "AD = 2\\sqrt2",
+            "enabled": true
+          },
+          {
+            "id": "e57e1c1b-ff8d-4032-8c79-50f31e31a6e6",
+            "kind": "distance",
+            "refs": [
+              [
+                "A",
+                "B"
+              ]
+            ],
+            "value": 2,
+            "source": "AB = 2",
+            "enabled": true
+          },
+          {
+            "id": "937d465f-8342-4ee3-8f7f-c4e1139c76ca",
+            "kind": "distance",
+            "refs": [
+              [
+                "B",
+                "C"
+              ]
+            ],
+            "value": 2,
+            "source": "BC = 2",
+            "enabled": true
+          },
+          {
+            "id": "935db48e-f656-40c4-83ae-0468f1e4d9d5",
+            "kind": "perpendicular",
+            "refs": [
+              [
+                "A",
+                "F"
+              ],
+              [
+                "A",
+                "B",
+                "C"
+              ]
+            ],
+            "source": "AF\\perp ABC",
+            "enabled": true
+          },
+          {
+            "id": "c326e12b-0427-49da-b995-d4d76c986f34",
+            "kind": "equal",
+            "refs": [
+              [
+                "A",
+                "F"
+              ],
+              [
+                "A",
+                "B"
+              ]
+            ],
+            "source": "AF=AB",
+            "enabled": true
+          }
+        ],
+        "curves": []
+      },
+      "result": {
+        "branches": [
+          {
+            "positions": {
+              "A": [
+                0,
+                0,
+                0
+              ],
+              "B": [
+                2,
+                0,
+                0
+              ],
+              "C": [
+                2.0000000000000004,
+                2,
+                0
+              ],
+              "D": [
+                -2,
+                2.0000000000000004,
+                0
+              ],
+              "E": [
+                2,
+                0,
+                2
+              ],
+              "F": [
+                0,
+                0,
+                2
+              ],
+              "R": [
+                4.440892098500626e-16,
+                2,
+                0
+              ],
+              "P": [
+                1,
+                0,
+                1
+              ],
+              "Q": [
+                2.220446049250313e-16,
+                1,
+                1
+              ]
+            },
+            "rigid": [
+              [
+                "A",
+                "B",
+                "C",
+                "D",
+                "E",
+                "F",
+                "R",
+                "P",
+                "Q"
+              ]
+            ],
+            "reference": [
+              "A",
+              "B",
+              "C",
+              "D",
+              "E",
+              "F",
+              "R",
+              "P",
+              "Q"
+            ],
+            "dof": 0,
+            "motionDof": 0,
+            "loci": [],
+            "residual": 2.220446049250313e-16,
+            "rigidityPending": false,
+            "mobility": {
+              "version": 2,
+              "linear": 0,
+              "removed": 0,
+              "checked": true
+            }
+          },
+          {
+            "positions": {
+              "A": [
+                0,
+                0,
+                0
+              ],
+              "B": [
+                2,
+                0,
+                0
+              ],
+              "C": [
+                2.0000000000000004,
+                2,
+                0
+              ],
+              "D": [
+                -2,
+                2.0000000000000004,
+                0
+              ],
+              "E": [
+                2,
+                0,
+                -2
+              ],
+              "F": [
+                0,
+                0,
+                -2
+              ],
+              "R": [
+                4.440892098500626e-16,
+                2,
+                0
+              ],
+              "P": [
+                1,
+                0,
+                -1
+              ],
+              "Q": [
+                2.220446049250313e-16,
+                1,
+                -1
+              ]
+            },
+            "rigid": [
+              [
+                "A",
+                "B",
+                "C",
+                "D",
+                "E",
+                "F",
+                "R",
+                "P",
+                "Q"
+              ]
+            ],
+            "reference": [
+              "A",
+              "B",
+              "C",
+              "D",
+              "E",
+              "F",
+              "R",
+              "P",
+              "Q"
+            ],
+            "dof": 0,
+            "motionDof": 0,
+            "loci": [],
+            "residual": 2.220446049250313e-16,
+            "rigidityPending": false,
+            "mobility": {
+              "version": 2,
+              "linear": 0,
+              "removed": 0,
+              "checked": true
+            }
+          }
+        ],
+        "status": "solved",
+        "method": "construction",
+        "complete": false,
+        "attempts": 2,
+        "elapsed": 61,
+        "constructionSteps": [
+          "以 A、B 为基准放置已知长度线段（仅消去整体平移和旋转）",
+          "C：2 个球面求交",
+          "F：2 个球面与辅助平面 / 直线求交",
+          "E、P：解析消元向量及定比分点关系",
+          "D：1 个球面与辅助平面 / 直线求交，保留连续自由度",
+          "R：2 个球面与辅助平面 / 直线求交",
+          "Q：解析消元向量及定比分点关系"
+        ],
+        "diagnostics": [
+          "优先通过几何构造与轨迹求交得到 2 个可行构型，均已回代全部条件。",
+          "辅助直线、平面、圆和球面只参与构造计算，不加入绘图区。",
+          "存在连续自由度或尚未完成全部分支枚举，不声明穷尽。"
+        ]
+      },
+      "activeBranch": 0,
+      "placement": {
+        "origin": [
+          0,
+          0,
+          0
+        ],
+        "x": [
+          0.7071067811865476,
+          -0.7071067811865474,
+          0
+        ],
+        "y": [
+          0.7071067811865475,
+          0.7071067811865476,
+          0
+        ],
+        "z": [
+          0,
+          0,
+          1
+        ]
+      },
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "p"
+    },
+    {
+      "id": "17ac33fb-023d-46fb-8a90-7d3645d97eee",
+      "name": "A",
+      "symbol": "A",
+      "kind": "point",
+      "construction": {
+        "type": "free",
+        "position": [
+          0,
+          0,
+          0
+        ]
+      },
+      "constraintSet": "74a4cffb-8f59-4a50-ab8e-be96a780c593",
+      "constraintPointName": "A",
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "showName": true,
+      "dot": "auto",
+      "coordinates": "none",
+      "labelOffset": [
+        9,
+        -10
+      ]
+    },
+    {
+      "id": "4ae9f27b-69fe-4e97-928a-20b1cfdd900d",
+      "name": "B",
+      "symbol": "B",
+      "kind": "point",
+      "construction": {
+        "type": "free",
+        "position": [
+          1.4142135623730951,
+          -1.4142135623730947,
+          0
+        ]
+      },
+      "constraintSet": "74a4cffb-8f59-4a50-ab8e-be96a780c593",
+      "constraintPointName": "B",
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "showName": true,
+      "dot": "auto",
+      "coordinates": "none",
+      "labelOffset": [
+        -26,
+        12
+      ]
+    },
+    {
+      "id": "0d4e6bcb-f81b-4259-b537-d21cdc6fa9ce",
+      "name": "C",
+      "symbol": "C",
+      "kind": "point",
+      "construction": {
+        "type": "free",
+        "position": [
+          2.8284271247461903,
+          2.220446049250313e-16,
+          0
+        ]
+      },
+      "constraintSet": "74a4cffb-8f59-4a50-ab8e-be96a780c593",
+      "constraintPointName": "C",
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "showName": true,
+      "dot": "auto",
+      "coordinates": "none",
+      "labelOffset": [
+        4,
+        20
+      ]
+    },
+    {
+      "id": "f8ae36f0-a212-4114-abae-8b06a42c7c8f",
+      "name": "D",
+      "symbol": "D",
+      "kind": "point",
+      "construction": {
+        "type": "free",
+        "position": [
+          0,
+          2.82842712474619,
+          0
+        ]
+      },
+      "constraintSet": "74a4cffb-8f59-4a50-ab8e-be96a780c593",
+      "constraintPointName": "D",
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "showName": true,
+      "dot": "auto",
+      "coordinates": "none",
+      "labelOffset": [
+        9,
+        -10
+      ]
+    },
+    {
+      "id": "d2853bbf-730e-4274-b1db-e06bbdf05bdb",
+      "name": "E",
+      "symbol": "E_1",
+      "kind": "point",
+      "construction": {
+        "type": "free",
+        "position": [
+          1.4142135623730951,
+          -1.4142135623730947,
+          2
+        ]
+      },
+      "constraintSet": "74a4cffb-8f59-4a50-ab8e-be96a780c593",
+      "constraintPointName": "E",
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "showName": true,
+      "dot": "auto",
+      "coordinates": "none",
+      "labelOffset": [
+        9,
+        -10
+      ]
+    },
+    {
+      "id": "0f046274-9188-4f6e-8ae4-05ef9b467635",
+      "name": "F",
+      "symbol": "F",
+      "kind": "point",
+      "construction": {
+        "type": "free",
+        "position": [
+          0,
+          0,
+          2
+        ]
+      },
+      "constraintSet": "74a4cffb-8f59-4a50-ab8e-be96a780c593",
+      "constraintPointName": "F",
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "showName": true,
+      "dot": "auto",
+      "coordinates": "none",
+      "labelOffset": [
+        9,
+        -10
+      ]
+    },
+    {
+      "id": "e14f7560-8679-4e65-82f7-b94464c3e933",
+      "name": "R",
+      "symbol": "R",
+      "kind": "point",
+      "construction": {
+        "type": "free",
+        "position": [
+          1.4142135623730951,
+          1.414213562373095,
+          0
+        ]
+      },
+      "constraintSet": "74a4cffb-8f59-4a50-ab8e-be96a780c593",
+      "constraintPointName": "R",
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "showName": true,
+      "dot": "auto",
+      "coordinates": "none",
+      "labelOffset": [
+        9,
+        -10
+      ]
+    },
+    {
+      "id": "9d6085dc-fe1a-4d4a-a182-0a491991bbd1",
+      "name": "P",
+      "symbol": "P",
+      "kind": "point",
+      "construction": {
+        "type": "free",
+        "position": [
+          0.7071067811865476,
+          -0.7071067811865474,
+          1
+        ]
+      },
+      "constraintSet": "74a4cffb-8f59-4a50-ab8e-be96a780c593",
+      "constraintPointName": "P",
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "showName": true,
+      "dot": "auto",
+      "coordinates": "none",
+      "labelOffset": [
+        -18,
+        -8
+      ]
+    },
+    {
+      "id": "f9d358dd-ca6d-4d49-98eb-f395629f2f18",
+      "name": "Q",
+      "symbol": "Q",
+      "kind": "point",
+      "construction": {
+        "type": "free",
+        "position": [
+          0.7071067811865476,
+          0.7071067811865475,
+          1
+        ]
+      },
+      "constraintSet": "74a4cffb-8f59-4a50-ab8e-be96a780c593",
+      "constraintPointName": "Q",
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "showName": true,
+      "dot": "auto",
+      "coordinates": "none",
+      "labelOffset": [
+        9,
+        -10
+      ]
+    },
+    {
+      "id": "c18097f4-bd30-4227-a6d9-ae98effb68d4",
+      "name": "AB",
+      "kind": "segment",
+      "constraintSet": "74a4cffb-8f59-4a50-ab8e-be96a780c593",
+      "points": [
+        "17ac33fb-023d-46fb-8a90-7d3645d97eee",
+        "4ae9f27b-69fe-4e97-928a-20b1cfdd900d"
+      ],
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "AB"
+    },
+    {
+      "id": "2ddde503-7b9c-4f20-bc72-cacc74554bd7",
+      "name": "AD",
+      "kind": "segment",
+      "constraintSet": "74a4cffb-8f59-4a50-ab8e-be96a780c593",
+      "points": [
+        "17ac33fb-023d-46fb-8a90-7d3645d97eee",
+        "f8ae36f0-a212-4114-abae-8b06a42c7c8f"
+      ],
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "AD"
+    },
+    {
+      "id": "6334aac8-5728-4e6b-b50a-1329cc6540c3",
+      "name": "AC",
+      "kind": "segment",
+      "constraintSet": "74a4cffb-8f59-4a50-ab8e-be96a780c593",
+      "points": [
+        "17ac33fb-023d-46fb-8a90-7d3645d97eee",
+        "0d4e6bcb-f81b-4259-b537-d21cdc6fa9ce"
+      ],
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "AC"
+    },
+    {
+      "id": "e13ff86f-b57d-45c8-b9f7-20178c3e6916",
+      "name": "BC",
+      "kind": "segment",
+      "constraintSet": "74a4cffb-8f59-4a50-ab8e-be96a780c593",
+      "points": [
+        "4ae9f27b-69fe-4e97-928a-20b1cfdd900d",
+        "0d4e6bcb-f81b-4259-b537-d21cdc6fa9ce"
+      ],
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "BC"
+    },
+    {
+      "id": "28043247-bd36-481b-91e6-f1d5c18555e1",
+      "name": "CD",
+      "kind": "segment",
+      "constraintSet": "74a4cffb-8f59-4a50-ab8e-be96a780c593",
+      "points": [
+        "0d4e6bcb-f81b-4259-b537-d21cdc6fa9ce",
+        "f8ae36f0-a212-4114-abae-8b06a42c7c8f"
+      ],
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "CD"
+    },
+    {
+      "id": "9ce0a42e-7f0a-46b9-bfc2-15ad59170ec8",
+      "name": "BE",
+      "kind": "segment",
+      "constraintSet": "74a4cffb-8f59-4a50-ab8e-be96a780c593",
+      "points": [
+        "4ae9f27b-69fe-4e97-928a-20b1cfdd900d",
+        "d2853bbf-730e-4274-b1db-e06bbdf05bdb"
+      ],
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "BE"
+    },
+    {
+      "id": "55d66d54-a0a7-41f9-9cb1-c60d9e9c48c0",
+      "name": "EF",
+      "kind": "segment",
+      "constraintSet": "74a4cffb-8f59-4a50-ab8e-be96a780c593",
+      "points": [
+        "d2853bbf-730e-4274-b1db-e06bbdf05bdb",
+        "0f046274-9188-4f6e-8ae4-05ef9b467635"
+      ],
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "EF"
+    },
+    {
+      "id": "fe0d0408-6287-4d39-8218-e351b6e68e03",
+      "name": "AF",
+      "kind": "segment",
+      "constraintSet": "74a4cffb-8f59-4a50-ab8e-be96a780c593",
+      "points": [
+        "17ac33fb-023d-46fb-8a90-7d3645d97eee",
+        "0f046274-9188-4f6e-8ae4-05ef9b467635"
+      ],
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "AF"
+    },
+    {
+      "id": "7231a3d8-9715-48b1-b1cc-b49f6b1e9014",
+      "name": "BF",
+      "kind": "segment",
+      "constraintSet": "74a4cffb-8f59-4a50-ab8e-be96a780c593",
+      "points": [
+        "4ae9f27b-69fe-4e97-928a-20b1cfdd900d",
+        "0f046274-9188-4f6e-8ae4-05ef9b467635"
+      ],
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "BF"
+    },
+    {
+      "id": "76d5e66c-9c9f-4bc2-9a93-dd2bab5bb5fd",
+      "name": "DF",
+      "kind": "segment",
+      "constraintSet": "74a4cffb-8f59-4a50-ab8e-be96a780c593",
+      "points": [
+        "f8ae36f0-a212-4114-abae-8b06a42c7c8f",
+        "0f046274-9188-4f6e-8ae4-05ef9b467635"
+      ],
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "DF"
+    },
+    {
+      "id": "143fb19b-aeee-490d-a3ed-358957a4365e",
+      "name": "FR",
+      "kind": "segment",
+      "constraintSet": "74a4cffb-8f59-4a50-ab8e-be96a780c593",
+      "points": [
+        "0f046274-9188-4f6e-8ae4-05ef9b467635",
+        "e14f7560-8679-4e65-82f7-b94464c3e933"
+      ],
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "FR"
+    },
+    {
+      "id": "3a6378a9-ee92-40bf-8971-90478ac33839",
+      "name": "CE",
+      "kind": "segment",
+      "constraintSet": "74a4cffb-8f59-4a50-ab8e-be96a780c593",
+      "points": [
+        "0d4e6bcb-f81b-4259-b537-d21cdc6fa9ce",
+        "d2853bbf-730e-4274-b1db-e06bbdf05bdb"
+      ],
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "CE"
+    },
+    {
+      "id": "1ab88f66-5999-4d3d-8700-c856d7ab7424",
+      "name": "PQ",
+      "kind": "segment",
+      "constraintSet": "74a4cffb-8f59-4a50-ab8e-be96a780c593",
+      "points": [
+        "9d6085dc-fe1a-4d4a-a182-0a491991bbd1",
+        "f9d358dd-ca6d-4d49-98eb-f395629f2f18"
+      ],
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "PQ"
+    },
+    {
+      "id": "bd3d2091-6961-480f-9246-8b3dfeaf59b7",
+      "name": "面 ABCD",
+      "kind": "polygon",
+      "constraintSet": "74a4cffb-8f59-4a50-ab8e-be96a780c593",
+      "constraintFace": "A|B|C|D",
+      "points": [
+        "17ac33fb-023d-46fb-8a90-7d3645d97eee",
+        "4ae9f27b-69fe-4e97-928a-20b1cfdd900d",
+        "0d4e6bcb-f81b-4259-b537-d21cdc6fa9ce",
+        "f8ae36f0-a212-4114-abae-8b06a42c7c8f"
+      ],
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "p1"
+    },
+    {
+      "id": "ea6d69f1-514b-4e28-a690-5d3dcff0c3a5",
+      "name": "面 ABEF",
+      "kind": "polygon",
+      "constraintSet": "74a4cffb-8f59-4a50-ab8e-be96a780c593",
+      "constraintFace": "A|B|E|F",
+      "points": [
+        "17ac33fb-023d-46fb-8a90-7d3645d97eee",
+        "4ae9f27b-69fe-4e97-928a-20b1cfdd900d",
+        "d2853bbf-730e-4274-b1db-e06bbdf05bdb",
+        "0f046274-9188-4f6e-8ae4-05ef9b467635"
+      ],
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "p2"
+    },
+    {
+      "id": "172a9d88-093a-4d26-a9c0-6bc5a06c21bb",
+      "name": "面 AFD",
+      "kind": "polygon",
+      "constraintSet": "74a4cffb-8f59-4a50-ab8e-be96a780c593",
+      "constraintFace": "A|D|F",
+      "points": [
+        "17ac33fb-023d-46fb-8a90-7d3645d97eee",
+        "0f046274-9188-4f6e-8ae4-05ef9b467635",
+        "f8ae36f0-a212-4114-abae-8b06a42c7c8f"
+      ],
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "p3"
+    },
+    {
+      "id": "f1e14ca5-62a6-4f72-8eaa-6bd00f59070b",
+      "name": "面 BEC",
+      "kind": "polygon",
+      "constraintSet": "74a4cffb-8f59-4a50-ab8e-be96a780c593",
+      "constraintFace": "B|C|E",
+      "points": [
+        "4ae9f27b-69fe-4e97-928a-20b1cfdd900d",
+        "d2853bbf-730e-4274-b1db-e06bbdf05bdb",
+        "0d4e6bcb-f81b-4259-b537-d21cdc6fa9ce"
+      ],
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "p4"
+    },
+    {
+      "id": "35b8545e-27bf-48ee-95e4-8de15dfcabf2",
+      "name": "面 CEFDR",
+      "kind": "polygon",
+      "constraintSet": "74a4cffb-8f59-4a50-ab8e-be96a780c593",
+      "constraintFace": "C|D|E|F|R",
+      "points": [
+        "0d4e6bcb-f81b-4259-b537-d21cdc6fa9ce",
+        "d2853bbf-730e-4274-b1db-e06bbdf05bdb",
+        "0f046274-9188-4f6e-8ae4-05ef9b467635",
+        "f8ae36f0-a212-4114-abae-8b06a42c7c8f",
+        "e14f7560-8679-4e65-82f7-b94464c3e933"
+      ],
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "p5"
+    },
+    {
+      "id": "ea35712c-e1c8-41d8-937f-6e06976bd568",
+      "name": "面 FPQ",
+      "kind": "polygon",
+      "constraintSet": "74a4cffb-8f59-4a50-ab8e-be96a780c593",
+      "constraintFace": "F|P|Q",
+      "points": [
+        "0f046274-9188-4f6e-8ae4-05ef9b467635",
+        "9d6085dc-fe1a-4d4a-a182-0a491991bbd1",
+        "f9d358dd-ca6d-4d49-98eb-f395629f2f18"
+      ],
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "p6"
+    },
+    {
+      "id": "19a9458e-d8cb-4b03-bd03-88398dadcdf2",
+      "kind": "line",
+      "name": "垂线",
+      "points": [
+        "e14f7560-8679-4e65-82f7-b94464c3e933",
+        "e14f7560-8679-4e65-82f7-b94464c3e933"
+      ],
+      "relation": {
+        "type": "perpendicular",
+        "plane": {
+          "type": "polygon",
+          "polygon": "172a9d88-093a-4d26-a9c0-6bc5a06c21bb"
+        },
+        "planeId": "xy"
+      },
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "l"
+    },
+    {
+      "id": "d54d9f4a-8a8c-4bda-80ab-37b7466d3c5b",
+      "kind": "line",
+      "name": "垂线",
+      "points": [
+        "17ac33fb-023d-46fb-8a90-7d3645d97eee",
+        "17ac33fb-023d-46fb-8a90-7d3645d97eee"
+      ],
+      "relation": {
+        "type": "perpendicular",
+        "plane": {
+          "type": "polygon",
+          "polygon": "35b8545e-27bf-48ee-95e4-8de15dfcabf2"
+        },
+        "planeId": "xy"
+      },
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "l1"
+    }
+  ],
+  "planes": [
+    {
+      "id": "xy",
+      "name": "z=0",
+      "origin": [
+        0,
+        0,
+        0
+      ],
+      "u": [
+        0.7071067811865476,
+        -0.7071067811865474,
+        0
+      ],
+      "v": [
+        0.7071067811865475,
+        0.7071067811865476,
+        0
+      ]
+    }
+  ],
+  "edgeStyles": {
+    "bd3d2091-6961-480f-9246-8b3dfeaf59b7:e:0": "hidden",
+    "bd3d2091-6961-480f-9246-8b3dfeaf59b7:e:1": "hidden",
+    "bd3d2091-6961-480f-9246-8b3dfeaf59b7:e:2": "hidden",
+    "bd3d2091-6961-480f-9246-8b3dfeaf59b7:e:3": "hidden",
+    "ea6d69f1-514b-4e28-a690-5d3dcff0c3a5:e:0": "hidden",
+    "ea6d69f1-514b-4e28-a690-5d3dcff0c3a5:e:1": "hidden",
+    "ea6d69f1-514b-4e28-a690-5d3dcff0c3a5:e:2": "hidden",
+    "ea6d69f1-514b-4e28-a690-5d3dcff0c3a5:e:3": "hidden",
+    "172a9d88-093a-4d26-a9c0-6bc5a06c21bb:e:0": "hidden",
+    "172a9d88-093a-4d26-a9c0-6bc5a06c21bb:e:1": "hidden",
+    "172a9d88-093a-4d26-a9c0-6bc5a06c21bb:e:2": "hidden",
+    "f1e14ca5-62a6-4f72-8eaa-6bd00f59070b:e:0": "hidden",
+    "f1e14ca5-62a6-4f72-8eaa-6bd00f59070b:e:1": "hidden",
+    "f1e14ca5-62a6-4f72-8eaa-6bd00f59070b:e:2": "hidden",
+    "35b8545e-27bf-48ee-95e4-8de15dfcabf2:e:0": "hidden",
+    "35b8545e-27bf-48ee-95e4-8de15dfcabf2:e:1": "hidden",
+    "35b8545e-27bf-48ee-95e4-8de15dfcabf2:e:2": "hidden",
+    "35b8545e-27bf-48ee-95e4-8de15dfcabf2:e:3": "hidden",
+    "35b8545e-27bf-48ee-95e4-8de15dfcabf2:e:4": "hidden",
+    "ea35712c-e1c8-41d8-937f-6e06976bd568:e:0": "hidden",
+    "ea35712c-e1c8-41d8-937f-6e06976bd568:e:1": "hidden",
+    "ea35712c-e1c8-41d8-937f-6e06976bd568:e:2": "hidden"
+  },
+  "view": {
+    "mode": "space",
+    "planeId": "xy",
+    "angle": -134,
+    "projection": "oblique",
+    "scale": 116.97868547588895,
+    "center": [
+      0.4181785905742007,
+      -0.34495896044399976
+    ],
+    "axes": true,
+    "grid": false,
+    "camera": {
+      "origin": [
+        0,
+        0,
+        0
+      ],
+      "x": [
+        0.7071067811865476,
+        -0.7071067811865474,
+        0
+      ],
+      "y": [
+        0.7071067811865475,
+        0.7071067811865476,
+        0
+      ],
+      "z": [
+        0,
+        0,
+        1
+      ]
+    }
+  },
+  "output": {
+    "width": 1600,
+    "background": "transparent",
+    "crop": "content",
+    "bounds": [
+      -5,
+      5,
+      -4,
+      4
+    ]
+  },
+  "coordinateOriginId": "e35da874-a3e2-4a7f-86cb-0d3883425b03"
+}

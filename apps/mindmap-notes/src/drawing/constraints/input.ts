@@ -50,6 +50,7 @@ export function segmentsFrom(source:string,names:string[]):[string,string][] {
 export function validateCondition(c:Condition,names:string[],curves?:ConstraintCurve[]) {
   if(!constraintKinds.includes(c.kind)||typeof c.id!=="string"||!c.id||typeof c.source!=="string"||c.source.length>2048||typeof c.enabled!=="boolean"||
     !Array.isArray(c.refs)||c.refs.some(r=>!Array.isArray(r)||r.some(p=>!names.includes(p))||new Set(r).size!==r.length))throw new Error("条件数据或点引用无效");
+  if(c.coefficientSources!==undefined&&(!Array.isArray(c.coefficientSources)||c.coefficientSources.length!==c.coefficients?.length||c.coefficientSources.some((source,i)=>typeof source!=='string'||source.length>2048||Math.abs(scalar(source)-c.coefficients![i])>1e-10*Math.max(1,Math.abs(c.coefficients![i])))))throw Error('向量系数源码与数值不一致');
   const sizes=c.refs.map(r=>r.length).join(",");
   const expected:Partial<Record<ConstraintKind,string>>={pointLineDistance:"1,2",pointPlaneDistance:"1,3",distance:"2",equal:"2,2",ratio:"2,2",lineAngle:"2,2",vertexAngle:"1,1,1",linePlaneAngle:"2,3",dihedral:"2,1,1",collinear:"3",onSegment:"1,2",division:"1,2",coplanar:"4",parallelogram:"4",rectangle:"4",rhombus:"4",square:"4",cube:"8"};
   if(c.kind==="volume") {
@@ -182,6 +183,12 @@ function parseGeometricCondition(source:string,names:string[],id:string,curves:C
       if(b?.length===2){kind="equal";refs=[a,b];}else{kind="distance";refs=[a];value=scalar(m[2]);}}
   }
   const c={id,kind,refs,value,source:original,enabled:true};validateCondition(c,names,curves);return c;
+}
+/** Recover the written numeric operand instead of reconstructing it from a double. */
+export function conditionValueSource(c:Condition):string|undefined {
+  const normalized=normalizeConditionNotation(c.source,[...new Set(c.refs.flat())]),call=conditionCall(normalized);
+  if(call){if(call[3])return call[3];const args=splitArguments(call[2]);if(call[1].toLowerCase()==='midpoint'||c.kind==='division'&&args.length===2)return '1';if(c.value!==undefined)return args.at(-1);}
+  const equal=normalized.lastIndexOf('=');return equal>=0?normalized.slice(equal+1).trim():undefined;
 }
 function conditionCall(source:string):[string,string,string,string?]|undefined {
   const head=source.match(/^([A-Za-z]+)\s*\(/);if(!head)return;

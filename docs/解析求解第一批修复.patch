@@ -1,0 +1,107 @@
+--- a/apps/mindmap-notes/src/drawing/constraints/planar.ts
++++ b/apps/mindmap-notes/src/drawing/constraints/planar.ts
+@@ -75,21 +75,21 @@
+     const loci=analyticLoci(p,d.positions,ref,e.scale).filter(l=>l.kind!=='sphere'&&l.kind!=='plane').map(l=>({...l,origin:[l.origin[0],l.origin[1],0] as Vec3}));
+     return {positions:d.positions,values:d.values,exactValues,reference:ref,rigid:[],dof,motionDof,loci,residual:size(e.residual(v)),rigidityPending:false} satisfies SolutionBranch;
+   };
+-  if(request.reference){if(!base)throw Error('构型已失效');const ref=request.reference.points;if(new Set(ref).size!==ref.length||ref.some(n=>!p.points.includes(n)))throw Error('固定点无效');const v=e.encode(base.positions,base.values);if(e.errors(v).length)throw Error('当前构型已失效');const result=structuredClone(request.previous!);result.branches[request.reference.branch]=make(v,ref);return {...result,elapsed:Date.now()-started};}
++  if(request.reference){if(!base)throw Error('构型已失效');const ref=request.reference.points;if(new Set(ref).size!==ref.length||ref.some(n=>!p.points.includes(n)))throw Error('固定点无效');const v=e.encode(base.positions,base.values);if(e.errors(v).length)throw Error('当前构型已失效');const result=structuredClone(request.previous!);result.branches[request.reference.branch]=make(v,ref,result.branches[request.reference.branch].exactValues);return {...result,elapsed:Date.now()-started};}
+   if(request.parameter){
+     const move=request.parameter,index=e.variables.findIndex(u=>u.id===move.variable);if(!base||index<0||!Number.isFinite(move.target))throw Error('该数值不是待求参数');
+     const start=e.encode(base.positions,base.values),candidate=[...start];candidate[index]=move.target;
+     const hard=(x:number[])=>[...e.residual(x),...base.reference.flatMap(n=>[0,1].map(i=>(e.model(x).positions[n][i]-base.positions[n][i])/e.scale))];
+     let next=candidate;if(e.errors(next).length||size(hard(next))>3e-6)next=minimize(x=>[...hard(x),(x[index]-move.target)/Math.max(1,e.scale)],candidate,deadline);
+     if(e.errors(next).length||size(hard(next))>3e-6||Math.abs(next[index]-move.target)>1e-5*Math.max(1,Math.abs(move.target)))throw Error('该参数值不满足全部条件，已保留原构型');
+-    const result=structuredClone(request.previous!);result.branches[move.branch]=make(next,base.reference);return {...result,precision:'approximate',method:'hybrid',approximationReason:'参数改变后进行二维联动校正并回代全部条件。',elapsed:Date.now()-started};
++    const result=structuredClone(request.previous!);result.branches[move.branch]=make(next,base.reference);return {...result,complete:false,precision:'approximate',method:'hybrid',approximationReason:'参数改变后进行二维联动校正并回代全部条件。',elapsed:Date.now()-started};
+   }
+-  if(request.move){if(!base||base.reference.includes(request.move.point))throw Error('该点是固定参照，不能直接拖动');const v=e.encode(base.positions,base.values),locus=base.loci.find(l=>l.point===request.move!.point),raw:[number,number,number]=[request.move.target[0],request.move.target[1],0],target=locus?nearestLocus(locus,raw):raw;
++  if(request.move){if(!base||!p.points.includes(request.move.point)||base.reference.includes(request.move.point))throw Error('该点是固定参照，不能直接拖动');const v=e.encode(base.positions,base.values),locus=base.loci.find(l=>l.point===request.move!.point),raw:[number,number,number]=[request.move.target[0],request.move.target[1],0],target=locus?nearestLocus(locus,raw):raw;
+     const fixed=(x:number[])=>{const q=e.model(x).positions;return base.reference.flatMap(n=>[0,1].map(i=>(q[n][i]-base.positions[n][i])/e.scale));};
+     const hard=(x:number[])=>[...e.residual(x),...fixed(x)],withTarget=(x:number[])=>[...hard(x),...[0,1].map(i=>(e.model(x).positions[request.move!.point][i]-target[i])/e.scale)];
+     let next=minimize(withTarget,v,deadline);if(e.errors(next).length||size(fixed(next))>3e-6)next=minimize(hard,next,deadline);
+     if(e.errors(next).length||size(fixed(next))>3e-6)throw Error('该位置不满足全部条件，已保留上一个可行位置');
+-    const result=structuredClone(request.previous!);result.branches[request.move.branch]=make(next,base.reference);return {...result,precision:'approximate',method:'hybrid',approximationReason:'二维约束联立校正，每次移动后回代全部条件。',elapsed:Date.now()-started};
++    const result=structuredClone(request.previous!);result.branches[request.move.branch]=make(next,base.reference);return {...result,complete:false,precision:'approximate',method:'hybrid',approximationReason:'二维约束联立校正，每次移动后回代全部条件。',elapsed:Date.now()-started};
+   }
+   const accept=(v:number[],exact?:Record<string,AlgebraicValue>)=>{
+     attempts++;if(e.errors(v).length)return false;const b=make(v,undefined,exact);
+@@ -102,7 +102,18 @@
+       if(b.dof===0)b.motionDof=0;
+       b.loci=b.dof===0?[]:analyticLoci(p,b.positions,b.reference,e.scale).filter(l=>!['sphere','plane'].includes(l.kind));
+     }
+-    if(!branches.some(a=>p.points.every(n=>norm(sub(a.positions[n],b.positions[n]))<e.scale*1e-5)&&e.variables.every(u=>u.point||Math.abs((a.values?.[u.id]??0)-(b.values?.[u.id]??0))<1e-6)))branches.push(b);return true;
++    // Isolated algebraic roots have identities independent of drawing tolerance.
++    // Never merge distinct exact candidates just because their decimals are close.
++    const sameRoots=(a:SolutionBranch)=>{
++      if(!a.exactValues&&!b.exactValues)return true;
++      if(!a.exactValues||!b.exactValues)return false;
++      const keys=Object.keys(a.exactValues);
++      return keys.length===Object.keys(b.exactValues).length&&keys.every(key=>{
++        const x=a.exactValues![key],y=b.exactValues![key];
++        return !!y&&x.polynomial.length===y.polynomial.length&&x.polynomial.every((c,i)=>c===y.polynomial[i])&&x.interval.every((v,i)=>v===y.interval[i]);
++      });
++    };
++    if(!branches.some(a=>sameRoots(a)&&p.points.every(n=>norm(sub(a.positions[n],b.positions[n]))<e.scale*1e-5)&&e.variables.every(u=>u.point||Math.abs((a.values?.[u.id]??0)-(b.values?.[u.id]??0))<1e-6)))branches.push(b);return true;
+   };
+   let analytic=false,complete=false;
+   if(!p.conditions.some(c=>c.enabled)&&!equations.some(c=>c.enabled)) {
+@@ -116,7 +127,7 @@
+     const symbolic=symbolicPlanarEquations(p,e.variables);
+     if(symbolic){
+       if(e.variables.length===1){for(const source of symbolic.sources){const roots=algebraicRoots(source,symbolic.tokens[0],{},Math.min(deadline,Date.now()+600));if(roots){for(const root of roots)accept([root.approximate],{[e.variables[0].id]:root});analytic=true;complete=true;steps.push('有理表达式清分母，使用精确 Sturm 序列隔离全部实根，回代排除增根。');break;}}}
+-      else {const pairs=algebraicSystem(symbolic.sources,symbolic.tokens as [string,string],{},Math.min(deadline,Date.now()+800));if(pairs){for(const pair of pairs)accept(pair.map(r=>r.approximate),Object.fromEntries(pair.map((r,i)=>[e.variables[i].id,r])));analytic=true;complete=true;steps.push('有理二元条件使用 Sylvester 结式双向消元；精确实根隔离后组合并回代原始条件。');}}
++      else {const pairs=algebraicSystem(symbolic.sources,symbolic.tokens as [string,string],{},Math.min(deadline,Date.now()+800));if(pairs){for(const pair of pairs)accept(pair.map(r=>r.approximate),Object.fromEntries(pair.map((r,i)=>[e.variables[i].id,r])));analytic=true;complete=false;steps.push('有理二元条件使用 Sylvester 结式双向消元；精确实根隔离后组合并回代原始条件；配对仍使用浮点校验，尚未认证解集穷尽。');}}
+     }
+   }
+   // For a point constrained to two existing lines/conics, use the quadratic
+@@ -124,7 +135,7 @@
+   if(!analytic&&context&&!context.unknowns.length&&p.points.filter(n=>!context.document.objects.some(o=>o.kind==='point'&&objectSymbol(o)===n)).length===1){
+     const name=p.points.find(n=>!context.document.objects.some(o=>o.kind==='point'&&objectSymbol(o)===n))!,env=equationEnvironment(e.model(e.initial).doc);
+     const refs=equations.flatMap(q=>{const m=q.source.match(/^on(?:Curve|Line)\s*\(\s*([^,]+),\s*([^,)]+)\s*\)$/i);const k=q.source.match(/^intersection\s*\(\s*([^,]+),\s*([^,]+),\s*([^,)]+)\s*\)$/i);return m?.[1].trim()===name?[m[2].trim()]:k?.[1].trim()===name?[k[2].trim(),k[3].trim()]:[];});
+-    if(refs.length>=2)try{for(const q of conicIntersections(env.quadratic(refs[0]),env.quadratic(refs[1])))accept(e.encode({...e.model(e.initial).positions,[name]:[q[0],q[1],0]}));analytic=true;complete=true;steps.push('二次曲线消元求交，枚举实交点并回代全部范围及附加条件。');}catch(err){steps.push((err as Error).message);}
++    if(refs.length>=2)try{for(const q of conicIntersections(env.quadratic(refs[0]),env.quadratic(refs[1])))accept(e.encode({...e.model(e.initial).positions,[name]:[q[0],q[1],0]}));analytic=true;complete=false;steps.push('二次曲线消元求交，计算实交点并回代全部范围及附加条件；浮点求交尚未认证解集穷尽。');}catch(err){steps.push((err as Error).message);}
+   }
+   if(!analytic&&!context?.unknowns.length&&!equations.length){
+     let anchors:Positions|undefined;
+--- a/apps/mindmap-notes/src/drawing/constraints/planar.test.ts
++++ b/apps/mindmap-notes/src/drawing/constraints/planar.test.ts
+@@ -35,3 +35,38 @@
+  it('rebinds references to absorbed virtual vertices and keeps a hidden source group hidden',()=>{const {d,problem}=setup(['B=(3,4)'],[]),set=solutionSetObject(problem,solve(problem));set.hidden=true;const doc=installSolutionSet(d,set),b=d.objects.find(o=>o.kind==='point'&&o.symbol==='B')!;if(b.kind!=='point')throw Error();const alias={...b,id:crypto.randomUUID(),name:'Q',symbol:'Q',construction:{type:'alias' as const,point:`${set.id}:v:1`}};doc.objects.push(alias);const context=planarContext(doc),q=context.document.objects.find(o=>o.id===alias.id);expect(q?.kind==='point'&&q.construction.type==='alias'&&q.construction.point).toBe(b.id);expect(context.document.objects.find(o=>o.id===b.id)?.hidden).toBe(true);expect(resolveGeometry(context.document).errors.size).toBe(0);});
+  it('retains presentation locks and slider settings during a constrained update',()=>{const {d,problem}=setup(['m=1','D=(m,2)'],[],[['m','value',-5,5]]),r=solve(problem),set=solutionSetObject(problem,r),doc=installSolutionSet(d,set),m=doc.objects.find(o=>o.symbol==='m'),point=doc.objects.find(o=>o.symbol==='D');if(m?.kind!=='number'||!point)throw Error();m.slider.min=-20;point.locked=true;point.name='Label';const next=installSolutionSet(doc,{...set,result:r});expect(next.objects.find(o=>o.id===point.id)?.locked).toBe(true);expect(next.objects.find(o=>o.id===point.id)?.name).toBe('Label');const n=next.objects.find(o=>o.id===m.id);expect(n?.kind==='number'&&n.slider.min).toBe(-20);});
+ });
++
++
++describe('planar solver result integrity',()=>{
++ it('retains isolated algebraic roots when changing only the reference',()=>{
++  const {problem}=setup(['m=1','A=(0,0)'],['m^2=2'],[['m','value']]),previous=solve(problem),before=structuredClone(previous);
++  const next=solveConstraints({id:2,problem,previous,reference:{branch:0,points:['A']}});
++  expect(next.branches[0].exactValues).toEqual(before.branches[0].exactValues);
++  expect(next.precision).toBe('algebraic');expect(next.complete).toBe(previous.complete);expect(previous).toEqual(before);
++ });
++ it('does not merge distinct algebraic roots within drawing tolerance',()=>{
++  const {problem}=setup(['m=0'],['m*(m-0.0000005)=0'],[['m','value']]),r=solve(problem);
++  expect(r.branches).toHaveLength(2);
++  const roots=r.branches.map(b=>Object.values(b.exactValues!)[0]);
++  expect(roots[0].interval[1]).toBeLessThanOrEqual(roots[1].interval[0]);expect(roots[0].approximate).toBe(0);expect(roots[1].interval[0]).toBeLessThanOrEqual(0.0000005);expect(roots[1].interval[1]).toBeGreaterThanOrEqual(0.0000005);
++ });
++ it('invalidates completeness and exact metadata after numerical parameter updates',()=>{
++  const {problem}=setup(['m=1'],['m^2=4'],[['m','value']]),previous=solve(problem);expect(previous.complete).toBe(true);
++  const variable=problem.planar!.unknowns[0].id,next=solveConstraints({id:2,problem,previous,parameter:{branch:0,variable,target:2}});
++  expect(next.complete).toBe(false);expect(next.precision).toBe('approximate');expect(next.branches[0].exactValues).toBeUndefined();
++  expect(previous.branches[0].exactValues).toBeDefined();expect(previous.complete).toBe(true);
++ });
++ it('does not preserve an enumeration claim after numerical point motion',()=>{
++  const {problem}=setup(['A=(0,0)'],[],[['A','x',-5,5]]),previous=solve(problem);previous.complete=true;
++  const next=solveConstraints({id:2,problem,previous,move:{branch:0,point:'A',target:[2,0,0]}});
++  expect(next.branches[0].positions.A[0]).toBeCloseTo(2,5);expect(next.complete).toBe(false);expect(next.precision).toBe('approximate');expect(previous.complete).toBe(true);
++ });
++ it('retains bivariate candidates without claiming certified enumeration',()=>{
++  const {problem}=setup(['m=1','n=1'],['m^2=2','n=m'],[['m','value'],['n','value']]),r=solve(problem);
++  expect(r.branches).toHaveLength(2);expect(r.precision).toBe('algebraic');expect(r.complete).toBe(false);
++ });
++ it('retains conic intersections without claiming certified enumeration',()=>{
++  const {problem}=setup(['c: x^2+y^2=pi','d: y=0'],['intersection(P,c,d)']);problem.points.push('P');
++  const r=solve(problem);expect(r.branches).toHaveLength(2);expect(r.complete).toBe(false);expect(r.branches.every(b=>Math.abs(b.positions.P[0])>1)).toBe(true);
++ });
++});

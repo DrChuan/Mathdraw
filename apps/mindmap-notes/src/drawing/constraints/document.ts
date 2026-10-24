@@ -14,6 +14,10 @@ import { curveGeometry } from "./measures";
 import { resolveGeometry } from "../geometry";
 import { planarMode,installPlanarSolution } from './planarModel';
 import { planarEvaluator } from './planar';
+import {validateRoot} from './exactArithmetic';
+import {validateExactCertificate,validateRootExpression,solveExactSystem} from './exactSystem';
+import {symbolicSpatialEquations} from './spatialExact';
+import {symbolicPlanarEquations} from './planarSymbolic';
 
 export function validPose(p:Pose) {
   return p&&[p.origin,p.x,p.y,p.z].every(v=>Array.isArray(v)&&v.length===3&&v.every(n=>Number.isFinite(n)&&Math.abs(n)<=1e9))&&
@@ -25,12 +29,19 @@ export function validateSolutionSet(set:DrawingSolutionSet) {
   if(set.driver!==undefined&&(typeof set.driver!=="string"||!names.includes(set.driver)))throw new Error("条件作图动点无效");
   if(!validPose(set.placement)||!r||
     r.approximationReason!==undefined&&(typeof r.approximationReason!=="string"||r.approximationReason.length>16384)||!Array.isArray(r.branches)||!r.branches.length||r.branches.length>12||!Number.isInteger(set.activeBranch)||set.activeBranch<0||set.activeBranch>=r.branches.length||
+    r.precision!==undefined&&!['construction','algebraic','approximate'].includes(r.precision)||
     r.method!==undefined&&!["construction","hybrid","numerical"].includes(r.method)||
     r.constructionSteps!==undefined&&(!Array.isArray(r.constructionSteps)||r.constructionSteps.length>200||r.constructionSteps.some(s=>typeof s!=="string"||s.length>4096))||
     typeof r.complete!=="boolean"||!["solved","notFound","contradiction"].includes(r.status)||!Number.isFinite(r.elapsed)||!Number.isInteger(r.attempts)||
     !Array.isArray(r.diagnostics)||r.diagnostics.length>100||r.diagnostics.some(s=>typeof s!=="string"||s.length>4096))throw new Error("约束解集数据无效");
   const vector=(p:unknown)=>Array.isArray(p)&&p.length===3&&p.every(n=>typeof n==="number"&&Number.isFinite(n)&&Math.abs(n)<=1e9);
   const check=evaluator(set.problem),planar=planarMode(set.problem)?planarEvaluator(set.problem):undefined;
+  if(r.precision==='algebraic'&&r.branches.some(b=>!b.exactCertificate&&!Object.keys(b.exactValues??{}).length))throw Error('代数精度声明缺少精确信息');
+  if(r.exactAnalysis){const a=r.exactAnalysis;if(!['finite','family','unresolved'].includes(a.state)||typeof a.certified!=='boolean'||!Number.isInteger(a.totalSolutions)||a.totalSolutions<0||a.totalSolutions>256||!Number.isInteger(a.reducedVariables)||a.reducedVariables<0||a.solutions!==undefined&&(!Array.isArray(a.solutions)||a.solutions.length!==a.totalSolutions))throw Error('精确求解状态数据无效');}
+  if(r.exactAnalysis?.certified){
+    const symbolic=planar?symbolicPlanarEquations(set.problem,planar.variables):symbolicSpatialEquations(set.problem),verified=solveExactSystem(symbolic.sources,symbolic.tokens,{deadline:Date.now()+1500});
+    if(!symbolic.complete||!verified.complete||verified.kind!=='finite'||r.exactAnalysis.state!=='finite'||r.exactAnalysis.totalSolutions!==verified.candidates.length||r.complete&&r.branches.length!==verified.candidates.length)throw Error('解集完整性证据无效或无法在预算内验证');
+  }
   for(const b of r.branches) {
     if(!b||!b.positions||Object.keys(b.positions).length!==names.length||names.some(n=>!vector(b.positions[n]))||!Number.isInteger(b.dof)||b.dof<0||b.dof>(planar?.variables.length??names.length*3)||
       !Array.isArray(b.reference)||!planar&&!b.reference.length||new Set(b.reference).size!==b.reference.length||b.reference.some(n=>!names.includes(n))||!Array.isArray(b.rigid)||b.rigid.length>2500||
@@ -41,6 +52,18 @@ export function validateSolutionSet(set:DrawingSolutionSet) {
       const values=planar.encode(b.positions,b.values),calculated=planar.model(values).positions;
       if(names.some(n=>Math.abs(b.positions[n][2])>1e-9||norm(sub(b.positions[n],calculated[n]))>1e-6*Math.max(1,planar.scale))||planar.errors(values).length||b.motionDof!==undefined&&(!Number.isInteger(b.motionDof)||b.motionDof<0)||b.values&&Object.values(b.values).some(v=>!Number.isFinite(v)))throw new Error('保存的二维构型不满足条件');
     }else if(!check.verify(flatten(names,b.positions)).valid)throw new Error("保存的约束构型不满足条件");
+    if(b.exactValues){
+      if(typeof b.exactValues!=='object'||Array.isArray(b.exactValues)||Object.keys(b.exactValues).length>(planar?.variables.length??names.length*3))throw Error('精确数值记录无效');
+      for(const [id,root]of Object.entries(b.exactValues)){
+        validateRoot(root);validateRootExpression(root as Parameters<typeof validateRootExpression>[0]);const value=planar?planar.encode(b.positions,b.values)[planar.variables.findIndex(v=>v.id===id)]:b.values?.[id];
+        if(value===undefined||!Number.isFinite(value)||Math.abs(root.approximate-value)>1e-11*Math.max(1,Math.abs(value)))throw Error('保存的坐标与代数根不一致');
+      }
+    }
+    if(b.exactCertificate){
+      const conditions=set.problem.conditions.map(c=>{if(c.alternateValue===undefined)return c;const first={...c,alternateValue:undefined};return {...first,value:evaluator({...set.problem,conditions:[first]}).verify(flatten(names,b.positions)).valid?c.value:c.alternateValue};});
+      const problem={...set.problem,conditions},symbolic=planar?symbolicPlanarEquations(problem,planar.variables):symbolicSpatialEquations(problem,false);
+      validateExactCertificate(b.exactCertificate,planar?planar.encode(b.positions,b.values):flatten(names,b.positions),symbolic.sources,symbolic.tokens);
+    }
     for(const l of b.loci) {
       if(!l||!names.includes(l.point)||!["line","segment","circle","plane","sphere","sampled"].includes(l.kind)||!vector(l.origin)||!vector(l.u)||!vector(l.v)||
         Math.abs(norm(l.u)-1)>1e-5||Math.abs(norm(l.v)-1)>1e-5||Math.abs(dot(l.u,l.v))>1e-5||typeof l.radius!=="number"||!Number.isFinite(l.radius)||l.radius<=0||l.radius>1e9||typeof l.complete!=="boolean"||

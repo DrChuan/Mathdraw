@@ -6,7 +6,7 @@ import type { Vec3 } from "../types";
 import { add,mul,sub,norm,dot } from "./math";
 
 type Resolve=(source:string)=>string[];
-type Term={ref:string[];coefficient:number};
+type Term={ref:string[];coefficient:number;source:string};
 type Linear={scalar:number;terms:Term[]};
 type Ast=ReturnType<typeof parseExpression>;
 
@@ -45,13 +45,14 @@ export function vectorRelationFormula(source:string,resolve:Resolve) {
   return formula.replace(/\*/g,"\\cdot ");
 }
 
-export function parseVectorRelation(source:string,resolve:Resolve):Pick<Condition,"kind"|"refs"|"coefficients"> {
+export function parseVectorRelation(source:string,resolve:Resolve):Pick<Condition,"kind"|"refs"|"coefficients"|"coefficientSources"> {
   const {text,refs}=vectorTokens(source,resolve);
   const parts=text.split("=");if(parts.length!==2||parts.some(p=>!p.trim()))throw new Error("向量关系需要左右两侧，例如 AB = 2*AC - AD");
-  const scale=(a:Linear,k:number):Linear=>({scalar:a.scalar*k,terms:a.terms.map(t=>({...t,coefficient:t.coefficient*k}))});
+  const astSource=(a:Ast):string=>a.type==='number'?a.constant??a.literal??String(a.value):a.type==='variable'?a.name:a.type==='unary'?`(${a.sign})*(${astSource(a.value)})`:a.type==='call'?`${a.name}(${a.args.map(astSource).join(',')})`:`(${astSource(a.left)})${a.op}(${astSource(a.right)})`;
+  const scale=(a:Linear,k:number,text=String(k)):Linear=>({scalar:a.scalar*k,terms:a.terms.map(t=>({...t,coefficient:t.coefficient*k,source:`(${t.source})*(${text})`}))});
   const walk=(ast:Ast):Linear=>{
     if(ast.type==="number")return {scalar:ast.value,terms:[]};
-    if(ast.type==="variable")return {scalar:0,terms:[{ref:refs.get(ast.name)!,coefficient:1}]};
+    if(ast.type==="variable")return {scalar:0,terms:[{ref:refs.get(ast.name)!,coefficient:1,source:'1'}]};
     if(ast.type==="unary")return scale(walk(ast.value),ast.sign);
     if(ast.type==="call") {
       if(ast.args.some(a=>walk(a).terms.length))throw new Error("向量不能作为数值函数的参数");
@@ -64,8 +65,8 @@ export function parseVectorRelation(source:string,resolve:Resolve):Pick<Conditio
       if(result.terms.length&&Math.abs(result.scalar)>1e-12)throw new Error("向量不能与非零数值相加");
       return result;
     }
-    if(ast.op==="*"&&(!a.terms.length||!b.terms.length))return a.terms.length?scale(a,b.scalar):scale(b,a.scalar);
-    if(ast.op==="/"&&!b.terms.length){if(b.scalar===0)throw new Error("系数不能除以零");return scale(a,1/b.scalar);}
+    if(ast.op==="*"&&(!a.terms.length||!b.terms.length))return a.terms.length?scale(a,b.scalar,astSource(ast.right)):scale(b,a.scalar,astSource(ast.left));
+    if(ast.op==="/"&&!b.terms.length){if(b.scalar===0)throw new Error("系数不能除以零");return scale(a,1/b.scalar,`1/(${astSource(ast.right)})`);}
     if(!a.terms.length&&!b.terms.length)return {scalar:evaluate(ast),terms:[]};
     throw new Error("仅支持向量的线性运算；数量积请使用 dot(AB,CD)=数值");
   };
@@ -74,7 +75,7 @@ export function parseVectorRelation(source:string,resolve:Resolve):Pick<Conditio
   if(Math.abs(left.scalar)>1e-12||Math.abs(right.scalar)>1e-12)throw new Error("向量等式右侧可使用 0，不能使用其他数值");
   const terms=[...left.terms,...scale(right,-1).terms];
   if(terms.length>64||terms.some(t=>!Number.isFinite(t.coefficient)||Math.abs(t.coefficient)>1e6))throw new Error("向量项过多或系数超出范围");
-  return {kind:"vectorRelation",refs:terms.map(t=>t.ref),coefficients:terms.map(t=>t.coefficient)};
+  return {kind:"vectorRelation",refs:terms.map(t=>t.ref),coefficients:terms.map(t=>t.coefficient),coefficientSources:terms.map(t=>t.source)};
 }
 
 export function vectorDotSource(source:string,resolve:Resolve):Pick<Condition,"kind"|"refs"|"value">|undefined {

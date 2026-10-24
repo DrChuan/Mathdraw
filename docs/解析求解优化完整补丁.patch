@@ -1,0 +1,1572 @@
+diff --git a/apps/mindmap-notes/src/drawing/expression.ts b/apps/mindmap-notes/src/drawing/expression.ts
+--- a/apps/mindmap-notes/src/drawing/expression.ts
++++ b/apps/mindmap-notes/src/drawing/expression.ts
+@@ -1,7 +1,7 @@
+ import { latexToExpression } from "./latex";
+ import { numericSource } from "./symbols";
+ type Ast =
+-  | { type: "number"; value: number }
++  | { type: "number"; value: number; literal?: string; constant?: "pi" | "e" }
+   | { type: "variable"; name: string }
+   | { type: "unary"; sign: number; value: Ast }
+   | { type: "binary"; op: string; left: Ast; right: Ast }
+@@ -34,8 +34,9 @@
+ export function parseExpression(
+   source: string,
+   variables: string[] = ["x", "y", "u", "v"],
++  limits: {length?:number;nodes?:number;depth?:number} = {},
+ ): Ast {
+-  if (source.length > 2048) throw new Error("表达式不能超过 2048 个字符");
++  if (source.length > (limits.length??2048)) throw new Error("表达式不能超过 2048 个字符");
+   const text = numericSource(latexToExpression(source),variables)
+     .replace(/π/g, "pi")
+     .replace(/−/g, "-")
+@@ -72,11 +73,11 @@
+     );
+   };
+   const expression = (minimum = 0): Ast => {
+-    if (++depth > 64 || ++nodes > 512) fail("表达式过于复杂");
++    if (++depth > (limits.depth??64) || ++nodes > (limits.nodes??512)) fail("表达式过于复杂");
+     const token = tokens[cursor++];
+     let left!: Ast;
+     if (token.type === "number")
+-      left = { type: "number", value: Number(token.text) };
++      left = { type: "number", value: Number(token.text), literal: token.text };
+     else if (token.text === "+" || token.text === "-")
+       left = {
+         type: "unary",
+@@ -94,6 +95,7 @@
+         left = {
+           type: "number",
+           value: name === "pi" ? Math.PI : Math.E,
++          constant: name as "pi" | "e",
+         };
+       else if (functions[name]) {
+         if (tokens[cursor].text !== "(") fail("函数后需要括号");
+diff --git a/apps/mindmap-notes/src/drawing/PlanarConstraintWorkbench.tsx b/apps/mindmap-notes/src/drawing/PlanarConstraintWorkbench.tsx
+--- a/apps/mindmap-notes/src/drawing/PlanarConstraintWorkbench.tsx
++++ b/apps/mindmap-notes/src/drawing/PlanarConstraintWorkbench.tsx
+@@ -18,6 +18,7 @@
+ import { sampleCurve } from './curves';
+ import { mathPreview,symbolLatex } from './mathPreview';
+ import { exactNumber } from './exactNumber';
++import {exactCoordinateSource} from './constraints/exactDisplay';
+ import { FormulaPreview } from './FormulaPreview';
+ import ConditionInput from './ConditionInput';
+ import ConstraintCurves from './ConstraintCurves';
+@@ -124,10 +125,12 @@
+         {context.equations.map(q=><div className="constraint-condition-chip" key={q.id}><input aria-label={`启用 ${q.source}`} type="checkbox" checked={q.enabled} onChange={e=>{invalidate();setContext(c=>({...c,equations:c.equations.map(x=>x.id===q.id?{...x,enabled:e.target.checked}:x)}));}}/><button onClick={()=>editCondition(q.id,q.source)}><FormulaPreview source={mathPreview(q.source)}/></button><button aria-label={`删除 ${q.source}`} onClick={()=>{invalidate();setContext(c=>({...c,equations:c.equations.filter(x=>x.id!==q.id)}));}}>×</button></div>)}
+       </div>{editing&&<form className="planar-definition" onSubmit={e=>{e.preventDefault();finishEdit();}}><input aria-label="编辑平面条件" value={rowSource} onChange={e=>setRowSource(e.target.value)}/><button>确定</button><button type="button" onClick={()=>setEditing(undefined)}>取消</button>{live.status==='invalid'&&<small role="alert" className="constraint-field-error">{live.message}</small>}</form>}</section>
+     </div><div className="constraint-live-preview"><div className="constraint-visual"><div className="constraint-view-controls"><span>图形预览</span><button onClick={()=>{fit.current=undefined;setFitRevision(v=>v+1);}}>全图</button></div>{preview&&'scene'in preview?<svg viewBox="0 0 480 340" aria-label="平面条件图形预览">{preview.scene.paths.map((p,i)=><g key={i}><path d={pathData(p.points)} fill="none" stroke={p.color??'#24314a'} strokeWidth={p.width} strokeDasharray={p.dashed?'5 4':undefined}/>{p.arrow&&<path d={arrowData(p.points)} fill={p.color??'#24314a'}/>}</g>)}{preview.scene.dots.map(p=><circle key={p.id} cx={p.p[0]} cy={p.p[1]} r={p.radius} fill="#24314a"/>)}{preview.scene.texts.map((t,i)=><text key={i} x={t.p[0]} y={t.p[1]} fontSize={t.fontSize} fontFamily="Times New Roman" fontStyle={t.italic?'italic':'normal'}>{labelPlainText(t.text)}</text>)}</svg>:<p>{preview?.error??'添加对象后，将自动生成预览'}</p>}</div><div className={`constraint-live-status ${live.status}`} role="status">{live.status==='pending'?'更新中…':live.message}{preview&&!live.ready&&<strong>{live.status==='pending'?'正在更新，显示上次有效结果':'当前条件尚未满足，显示上次有效结果'}</strong>}</div><details className="constraint-live-options"><summary>构型、动点与轨迹</summary><aside className="constraint-result-controls"><fieldset disabled={!live.ready}>
+-      <strong>{result?.precision==='algebraic'?'精确代数解':result?.precision==='construction'?'解析构造':'近似求解'}</strong>{result?.approximationReason&&<p>{result.approximationReason}</p>}
++      <strong>{result?.precision==='algebraic'?(result.exactAnalysis?.certified||result.branches[branch]?.exactCertificate&&!result.exactAnalysis?'精确代数解':'代数表示（已回代校验）'):result?.precision==='construction'?'解析构造':'近似求解'}</strong>{result?.approximationReason&&<p>{result.approximationReason}</p>}
+       {preview&&'set'in preview&&<ConstraintSetControls set={preview.set} docRef={previewRef} change={next=>{const s=next.objects.find(o=>o.id===rootId.current);if(s?.kind!=='solutionSet')return false;live.remember(s.result,s.activeBranch);setResult(s.result);setBranch(s.activeBranch);return true;}} edit={()=>document.querySelector<HTMLInputElement>('.constraint-editor input')?.focus()}/>}
+-      {result?.branches[branch]?.values&&Object.entries(result.branches[branch].values!).filter(([id])=>!id.startsWith('point.')).map(([id,v])=>{const u=problem?.planar?.unknowns.find(u=>u.id===id),o=(problem?.planar?.document??context.document).objects.find(o=>o.id===u?.object),exact=result.branches[branch].exactValues?.[id];return <div key={id}><small>{o&&objectSymbol(o)} {u?.field}</small><FormulaPreview source={exact?.expression?mathPreview(exact.expression):String(Number(v.toPrecision(10)))}/>{exact&&!exact.expression&&<small>代数实根 · {exact.polynomial.join(', ')}；隔离区间 [{exact.interval.join(', ')}]</small>}</div>;})}
+-      {mode==='coordinate'&&result?.branches[branch]&&<details><summary>点坐标</summary>{Object.entries(result.branches[branch].positions).map(([name,p])=>{const o=(problem?.planar?.document??context.document).objects.find(o=>o.kind==='point'&&objectSymbol(o)===name),b=result.branches[branch],parts=[0,1].map(axis=>b.exactValues?.[o?`${o.id}.${axis?'y':'x'}`:`point.${name}.${axis}`]?.expression??exactNumber(p[axis]).source);return <FormulaPreview key={name} source={`${symbolLatex(name)}=(${parts.map(mathPreview).join(',')})`}/>;})}</details>}
++      {result?.branches[branch]?.values&&Object.entries(result.branches[branch].values!).filter(([id])=>!id.startsWith('point.')).map(([id,v])=>{const u=problem?.planar?.unknowns.find(u=>u.id===id),o=(problem?.planar?.document??context.document).objects.find(o=>o.id===u?.object),exact=result.branches[branch].exactValues?.[id],source=exactCoordinateSource(result.branches[branch],id,problem);return <div key={id}><small>{o&&objectSymbol(o)} {u?.field}</small><FormulaPreview source={source?mathPreview(source):String(Number(v.toPrecision(10)))}/>{exact&&!exact.expression&&<small>代数实根 · {exact.polynomial.join(', ')}；隔离区间 [{exact.interval.join(', ')}]</small>}</div>;})}
++      {mode==='coordinate'&&result?.branches[branch]&&<details><summary>点坐标</summary>{Object.entries(result.branches[branch].positions).map(([name,p])=>{const o=(problem?.planar?.document??context.document).objects.find(o=>o.kind==='point'&&objectSymbol(o)===name),b=result.branches[branch],parts=[0,1].map(axis=>exactCoordinateSource(b,o?`${o.id}.${axis?'y':'x'}`:`point.${name}.${axis}`,problem)??exactNumber(p[axis]).source);return <FormulaPreview key={name} source={`${symbolLatex(name)}=(${parts.map(mathPreview).join(',')})`}/>;})}</details>}
++      {result?.exactAnalysis?.family&&<p>保留连续解族及有效域；当前显示其中的可行构型。</p>}
++      {result?.branches[branch]?.exactCertificate&&<details><summary>代数根定义</summary>{Object.values(result.branches[branch].exactCertificate!.roots).map((root,i)=><div key={i}><FormulaPreview source={`t_${i+1}: ${root.polynomial.map((c,k)=>`(${c})${k?`*t^${k}`:''}`).join('+')}=0`}/><small>隔离区间 [{(root.rationalInterval??root.interval).join(', ')}]</small></div>)}</details>}
+       {result?.diagnostics.map((s,i)=><p key={i}>{s}</p>)}
+     </fieldset></aside></details></div>
+     </div>
+diff --git a/apps/mindmap-notes/src/drawing/constraints/algebraic.ts b/apps/mindmap-notes/src/drawing/constraints/algebraic.ts
+--- a/apps/mindmap-notes/src/drawing/constraints/algebraic.ts
++++ b/apps/mindmap-notes/src/drawing/constraints/algebraic.ts
+@@ -1,11 +1,12 @@
+ import { parseExpression } from '../expression';
+ import type { AlgebraicValue } from './types';
++import {num} from './exactArithmetic';
+ type Q={n:bigint;d:bigint};type P=Q[];
+ const gcd=(a:bigint,b:bigint):bigint=>b?gcd(b,a%b):a<0n?-a:a;
+ const q=(n:bigint,d=1n):Q=>{if(!d)throw Error('除数为零');const g=gcd(n,d);return {n:(d<0n?-n:n)/g,d:(d<0n?-d:d)/g};};
+ const zero=q(0n),one=q(1n),plus=(a:Q,b:Q)=>q(a.n*b.d+b.n*a.d,a.d*b.d),neg=(a:Q)=>q(-a.n,a.d),times=(a:Q,b:Q)=>q(a.n*b.n,a.d*b.d),div=(a:Q,b:Q)=>q(a.n*b.d,a.d*b.n);
+-const number=(x:Q)=>Number(x.n)/Number(x.d),text=(x:Q)=>x.d===1n?String(x.n):`(${x.n}/${x.d})`;
+-function decimal(v:number):Q {const [mantissa,exponent='0']=String(v).toLowerCase().split('e'),digits=mantissa.split('.'),scale=(digits[1]?.length??0)-Number(exponent),n=BigInt(digits.join(''));return scale>=0?q(n,10n**BigInt(scale)):q(n*10n**BigInt(-scale));}
++const number=(x:Q)=>num(x),text=(x:Q)=>x.d===1n?String(x.n):`(${x.n}/${x.d})`;
++function decimal(v:number|string):Q {const [mantissa,exponent='0']=String(v).toLowerCase().split('e'),digits=mantissa.split('.'),scale=(digits[1]?.length??0)-Number(exponent),n=BigInt(digits.join(''));return scale>=0?q(n,10n**BigInt(scale)):q(n*10n**BigInt(-scale));}
+ const clean=(p:P)=>{while(p.length>1&&!p.at(-1)!.n)p.pop();return p;};
+ const add=(a:P,b:P)=>clean(Array.from({length:Math.max(a.length,b.length)},(_,i)=>plus(a[i]??zero,b[i]??zero)));
+ const mul=(a:P,b:P)=>{if(a.length+b.length>20)throw Error('精确多项式次数超限');const p=Array(a.length+b.length-1).fill(zero) as P;a.forEach((v,i)=>b.forEach((w,j)=>p[i+j]=plus(p[i+j],times(v,w))));return clean(p);};
+@@ -21,7 +22,8 @@
+     const parts=source.split('=');if(parts.length!==2||/[<>]/.test(source))return;
+     type R={n:P;d:P};
+     const walk=(a:ReturnType<typeof parseExpression>):R=>{
+-      if(a.type==='number')return {n:[decimal(a.value)],d:[one]};
++      if(a.type==='number'&&a.constant)throw Error('非代数常数');
++      if(a.type==='number')return {n:[decimal(a.literal??a.value)],d:[one]};
+       if(a.type==='variable'){if(a.name===variable)return {n:[zero,one],d:[one]};if(a.name in constants)return {n:[decimal(constants[a.name])],d:[one]};throw Error('未知符号');}
+       if(a.type==='call')throw Error('非有理函数');
+       if(a.type==='unary'){const r=walk(a.value);return {n:r.n.map(v=>times(v,q(BigInt(a.sign)))),d:r.d};}
+@@ -54,7 +56,7 @@
+       if(n===1&&b-a<1e-12*Math.max(1,Math.abs(a),Math.abs(b))&&!(a<=0&&b>=0&&p[0].n)){const x=(a+b)/2;
+         let expression:string|undefined;if(p.length===2)expression=text(neg(div(p[0],p[1])));
+         if(p.length===3){const discriminant=plus(times(p[1],p[1]),neg(times(q(4n),times(p[2],p[0])))),a2=times(q(2n),p[2]),s=Math.sqrt(number(discriminant)),sign=Math.abs(number(div(plus(neg(p[1]),decimal(s)),a2))-x)<Math.abs(number(div(plus(neg(p[1]),decimal(-s)),a2))-x)?'+':'-';expression=`(-(${text(p[1])})${sign}sqrt(${text(discriminant)}))/(${text(a2)})`;}
+-        roots.push({polynomial:coefficients,interval:[a,b],approximate:x,expression});continue;}
++        roots.push({polynomial:coefficients,interval:[a,b],rationalInterval:[text(lo),text(hi)],approximate:x,expression});continue;}
+       const mid=div(plus(lo,hi),q(2n)),leftCount=variations(lo)-variations(mid);queue.push([mid,hi,n-leftCount],[lo,mid,leftCount]);
+     }
+     const rational=new Map<AlgebraicValue,Q>();
+@@ -79,7 +81,8 @@
+   const sum=(a:B,b:B,sign=1)=>{const p=new Map(a);for(const [k,v]of b)p.set(k,plus(p.get(k)??zero,sign===1?v:neg(v)));return tidy(p);};
+   const product=(a:B,b:B)=>{const p:B=new Map();for(const [ka,x]of a)for(const [kb,y]of b){const i=ka.split(',').map(Number),j=kb.split(',').map(Number),u=i[0]+j[0],v=i[1]+j[1];if(u+v>12||Date.now()>deadline)throw Error('消元预算耗尽');const k=`${u},${v}`;p.set(k,plus(p.get(k)??zero,times(x,y)));}return tidy(p);};
+   const walk=(a:ReturnType<typeof parseExpression>):R=>{
+-    if(a.type==='number')return {n:constant(decimal(a.value)),d:constant(one)};
++    if(a.type==='number'&&a.constant)throw Error('非代数常数');
++      if(a.type==='number')return {n:constant(decimal(a.literal??a.value)),d:constant(one)};
+     if(a.type==='variable'){const i=variables.indexOf(a.name);if(i>=0)return{n:new Map([[i===0?'1,0':'0,1',one]]),d:constant(one)};if(a.name in constants)return {n:constant(decimal(constants[a.name])),d:constant(one)};throw Error('未知符号');}
+     if(a.type==='call')throw Error('非有理表达式');
+     if(a.type==='unary'){const r=walk(a.value);return {n:new Map([...r.n].map(([k,v])=>[k,times(v,q(BigInt(a.sign)))])),d:r.d};}
+diff --git a/apps/mindmap-notes/src/drawing/constraints/planar.ts b/apps/mindmap-notes/src/drawing/constraints/planar.ts
+--- a/apps/mindmap-notes/src/drawing/constraints/planar.ts
++++ b/apps/mindmap-notes/src/drawing/constraints/planar.ts
+@@ -1,7 +1,7 @@
+ import type { Vec3 } from '../types';
+ import type { ConstraintProblem,ConstraintResult,PlanarUnknown,Positions,SolutionBranch,SolveRequest,AlgebraicValue } from './types';
+ import { evaluator,flatten,problemScale } from './compile';
+-import { jacobian,rowBasis,dampedStep,sub,norm,dot,cross } from './math';
++import { jacobian,rowBasis,offRowSpace,dampedStep,sub,norm,dot,cross } from './math';
+ import { analyticLoci,nearestLocus } from './loci';
+ import { planConstructions } from './planner';
+ import { materializePlanar,planarPositions,objectSymbol,coordinatePlane } from './planarModel';
+@@ -11,6 +11,9 @@
+ import { symbolicPlanarEquations } from './planarSymbolic';
+ import { conicIntersections } from '../quadratic';
+ import { validateProblem } from './input';
++import {solveExactSystem,type ExactCertificate} from './exactSystem';
++import {localMobility} from './mobility';
++import {substituteNames} from '../parameters';
+ 
+ interface Variable extends PlanarUnknown {point?:string;axis?:number}
+ const penalty=1e4,cap=12;
+@@ -59,7 +62,18 @@
+     if(c<cost){v=next;r=s;cost=c;lambda=Math.max(1e-12,lambda*.25);}else lambda*=8;if(lambda>1e12)break;
+   }return v;
+ }
+-function symmetryDimension(p:Positions){const names=Object.keys(p);if(!names.length)return 0;return names.some(n=>norm(sub(p[n],p[names[0]]))>1e-8)?3:2;}
++/** Count only Euclidean motions attainable by the current variables. Imported
++ * definitions may already remove translations/rotations; subtracting three
++ * unconditionally would erase real shape parameters. */
++function planarOrbitDimension(e:ReturnType<typeof planarEvaluator>,v:number[]){
++ const names=Object.keys(e.model(v).positions),position=(x:number[])=>names.flatMap(n=>e.model(x).positions[n].slice(0,2)),p=position(v);
++ if(!p.length)return 0;
++ const center=[0,1].map(axis=>p.reduce((sum,n,i)=>sum+(i%2===axis?n:0),0)/names.length),orbit=rowBasis([p.map((_,i)=>i%2===0?1:0),p.map((_,i)=>i%2===1?1:0),p.map((_,i)=>i%2===0?-(p[i+1]-center[1]):p[i-1]-center[0])]);
++ const j=jacobian(position,v),constraints=jacobian(e.residual,v),projected=j.map(()=>v.map(()=>0));
++ for(let col=0;col<v.length;col++){const q=offRowSpace(j.map(row=>row[col]),orbit);q.forEach((n,row)=>projected[row][col]=n);}
++ return Math.max(0,rowBasis([...constraints,...j]).length-rowBasis([...constraints,...projected]).length);
++}
++
+ export function solvePlanar(request:SolveRequest):ConstraintResult {
+   const started=Date.now(),deadline=started+Math.max(30,Math.min(10000,request.budget??2000)),p=request.problem;validateProblem(p);
+   const e=planarEvaluator(p),context=p.planar,branches:SolutionBranch[]=[],steps:string[]=[],equations=context?.equations.filter(q=>q.enabled)??[];
+@@ -67,56 +81,103 @@
+   if(e.variables.length>100)throw Error('最多同时求解 100 个独立二维坐标分量或参数');
+   const base=request.previous?.branches[request.move?.branch??request.parameter?.branch??request.reference?.branch??0];
+   const make=(v:number[],reference?:string[],exactValues?:Record<string,AlgebraicValue>)=>{
+-    const d=e.model(v),rank=rowBasis(jacobian(e.residual,v)).length,raw=Math.max(0,v.length-rank),dof=p.mode==='plane'?Math.max(0,raw-symmetryDimension(d.positions)):raw;
++    const d=e.model(v),mobility=localMobility(e.residual,v,e.variables.map(u=>Math.max(1,Math.abs(u.initial))),Math.min(deadline,Date.now()+50)),raw=mobility.dof,dof=p.mode==='plane'?Math.max(0,raw-planarOrbitDimension(e,v)):raw;
+     const known=new Set<string>();if(context){const changed=new Set(context.unknowns.flatMap(u=>[u.object,...affectedObjects(context.document,u.object)]));for(const o of context.document.objects)if(o.kind==='point'&&!changed.has(o.id))known.add(objectSymbol(o));}
+     const ref=reference??(p.mode==='coordinate'?[...known]:p.points.slice(0,1));
+     const fixedResidual=(x:number[])=>{const q=e.model(x).positions;return ref.flatMap(n=>[0,1].map(i=>(q[n][i]-d.positions[n][i])/e.scale));};
+-    const motionDof=Math.max(0,v.length-rowBasis(jacobian(x=>[...e.residual(x),...fixedResidual(x)],v)).length);
++    const motion=localMobility(x=>[...e.residual(x),...fixedResidual(x)],v,e.scale,Math.min(deadline,Date.now()+30)),motionDof=p.mode==='plane'&&dof===0?0:motion.dof;
+     const loci=analyticLoci(p,d.positions,ref,e.scale).filter(l=>l.kind!=='sphere'&&l.kind!=='plane').map(l=>({...l,origin:[l.origin[0],l.origin[1],0] as Vec3}));
+-    return {positions:d.positions,values:d.values,exactValues,reference:ref,rigid:[],dof,motionDof,loci,residual:size(e.residual(v)),rigidityPending:false} satisfies SolutionBranch;
+-  };
+-  if(request.reference){if(!base)throw Error('构型已失效');const ref=request.reference.points;if(new Set(ref).size!==ref.length||ref.some(n=>!p.points.includes(n)))throw Error('固定点无效');const v=e.encode(base.positions,base.values);if(e.errors(v).length)throw Error('当前构型已失效');const result=structuredClone(request.previous!);result.branches[request.reference.branch]=make(v,ref);return {...result,elapsed:Date.now()-started};}
++    return {positions:d.positions,values:d.values,exactValues,exactCertificate:undefined as ExactCertificate|undefined,reference:ref,rigid:[],dof,motionDof,loci,residual:size(e.residual(v)),rigidityPending:!mobility.checked||!motion.checked} satisfies SolutionBranch;
++  };
++  const exactUpdate=(extra:(symbolic:ReturnType<typeof symbolicPlanarEquations>)=>string[]|undefined)=>{
++    if(!base)return;
++    const symbolic=symbolicPlanarEquations(p,e.variables);if(!symbolic.complete)return;
++    const additions=extra(symbolic);if(!additions)return;
++    const rootExpressions=Object.fromEntries(Object.entries(base.exactCertificate?.roots??{}).filter(([,r])=>r.expression).map(([name,r])=>[name,`(${r.expression})`]));
++    const replacements:Record<string,string>={};
++    for(const [i,v]of e.variables.entries()){
++      const expression=base.exactValues?.[v.id]?.expression??base.exactCertificate?.assignments[symbolic.tokens[i]];
++      if(expression){const source=substituteNames(expression,rootExpressions);if(!/root_\d+/.test(source))replacements[symbolic.tokens[i]]=`(${source})`;}
++    }
++    for(const name of base.reference)for(const expression of (symbolic.coordinates[name]??[])){
++      if(!/\bq_\d+\b/.test(expression))continue;
++      const source=substituteNames(expression,replacements);if(/\bq_\d+\b/.test(source))return;
++      additions.push(`(${expression})=(${source})`);
++    }
++    const solved=solveExactSystem([...symbolic.sources,...additions],symbolic.tokens,{deadline:Math.min(deadline,Date.now()+Math.max(15,(request.budget??2000)*.3)),initial:e.encode(base.positions,base.values)});
++    if(solved.kind!=='finite'||!solved.complete||!solved.candidates.length)return;
++    const before=e.encode(base.positions,base.values),candidates=solved.candidates.filter(c=>!e.errors(c.values).length);
++    candidates.sort((a,b)=>{if(request.move){const distance=(v:number[])=>e.model(v).positions[request.move!.point].slice(0,2).reduce((sum,n,i)=>sum+(n-request.move!.target[i])**2,0),delta=distance(a.values)-distance(b.values);if(Math.abs(delta)>1e-12*e.scale*e.scale)return delta;}return a.values.reduce((s,v,i)=>s+(v-before[i])**2,0)-b.values.reduce((s,v,i)=>s+(v-before[i])**2,0);});
++    const candidate=candidates[0];if(!candidate)return;
++    const exact=Object.fromEntries(Object.entries(candidate.exactValues).map(([token,value])=>[e.variables[symbolic.tokens.indexOf(token)].id,value])),branch=make(candidate.values,base.reference,exact);branch.exactCertificate=candidate.certificate;
++    const result=structuredClone(request.previous!),index=request.parameter?.branch??request.move!.branch;result.branches[index]=branch;
++    return {...result,exactAnalysis:undefined,complete:false,precision:result.branches.every(b=>b.exactCertificate)?'algebraic':'approximate',method:'construction',approximationReason:undefined,elapsed:Date.now()-started} as ConstraintResult;
++  };
++  if(request.reference){if(!base)throw Error('构型已失效');const ref=request.reference.points;if(new Set(ref).size!==ref.length||ref.some(n=>!p.points.includes(n)))throw Error('固定点无效');const v=e.encode(base.positions,base.values);if(e.errors(v).length)throw Error('当前构型已失效');const result=structuredClone(request.previous!);const certificate=result.branches[request.reference.branch].exactCertificate;result.branches[request.reference.branch]=make(v,ref,result.branches[request.reference.branch].exactValues);result.branches[request.reference.branch].exactCertificate=certificate;if(certificate&&result.exactAnalysis?.state==='finite'){result.branches[request.reference.branch].dof=0;result.branches[request.reference.branch].motionDof=0;}return {...result,elapsed:Date.now()-started};}
+   if(request.parameter){
+     const move=request.parameter,index=e.variables.findIndex(u=>u.id===move.variable);if(!base||index<0||!Number.isFinite(move.target))throw Error('该数值不是待求参数');
++    const exact=exactUpdate(symbolic=>[`${symbolic.tokens[index]}=${move.target}`]);if(exact)return exact;
+     const start=e.encode(base.positions,base.values),candidate=[...start];candidate[index]=move.target;
+     const hard=(x:number[])=>[...e.residual(x),...base.reference.flatMap(n=>[0,1].map(i=>(e.model(x).positions[n][i]-base.positions[n][i])/e.scale))];
+     let next=candidate;if(e.errors(next).length||size(hard(next))>3e-6)next=minimize(x=>[...hard(x),(x[index]-move.target)/Math.max(1,e.scale)],candidate,deadline);
+     if(e.errors(next).length||size(hard(next))>3e-6||Math.abs(next[index]-move.target)>1e-5*Math.max(1,Math.abs(move.target)))throw Error('该参数值不满足全部条件，已保留原构型');
+-    const result=structuredClone(request.previous!);result.branches[move.branch]=make(next,base.reference);return {...result,precision:'approximate',method:'hybrid',approximationReason:'参数改变后进行二维联动校正并回代全部条件。',elapsed:Date.now()-started};
+-  }
+-  if(request.move){if(!base||base.reference.includes(request.move.point))throw Error('该点是固定参照，不能直接拖动');const v=e.encode(base.positions,base.values),locus=base.loci.find(l=>l.point===request.move!.point),raw:[number,number,number]=[request.move.target[0],request.move.target[1],0],target=locus?nearestLocus(locus,raw):raw;
++    const result=structuredClone(request.previous!);result.branches[move.branch]=make(next,base.reference);return {...result,exactAnalysis:undefined,complete:false,precision:'approximate',method:'hybrid',approximationReason:'参数改变后进行二维联动校正并回代全部条件。',elapsed:Date.now()-started};
++  }
++  if(request.move){if(!base||!p.points.includes(request.move.point)||base.reference.includes(request.move.point))throw Error('该点是固定参照，不能直接拖动');const v=e.encode(base.positions,base.values),locus=base.loci.find(l=>l.point===request.move!.point),raw:[number,number,number]=[request.move.target[0],request.move.target[1],0],target=locus?nearestLocus(locus,raw):raw;
++    const axis=Math.abs(target[0]-base.positions[request.move.point][0])>=Math.abs(target[1]-base.positions[request.move.point][1])?0:1;
++    const exact=exactUpdate(symbolic=>symbolic.coordinates[request.move!.point]?[`${symbolic.coordinates[request.move!.point][axis]}=${target[axis]}`]:undefined);if(exact)return exact;
+     const fixed=(x:number[])=>{const q=e.model(x).positions;return base.reference.flatMap(n=>[0,1].map(i=>(q[n][i]-base.positions[n][i])/e.scale));};
+     const hard=(x:number[])=>[...e.residual(x),...fixed(x)],withTarget=(x:number[])=>[...hard(x),...[0,1].map(i=>(e.model(x).positions[request.move!.point][i]-target[i])/e.scale)];
+     let next=minimize(withTarget,v,deadline);if(e.errors(next).length||size(fixed(next))>3e-6)next=minimize(hard,next,deadline);
+     if(e.errors(next).length||size(fixed(next))>3e-6)throw Error('该位置不满足全部条件，已保留上一个可行位置');
+-    const result=structuredClone(request.previous!);result.branches[request.move.branch]=make(next,base.reference);return {...result,precision:'approximate',method:'hybrid',approximationReason:'二维约束联立校正，每次移动后回代全部条件。',elapsed:Date.now()-started};
+-  }
+-  const accept=(v:number[],exact?:Record<string,AlgebraicValue>)=>{
+-    attempts++;if(e.errors(v).length)return false;const b=make(v,undefined,exact);
++    const result=structuredClone(request.previous!);result.branches[request.move.branch]=make(next,base.reference);return {...result,exactAnalysis:undefined,complete:false,precision:'approximate',method:'hybrid',approximationReason:'二维约束联立校正，每次移动后回代全部条件。',elapsed:Date.now()-started};
++  }
++  const accept=(v:number[],exact?:Record<string,AlgebraicValue>,certificate?:ExactCertificate,finite=false)=>{
++    attempts++;if(e.errors(v).length)return false;const b=make(v,undefined,exact);b.exactCertificate=certificate;if(finite){b.dof=0;b.motionDof=0;b.loci=[];if(p.mode==='plane')b.reference=[...p.points];}
+     // In the coordinate-free problem, remove planar Euclidean motion only.
+     // A reflection changes winding and is retained as a separate branch.
+-    if(p.mode==='plane'){
++    if(p.mode==='plane'&&!certificate){
+       const origin=b.positions[p.points[0]],second=p.points.find(n=>norm(sub(b.positions[n],origin))>1e-8),d=second?sub(b.positions[second],origin):[1,0,0] as Vec3,t=Math.atan2(d[1],d[0]),c=Math.cos(t),s=Math.sin(t);
+       b.positions=Object.fromEntries(Object.entries(b.positions).map(([n,q])=>{const x=q[0]-origin[0],y=q[1]-origin[1];return [n,[c*x+s*y,-s*x+c*y,0] as Vec3];}));b.values=Object.fromEntries(e.variables.map(u=>[u.id,u.point?b.positions[u.point][u.axis!]:b.values[u.id]]));
+       b.reference=b.dof===0?[...p.points]:[p.points[0]];
+       if(b.dof===0)b.motionDof=0;
+       b.loci=b.dof===0?[]:analyticLoci(p,b.positions,b.reference,e.scale).filter(l=>!['sphere','plane'].includes(l.kind));
+     }
+-    if(!branches.some(a=>p.points.every(n=>norm(sub(a.positions[n],b.positions[n]))<e.scale*1e-5)&&e.variables.every(u=>u.point||Math.abs((a.values?.[u.id]??0)-(b.values?.[u.id]??0))<1e-6)))branches.push(b);return true;
+-  };
+-  let analytic=false,complete=false;
+-  if(!p.conditions.some(c=>c.enabled)&&!equations.some(c=>c.enabled)) {
++    // Isolated algebraic roots have identities independent of drawing tolerance.
++    // Never merge distinct exact candidates just because their decimals are close.
++    const sameRoots=(a:SolutionBranch)=>{
++      if(a.exactCertificate||b.exactCertificate)return JSON.stringify(a.exactCertificate)===JSON.stringify(b.exactCertificate);
++      if(!a.exactValues&&!b.exactValues)return true;
++      if(!a.exactValues||!b.exactValues)return false;
++      const keys=Object.keys(a.exactValues);
++      return keys.length===Object.keys(b.exactValues).length&&keys.every(key=>{
++        const x=a.exactValues![key],y=b.exactValues![key];
++        return !!y&&x.polynomial.length===y.polynomial.length&&x.polynomial.every((c,i)=>c===y.polynomial[i])&&x.interval.every((v,i)=>v===y.interval[i]);
++      });
++    };
++    if(!branches.some(a=>sameRoots(a)&&p.points.every(n=>norm(sub(a.positions[n],b.positions[n]))<e.scale*1e-5)&&e.variables.every(u=>u.point||Math.abs((a.values?.[u.id]??0)-(b.values?.[u.id]??0))<1e-6)))branches.push(b);return true;
++  };
++  let analytic=false,complete=false;let exactAnalysis:ConstraintResult['exactAnalysis'];
++  const symbolic=symbolicPlanarEquations(p,e.variables);
++  if(symbolic.sources.length&&e.variables.length&&(p.conditions.some(c=>c.enabled)||equations.length||p.curves?.length)){
++    const exact=solveExactSystem(symbolic.sources,symbolic.tokens,{deadline:Math.min(deadline,Date.now()+Math.max(50,(request.budget??2000)*.4)),initial:e.initial});
++    let accepted=0;for(const candidate of exact.candidates){const values=Object.fromEntries(Object.entries(candidate.exactValues).map(([token,value])=>[e.variables[symbolic.tokens.indexOf(token)].id,value]));if(accept(candidate.values,values,candidate.certificate,exact.kind==='finite'))accepted++;}
++    exactAnalysis={state:exact.kind,certified:exact.complete&&symbolic.complete&&accepted===exact.candidates.length,totalSolutions:exact.candidates.length,reducedVariables:exact.reducedVariables,reason:exact.reason??symbolic.unsupported.join('；'),reasonCode:exact.reasonCode??(symbolic.complete?undefined:'translation'),family:exact.family,solutions:exact.complete?exact.candidates.map(c=>c.certificate):undefined};
++    if(exact.kind==='finite'&&exact.complete){analytic=true;complete=exactAnalysis.certified;steps.push('精确线性降维、耦合块分解与有理单变量表示；使用 Sturm 隔离及代数符号判定验证候选。');}
++    else if(exact.kind==='family'&&accepted){analytic=true;steps.push('保留精确参数关系及有效域，显示其中一个可行构型。');}
++  }
++  if(!analytic&&!p.conditions.some(c=>c.enabled)&&!equations.some(c=>c.enabled)) {
+     const spread=Object.fromEntries(p.points.map((name,i)=>[name,[3*Math.cos(i*2*Math.PI/Math.max(3,p.points.length)),3*Math.sin(i*2*Math.PI/Math.max(3,p.points.length)),0] as Vec3]));
+     if(accept(e.encode(request.seeds?.[0]??spread,request.seedValues?.[0]))){analytic=true;steps.push('无附加条件：显示自由布局，未增加长度、角度或位置约束。');}
+   }
+   if(e.variables.length===0&&!e.errors(e.initial).length){accept(e.initial);analytic=true;complete=true;steps.push('全部对象与数值均已知，直接验证已有定义和附加条件。');}
+   // Exact rational elimination in a single independent parameter. The original
+   // equations (including denominators and ranges) are always checked again.
+-  if(context&&e.variables.length>=1&&e.variables.length<=2&&equations.length){
++  if(!analytic&&context&&e.variables.length>=1&&e.variables.length<=2&&equations.length){
+     const symbolic=symbolicPlanarEquations(p,e.variables);
+     if(symbolic){
+-      if(e.variables.length===1){for(const source of symbolic.sources){const roots=algebraicRoots(source,symbolic.tokens[0],{},Math.min(deadline,Date.now()+600));if(roots){for(const root of roots)accept([root.approximate],{[e.variables[0].id]:root});analytic=true;complete=true;steps.push('有理表达式清分母，使用精确 Sturm 序列隔离全部实根，回代排除增根。');break;}}}
+-      else {const pairs=algebraicSystem(symbolic.sources,symbolic.tokens as [string,string],{},Math.min(deadline,Date.now()+800));if(pairs){for(const pair of pairs)accept(pair.map(r=>r.approximate),Object.fromEntries(pair.map((r,i)=>[e.variables[i].id,r])));analytic=true;complete=true;steps.push('有理二元条件使用 Sylvester 结式双向消元；精确实根隔离后组合并回代原始条件。');}}
++      if(e.variables.length===1){for(const source of symbolic.sources){const roots=algebraicRoots(source,symbolic.tokens[0],{},Math.min(deadline,Date.now()+600));if(roots){for(const root of roots)accept([root.approximate],{[e.variables[0].id]:root});analytic=true;complete=false;steps.push('有理表达式清分母，使用精确 Sturm 序列隔离全部实根，回代排除增根。');break;}}}
++      else {const pairs=algebraicSystem(symbolic.sources,symbolic.tokens as [string,string],{},Math.min(deadline,Date.now()+800));if(pairs){for(const pair of pairs)accept(pair.map(r=>r.approximate),Object.fromEntries(pair.map((r,i)=>[e.variables[i].id,r])));analytic=true;complete=false;steps.push('有理二元条件使用 Sylvester 结式双向消元；精确实根隔离后组合并回代原始条件；配对仍使用浮点校验，尚未认证解集穷尽。');}}
+     }
+   }
+   // For a point constrained to two existing lines/conics, use the quadratic
+@@ -124,7 +185,7 @@
+   if(!analytic&&context&&!context.unknowns.length&&p.points.filter(n=>!context.document.objects.some(o=>o.kind==='point'&&objectSymbol(o)===n)).length===1){
+     const name=p.points.find(n=>!context.document.objects.some(o=>o.kind==='point'&&objectSymbol(o)===n))!,env=equationEnvironment(e.model(e.initial).doc);
+     const refs=equations.flatMap(q=>{const m=q.source.match(/^on(?:Curve|Line)\s*\(\s*([^,]+),\s*([^,)]+)\s*\)$/i);const k=q.source.match(/^intersection\s*\(\s*([^,]+),\s*([^,]+),\s*([^,)]+)\s*\)$/i);return m?.[1].trim()===name?[m[2].trim()]:k?.[1].trim()===name?[k[2].trim(),k[3].trim()]:[];});
+-    if(refs.length>=2)try{for(const q of conicIntersections(env.quadratic(refs[0]),env.quadratic(refs[1])))accept(e.encode({...e.model(e.initial).positions,[name]:[q[0],q[1],0]}));analytic=true;complete=true;steps.push('二次曲线消元求交，枚举实交点并回代全部范围及附加条件。');}catch(err){steps.push((err as Error).message);}
++    if(refs.length>=2)try{for(const q of conicIntersections(env.quadratic(refs[0]),env.quadratic(refs[1])))accept(e.encode({...e.model(e.initial).positions,[name]:[q[0],q[1],0]}));analytic=true;complete=false;steps.push('二次曲线消元求交，计算实交点并回代全部范围及附加条件；浮点求交尚未认证解集穷尽。');}catch(err){steps.push((err as Error).message);}
+   }
+   if(!analytic&&!context?.unknowns.length&&!equations.length){
+     let anchors:Positions|undefined;
+@@ -158,5 +219,5 @@
+   }
+   const reason='当前二维条件含尚未完成解析消元的耦合关系，采用限定范围内的多起点数值联立，再回代原始定义和条件；不表示不存在解析解。';
+   const failures=branches.length?[]:e.errors(e.initial).slice(0,5).map(v=>`${v.source}（误差 ${v.error.toPrecision(3)}）`);
+-  return {branches:branches.slice(0,cap),status:branches.length?'solved':analytic&&complete?'contradiction':'notFound',precision:analytic?branches.some(b=>b.exactValues)?'algebraic':'construction':'approximate',method:analytic?'construction':'numerical',complete:complete&&branches.length<=cap,attempts,elapsed:Date.now()-started,constructionSteps:steps.slice(0,100),approximationReason:analytic?undefined:reason,diagnostics:[branches.length?`二维求解得到 ${branches.length} 个构型；已验证原始条件。`:analytic&&complete?'解析候选均不满足原条件，没有可行实解。':'暂未找到可行解，未证明无解。',...failures]};
+-}
++  return {exactAnalysis,branches:branches.slice(0,cap),status:branches.length?'solved':analytic&&complete?'contradiction':'notFound',precision:analytic?branches.some(b=>b.exactValues||b.exactCertificate)?'algebraic':'construction':'approximate',method:analytic?'construction':'numerical',complete:complete&&branches.length<=cap,attempts,elapsed:Date.now()-started,constructionSteps:steps.slice(0,100),approximationReason:analytic?undefined:reason,diagnostics:[branches.length?`二维求解得到 ${branches.length} 个构型；已验证原始条件。`:analytic&&complete?'解析候选均不满足原条件，没有可行实解。':'暂未找到可行解，未证明无解。',...failures]};
++}
+diff --git a/apps/mindmap-notes/src/drawing/constraints/planarSymbolic.ts b/apps/mindmap-notes/src/drawing/constraints/planarSymbolic.ts
+--- a/apps/mindmap-notes/src/drawing/constraints/planarSymbolic.ts
++++ b/apps/mindmap-notes/src/drawing/constraints/planarSymbolic.ts
+@@ -1,14 +1,16 @@
+ import type {ConstraintProblem,PlanarUnknown} from './types';
+ import type {GeometryObject} from '../types';
+-import {resolveGeometry,toPlane,dependencies} from '../geometry';
++import {toPlane} from '../geometry';
++import {newDrawing} from '../types';
++import {symbolicGeometry,angleConstant} from './symbolicGeometry';
+ import {coordinatePlane,objectSymbol} from './planarModel';
+ import {substituteNames,expressionNames} from '../parameters';
+ /** Source-level expressions for the rational subset of the dependency graph.
+  * Unsupported constructions return no symbolic candidate; never freeze a
+  * moving dependency to its current numerical coordinates to force an answer. */
+ export function symbolicPlanarEquations(problem:ConstraintProblem,variables:(PlanarUnknown&{point?:string;axis?:number})[]) {
+-  const context=problem.planar;if(!context)return;
+-  const doc=context.document,objects=new Map(doc.objects.map(o=>[objectSymbol(o),o])),g=resolveGeometry(doc),plane=coordinatePlane(doc),tokens=variables.map((_,i)=>`q_${i}`),active=new Set<string>();
++  const context=problem.planar??{document:{...newDrawing(),objects:[]},unknowns:[],equations:[]};
++  const doc=context.document,objects=new Map(doc.objects.map(o=>[objectSymbol(o),o])),plane=coordinatePlane(doc),tokens=variables.map((_,i)=>`q_${i}`),active=new Set<string>();
+   const object=(name:string)=>{const o=objects.get(name.trim());if(!o)throw Error('未知对象');return o;};
+   const numeric=(source:string):string=>{
+     const prepared=source.replace(/\b([xy])\s*\(\s*([A-Za-z][A-Za-z0-9_]*)\s*\)/g,(_,axis:string,n:string)=>`(${point(n,axis==='x'?0:1)})`);
+@@ -18,21 +20,19 @@
+       else if(active.has(o.id))continue;else {active.add(o.id);replacements[objectSymbol(o)]=`(${numeric(o.expression)})`;active.delete(o.id);}
+     }return substituteNames(prepared,replacements);
+   };
+-  const field=(o:GeometryObject,name:string,value:number)=>{const i=variables.findIndex(u=>u.object===o.id&&u.field===name);return i>=0?tokens[i]:String(value);};
++  const field=(o:GeometryObject,name:string,value:number)=>{const i=variables.findIndex(u=>u.object===o.id&&u.field===name),source=o.parameters?.fields[name];return i>=0?tokens[i]:typeof source==='string'?numeric(source):String(value);};
+   const point=(name:string,axis:number):string=>{
+     const index=variables.findIndex(u=>u.point===name&&u.axis===axis);if(index>=0)return tokens[index];
+     const o=object(name);if(o.kind!=='point')throw Error('不是点');const c=o.construction,key=`${o.id}.${axis}`;if(active.has(key))throw Error('循环引用');active.add(key);
+     let s:string;
+     if(c.type==='free'){
++      const unknown=variables.findIndex(u=>u.object===o.id&&u.field===(axis?'y':'x'));if(unknown>=0){active.delete(key);return tokens[unknown];}
+       const coords=o.parameters?.fields['construction.position'];
+       s=coords&&typeof coords!=='string'?numeric(coords.coordinates[axis]):field(o,axis?'y':'x',toPlane(plane,c.position)[axis]);
+     }else if(c.type==='alias')s=point(objectSymbol(doc.objects.find(o=>o.id===c.point)!),axis);
+     else if(c.type==='division'){const a=objectSymbol(doc.objects.find(o=>o.id===c.a)!),b=objectSymbol(doc.objects.find(o=>o.id===c.b)!);s=`(1-(${c.t}))*(${point(a,axis)})+(${c.t})*(${point(b,axis)})`;}
+     else {
+-      // A source depending on an unknown must be symbolically translated or
+-      // left for joint numerical evaluation, rather than sampled as a constant.
+-      const depends=(id:string,seen=new Set<string>()):boolean=>{if(seen.has(id))return false;seen.add(id);if(variables.some(u=>u.object===id))return true;const p=doc.objects.find(o=>o.id===id);return !!p&&dependencies(p).some(v=>depends(v,seen));};
+-      if(depends(o.id)||variables.some(u=>u.object&&JSON.stringify(c).includes(u.object)))throw Error('该构造尚无有理表达式');const p=g.points.get(o.id);if(!p)throw Error('点失效');s=String(toPlane(plane,p.p)[axis]);
++      throw Error('该构造尚无精确表达式，不能冻结为坐标常数');
+     }
+     active.delete(key);return s;
+   };
+@@ -44,20 +44,34 @@
+       if(typeof symbolic==='string')source=numeric(symbolic);
+       else if(o.circle){
+         const names=o.circle.points.map(id=>objectSymbol(doc.objects.find(o=>o.id===id)!)),px=names.map(n=>point(n,0)),py=names.map(n=>point(n,1));let cx=px[0],cy=py[0];
+-        if(o.circle.type==='incircle')throw Error('内切圆含根式');
++        if(o.circle.type==='incircle'){const lengths=[0,1,2].map(i=>`sqrt(((${px[(i+1)%3]})-(${px[(i+2)%3]}))^2+((${py[(i+1)%3]})-(${py[(i+2)%3]}))^2)`),perimeter=lengths.map(v=>`(${v})`).join('+');cx=px.map((v,i)=>`(${lengths[i]})*(${v})`).join('+');cy=py.map((v,i)=>`(${lengths[i]})*(${v})`).join('+');cx=`(${cx})/(${perimeter})`;cy=`(${cy})/(${perimeter})`;}
+         if(o.circle.type==='threePoint'){const d=`2*((${px[0]})*((${py[1]})-(${py[2]}))+(${px[1]})*((${py[2]})-(${py[0]}))+(${px[2]})*((${py[0]})-(${py[1]})))`,r=px.map((x,i)=>`((${x})^2+(${py[i]})^2)`);cx=`((${r[0]})*((${py[1]})-(${py[2]}))+(${r[1]})*((${py[2]})-(${py[0]}))+(${r[2]})*((${py[0]})-(${py[1]})))/(${d})`;cy=`((${r[0]})*((${px[2]})-(${px[1]}))+(${r[1]})*((${px[0]})-(${px[2]}))+(${r[2]})*((${px[1]})-(${px[0]})))/(${d})`;}
+-        const radius=o.circle.type==='centerRadius'?`(${field(o,'circle.radius',o.circle.radius!)})^2`:`((${px[o.circle.type==='threePoint'?0:1]})-(${cx}))^2+((${py[o.circle.type==='threePoint'?0:1]})-(${cy}))^2`;source=`(x-(${cx}))^2+(y-(${cy}))^2=${radius}`;
+-      }else if(o.preset){const p=o.preset;if(p.angle!==0)throw Error('旋转参数留待数值联立');const h=field(o,'preset.h',p.h),k=field(o,'preset.k',p.k),a=field(o,'preset.a',p.a),b=field(o,'preset.b',p.b);
++        const incircleRadius=`(((${py[1]})-(${py[0]}))*((${cx})-(${px[0]}))-((${px[1]})-(${px[0]}))*((${cy})-(${py[0]})))^2/(((${px[1]})-(${px[0]}))^2+((${py[1]})-(${py[0]}))^2)`;
++        const radius=o.circle.type==='incircle'?incircleRadius:o.circle.type==='centerRadius'?`(${field(o,'circle.radius',o.circle.radius!)})^2`:`((${px[o.circle.type==='threePoint'?0:1]})-(${cx}))^2+((${py[o.circle.type==='threePoint'?0:1]})-(${cy}))^2`;source=`(x-(${cx}))^2+(y-(${cy}))^2=${radius}`;
++      }else if(o.preset){const p=o.preset;const h=field(o,'preset.h',p.h),k=field(o,'preset.k',p.k),a=field(o,'preset.a',p.a),b=field(o,'preset.b',p.b);
+         source=p.type==='parabola'?`(y-(${k}))^2=4*(${a})*(x-(${h}))`:p.type==='circle'?`(x-(${h}))^2+(y-(${k}))^2=(${a})^2`:`(x-(${h}))^2/(${a})^2${p.type==='hyperbola'?'-':'+'}(y-(${k}))^2/(${b})^2=1`;
+       }else source=numeric(o.equation);
++      if(o.preset&&o.preset.angle!==0){if(variables.some(u=>u.object===o.id&&u.field==='preset.angle'))throw Error('未知旋转角尚无代数编译');const condition={kind:'vertexAngle' as const,value:o.preset.angle,source:String(o.preset.angle),id:'',enabled:true,refs:[]},cos=angleConstant(condition),sin=angleConstant(condition,true);if(cos===undefined||sin===undefined)throw Error('旋转角的精确三角常数暂未支持');const h=field(o,'preset.h',o.preset.h),k=field(o,'preset.k',o.preset.k);source=substituteNames(source,{x:`(${h})+(${cos})*(x-(${h}))+(${sin})*(y-(${k}))`,y:`(${k})-(${sin})*(x-(${h}))+(${cos})*(y-(${k}))`});}
+     }else if(['line','segment','vector'].includes(o.kind)&&'points'in o){const [a,b]=o.points.map(id=>objectSymbol(doc.objects.find(o=>o.id===id)!));source=`(x-(${point(a,0)}))*((${point(b,1)})-(${point(a,1)}))-(y-(${point(a,1)}))*((${point(b,0)})-(${point(a,0)}))=0`;}
+     else throw Error('未知曲线');return substituteNames(source,{x:`(${x})`,y:`(${y})`});
+   };
+-  try{
+-    const sources=context.equations.filter(q=>q.enabled).flatMap(q=>{const m=q.source.match(/^on(?:Curve|Line)\s*\(\s*([^,]+),\s*([^,)]+)\s*\)$/i),k=q.source.match(/^intersection\s*\(\s*([^,]+),\s*([^,]+),\s*([^,)]+)\s*\)$/i);
+-      if(m)return[curve(m[2],point(m[1],0),point(m[1],1))];if(k)return[curve(k[2],point(k[1],0),point(k[1],1)),curve(k[3],point(k[1],0),point(k[1],1))];
+-      if(q.source.match(/\b(?:onCurve|tangent|focus|directrix|center|a|b|eccentricity|radius|p)\s*\(/))return[];
+-      return[numeric(q.source)];});
+-    return {sources,tokens};
+-  }catch{return;}
++  const sources:string[]=[],unsupported:string[]=[];
++  for(const q of context.equations.filter(q=>q.enabled))try{
++    const m=q.source.match(/^on(?:Curve|Line)\s*\(\s*([^,]+),\s*([^,)]+)\s*\)$/i),k=q.source.match(/^intersection\s*\(\s*([^,]+),\s*([^,]+),\s*([^,)]+)\s*\)$/i);
++    const incidence=(name:string,ref:string)=>{
++      const x=point(name,0),y=point(name,1);sources.push(curve(ref,x,y));const o=object(ref);
++      if((o.kind==='segment'||o.kind==='vector'||o.kind==='line')&&'points'in o){const a=objectSymbol(doc.objects.find(p=>p.id===o.points[0])!),b=objectSymbol(doc.objects.find(p=>p.id===o.points[1])!),dx=`(${point(b,0)})-(${point(a,0)})`,dy=`(${point(b,1)})-(${point(a,1)})`,den=`(${dx})^2+(${dy})^2`,dot=`((${x})-(${point(a,0)}))*(${dx})+((${y})-(${point(a,1)}))*(${dy})`;sources.push(`${den}>0`);if(o.kind!=='line'||o.ray)sources.push(`${dot}>=0`);if(o.kind!=='line')sources.push(`(${den})-(${dot})>=0`);}
++      if(o.kind==='curve'&&o.limits){for(const [axis,expression]of [['x',x],['y',y]] as const){const lo=o.limits[`${axis}Min`],hi=o.limits[`${axis}Max`];if(lo!==undefined)sources.push(`(${expression})>=${lo}`);if(hi!==undefined)sources.push(`(${expression})<=${hi}`);}}
++    };
++    if(m)incidence(m[1],m[2]);else if(k){incidence(k[1],k[2]);incidence(k[1],k[3]);}
++    else if(q.source.match(/\b(?:tangent|focus|directrix|center|a|b|eccentricity|radius|p)\s*\(/))unsupported.push(q.source);
++    else sources.push(numeric(q.source));
++  }catch(error){unsupported.push(`${q.source}: ${(error as Error).message}`);}
++  try{const geometry=symbolicGeometry(problem,name=>[point(name,0),point(name,1),'0']);sources.push(...geometry.sources);unsupported.push(...geometry.unsupported);}catch(error){unsupported.push((error as Error).message);}
++  if(problem.mode==='plane'&&!context.document.objects.some(o=>o.kind==='point')&&!context.equations.some(e=>e.enabled)){
++    const [a,b]=problem.points;if(a)sources.push(`${point(a,0)}=0`,`${point(a,1)}=0`);if(b)sources.push(`${point(b,1)}=0`,`${point(b,0)}>=0`);
++  }
++  for(const [i,u]of variables.entries()){if(u.min!==undefined)sources.push(`${tokens[i]}>=${u.min}`);if(u.max!==undefined)sources.push(`${tokens[i]}<=${u.max}`);}
++  const coordinates:Record<string,[string,string]>={};for(const name of problem.points)try{coordinates[name]=[point(name,0),point(name,1)];}catch{/* The unsupported construction remains a joint numerical check. */}
++  return {sources,tokens,coordinates,complete:!unsupported.length,unsupported};
+ }
+diff --git a/apps/mindmap-notes/src/drawing/constraints/solver.ts b/apps/mindmap-notes/src/drawing/constraints/solver.ts
+--- a/apps/mindmap-notes/src/drawing/constraints/solver.ts
++++ b/apps/mindmap-notes/src/drawing/constraints/solver.ts
+@@ -1,3 +1,6 @@
++import {solveExactSystem} from './exactSystem';
++import {symbolicSpatialEquations} from './spatialExact';
++import {substituteNames} from '../parameters';
+ import {localMobility} from './mobility';
+ import {shapeMobility} from './shapeMobility';
+ import type { Vec3 } from "../types";
+@@ -203,9 +206,8 @@
+   return {...branch,dof:shape.dof,motionDof,loci:motionDof?branch.loci:[],mobility:{version:2,linear:shape.linear,removed:shape.removed,checked:shape.checked&&mobility.checked}};
+ }
+ export function solveConstraints(request:SolveRequest):ConstraintResult {
+-  if(request.problem.mode==='plane'||request.problem.mode==='coordinate')return solvePlanar(request);
+-  const started=Date.now(),problem=request.problem;validateProblem(problem);
+-  if(request.refreshMobility&&request.previous){const result=structuredClone(request.previous);result.branches=result.branches.map(b=>refreshSpatialMobility(problem,b));result.elapsed=Date.now()-started;return result;}
++  const started=Date.now(),problem=request.problem,planar=problem.mode==='plane'||problem.mode==='coordinate';validateProblem(problem);
++  if(!planar&&request.refreshMobility&&request.previous){const result=structuredClone(request.previous);result.branches=result.branches.map(b=>refreshSpatialMobility(problem,b));result.elapsed=Date.now()-started;return result;}
+   const alternatives=problem.conditions.filter(c=>c.enabled&&c.alternateValue!==undefined);
+   if(alternatives.length) {
+     const issues=contradictions(problem);if(issues.length)return {branches:[],status:"contradiction",complete:true,attempts:0,elapsed:Date.now()-started,diagnostics:issues};
+@@ -225,13 +227,15 @@
+       const conditions=problem.conditions.map(c=>{const i=alternatives.indexOf(c);return {...c,value:i>=0&&i<6&&(mask>>i&1)?c.alternateValue:c.value,alternateValue:undefined};}),part={...problem,conditions},check=evaluator(part);
+       const previous=request.previous?{...request.previous,branches:request.previous.branches.filter(b=>check.verify(flatten(problem.points,b.positions)).valid)}:undefined;
+       const result=solveConstraints({...request,problem:part,previous,budget:Math.max(30,(budget-(Date.now()-started))/(count-mask))});results.push(result);
+-      for(const b of result.branches)if(!branches.some(a=>branchEquivalent(a,b,scale)))branches.push(b);
++      for(const b of result.branches)if(!branches.some(a=>planar?(a.exactCertificate&&b.exactCertificate?JSON.stringify([a.exactCertificate.roots,a.exactCertificate.assignments])===JSON.stringify([b.exactCertificate.roots,b.exactCertificate.assignments]):problem.points.every(n=>norm(sub(a.positions[n],b.positions[n]))<scale*1e-8)&&JSON.stringify(a.values)===JSON.stringify(b.values)):branchEquivalent(a,b,scale)))branches.push(b);
+     }
+     return {branches:branches.slice(0,12),status:branches.length?"solved":"notFound",complete:count===2**alternatives.length&&branches.length<=12&&results.every(r=>r.complete),
++      precision:results.every(r=>r.precision==='algebraic')?'algebraic':results.some(r=>r.precision==='approximate')?'approximate':undefined,
+       attempts:results.reduce((n,r)=>n+r.attempts,0),elapsed:Date.now()-started,method:results.every(r=>r.method==="construction")?"construction":"hybrid",
+       approximationReason:[...new Set(results.flatMap(r=>r.approximationReason?[r.approximationReason]:[]))].join("；")||undefined,
+       constructionSteps:[...new Set(results.flatMap(r=>r.constructionSteps??[]))],diagnostics:["三角函数条件先枚举允许的角度分支，再分别解析构造并回代校验。",...new Set(results.flatMap(r=>r.diagnostics))]};
+   }
++  if(planar)return solvePlanar(request);
+   const budget=Math.max(30,Math.min(10000,request.budget??2000)),deadline=started+budget,e=evaluator(problem),issues=contradictions(problem);
+   if(issues.length)return {branches:[],status:"contradiction",complete:true,attempts:0,elapsed:Date.now()-started,diagnostics:issues};
+   let state=(request.seed??(request.previous?.attempts??0)+3127351)>>>0;
+@@ -242,7 +246,7 @@
+     // reduce its freedoms; it never relaxes a condition or changes coordinates.
+     if(!branch||!Array.isArray(reference)||!reference.length||new Set(reference).size!==reference.length||reference.some(n=>!problem.points.includes(n)))throw new Error("请选择至少一个有效且不重复的固定点");
+     const flat=flatten(problem.points,branch.positions);if(!e.verify(flat).valid)throw new Error("当前构型已失效，请重新求解条件");
+-    result.branches[request.reference.branch]=analyze(problem,flat,deadline,random,{...branch,reference:[...reference]});
++    result.branches[request.reference.branch]={...analyze(problem,flat,deadline,random,{...branch,reference:[...reference]}),exactValues:branch.exactValues,exactCertificate:branch.exactCertificate,values:branch.values};
+     result.elapsed=Date.now()-started;
+     return result;
+   }
+@@ -250,15 +254,34 @@
+     const result=structuredClone(request.previous),branch=result.branches[request.move.branch];
+     if(!branch||!problem.points.includes(request.move.point))throw new Error("动点或构型已失效");
+     if(branch.reference.includes(request.move.point))throw new Error("此点属于参照结构，请先切换参照结构或选择其他动点");
++    const invalidateExact=()=>{delete branch.exactCertificate;delete branch.exactValues;delete branch.values;delete result.exactAnalysis;result.complete=false;result.precision='approximate';};
+     const refreshed=refreshSpatialMobility(problem,branch);Object.assign(branch,refreshed);
+     if(branch.dof===0)throw Error(branch.mobility?.removed?'当前构型在极值或相切处被条件锁定，没有可连续拖动的自由度':'当前形状已固定，整体平移和旋转不计构型自由度');
+     if(branch.motionDof===0)throw Error('当前参照下没有可连续拖动的自由度，请减少固定点');
+     const fixed=fixedCoordinates(problem.points,branch.positions,branch.reference),index=problem.points.indexOf(request.move.point)*3;
+     const locus=branch.loci.find(l=>l.point===request.move!.point),target=locus?nearestLocus(locus,request.move.target):request.move.target;
++    const symbolic=symbolicSpatialEquations(problem,false);
++    if(symbolic.complete){
++      const additions:string[]=[],rootExpressions=Object.fromEntries(Object.entries(branch.exactCertificate?.roots??{}).filter(([,r])=>r.expression).map(([name,r])=>[name,`(${r.expression})`]));
++      for(const name of branch.reference)for(let axis=0;axis<3;axis++){
++        const token=symbolic.point(name)[axis],id=`point.${name}.${axis}`,source=branch.exactValues?.[id]?.expression??branch.exactCertificate?.assignments[token];
++        const exact=source?substituteNames(source,rootExpressions):String(branch.positions[name][axis]);
++        additions.push(`${token}=${/root_\d+/.test(exact)?branch.positions[name][axis]:exact}`);
++      }
++      const axis=[0,1,2].sort((a,b)=>Math.abs(target[b]-branch.positions[request.move!.point][b])-Math.abs(target[a]-branch.positions[request.move!.point][a]))[0];
++      additions.push(`${symbolic.point(request.move.point)[axis]}=${target[axis]}`);
++      const exact=solveExactSystem([...symbolic.sources,...additions],symbolic.tokens,{deadline:Math.min(deadline,Date.now()+Math.max(15,budget*.3)),initial:flatten(problem.points,branch.positions)});
++      const candidates=exact.kind==='finite'&&exact.complete?exact.candidates.filter(c=>e.verify(c.values).valid):[];
++      const prior=flatten(problem.points,branch.positions);candidates.sort((a,b)=>{const targetDistance=(v:number[])=>target.reduce((sum,n,k)=>sum+(v[index+k]-n)**2,0),delta=targetDistance(a.values)-targetDistance(b.values);if(Math.abs(delta)>1e-12*e.scale*e.scale)return delta;const cost=(v:number[])=>v.reduce((sum,n,i)=>sum+(n-prior[i])**2,0);return cost(a.values)-cost(b.values);});
++      if(candidates.length){
++        const candidate=candidates[0],ids=problem.points.flatMap(n=>[0,1,2].map(k=>`point.${n}.${k}`));branch.positions=positions(problem.points,candidate.values);branch.values=Object.fromEntries(ids.map((id,i)=>[id,candidate.values[i]]));branch.exactValues=Object.fromEntries(Object.entries(candidate.exactValues).map(([token,value])=>[ids[symbolic.tokens.indexOf(token)],value]));branch.exactCertificate=candidate.certificate;branch.residual=e.verify(candidate.values).max;
++        delete result.exactAnalysis;result.complete=false;result.precision=result.branches.every(b=>b.exactCertificate)?'algebraic':'approximate';result.method='construction';delete result.approximationReason;result.elapsed=Date.now()-started;return result;
++      }
++    }
+     const transported=rigidMotion(branch.positions,branch.reference,request.move.point,target,e.scale);
+     if(transported) {
+       const check=e.verify(flatten(problem.points,transported));
+-      if(check.valid){branch.positions=transported;branch.residual=check.max;result.elapsed=Date.now()-started;return result;}
++      if(check.valid){invalidateExact();branch.positions=transported;branch.residual=check.max;result.elapsed=Date.now()-started;return result;}
+     }
+     // A point on an explicit locus, and followers constructible from it, do not
+     // need an optimizer for each pointer movement. Preserve the reference frame
+@@ -271,7 +294,7 @@
+       plan.solutions.sort((a,b)=>cost(a)-cost(b));if(plan.solutions.length)direct=plan.solutions[0];
+     }
+     const directCheck=e.verify(flatten(problem.points,direct));
+-    if(directCheck.valid){branch.positions=direct;branch.residual=directCheck.max;result.elapsed=Date.now()-started;return result;}
++    if(directCheck.valid){invalidateExact();branch.positions=direct;branch.residual=directCheck.max;result.elapsed=Date.now()-started;return result;}
+     const moveScale=locus&&["circle","sphere","segment"].includes(locus.kind)?locus.radius:e.scale;
+     const extra=(x:number[])=>target.map((v,k)=>(x[index+k]-v)/moveScale);
+     let x=minimize(e.values,flatten(problem.points,branch.positions),deadline,fixed,extra);
+@@ -282,10 +305,24 @@
+       x=minimize(e.values,x,deadline,fixed);
+     }
+     if(!e.verify(x).valid)throw new Error("该位置不满足全部条件，已保留上一个可行位置");
+-    branch.positions=positions(problem.points,x);branch.residual=e.verify(x).max;result.elapsed=Date.now()-started;
++    branch.positions=positions(problem.points,x);branch.residual=e.verify(x).max;delete branch.exactCertificate;delete branch.exactValues;delete branch.values;result.complete=false;result.precision='approximate';delete result.exactAnalysis;result.elapsed=Date.now()-started;
+     result.method=result.method==="construction"?"hybrid":result.method??"numerical";
+     result.approximationReason="当前拖动位置不能直接由现有构造满足全部条件，采用数值联动并回代校验。";
+     return result;
++  }
++  let exactAnalysis:ConstraintResult['exactAnalysis'];
++  if(problem.points.length<=12&&problem.conditions.some(c=>c.enabled)){
++    const compiled=symbolicSpatialEquations(problem),exact=solveExactSystem(compiled.sources,compiled.tokens,{deadline:Math.min(deadline,Date.now()+Math.max(15,budget*.25))});
++    const exactBranches:SolutionBranch[]=[];
++    for(const candidate of exact.candidates){
++      if(exact.kind!=='finite')break;
++      const p=positions(problem.points,candidate.values);if(!e.verify(candidate.values).valid)continue;
++      const ids=problem.points.flatMap(n=>[0,1,2].map(k=>`point.${n}.${k}`));
++      exactBranches.push({positions:p,rigid:[problem.points],reference:[...problem.points],dof:0,motionDof:0,loci:[],residual:e.verify(candidate.values).max,rigidityPending:false,values:Object.fromEntries(ids.map((id,i)=>[id,candidate.values[i]])),exactValues:Object.fromEntries(Object.entries(candidate.exactValues).map(([token,value])=>[ids[compiled.tokens.indexOf(token)],value])),exactCertificate:candidate.certificate});
++    }
++    exactAnalysis={state:exact.kind,certified:exact.complete&&compiled.complete&&exactBranches.length===exact.candidates.length,totalSolutions:exact.candidates.length,reducedVariables:exact.reducedVariables,reason:exact.reason??compiled.unsupported.join('；'),reasonCode:exact.reasonCode??(compiled.complete?undefined:'translation'),family:exact.family,solutions:exact.complete?exact.candidates.map(c=>c.certificate):undefined};
++    if(exactBranches.length&&compiled.complete&&!request.previous?.branches.length)return {branches:exactBranches.slice(0,12),status:'solved',method:'construction',precision:'algebraic',complete:exactAnalysis.certified&&exactBranches.length<=12,attempts:exact.candidates.length,elapsed:Date.now()-started,exactAnalysis,constructionSteps:['空间几何条件编译为等式、符号及非退化条件；精确降维后求解耦合块。'],diagnostics:[`精确代数表示得到 ${exactBranches.length} 个构型，已回代原始几何条件。`]};
++    if(compiled.complete&&exact.kind==='finite'&&exact.complete&&!exact.candidates.length)return {branches:[],status:'contradiction',method:'construction',complete:true,attempts:0,elapsed:Date.now()-started,exactAnalysis,diagnostics:['精确代数条件无可行实解。']};
+   }
+   const construction=constructRightPrism(problem);
+   if(construction) {
+@@ -296,7 +333,7 @@
+       if(!branches.some(b=>branchEquivalent(b,branch,e.scale)))branches.push(branch);
+     }
+     const complete=branches.length<=12,shown=branches.slice(0,12);
+-    return {branches:shown,status:"solved",method:"construction",complete,attempts:construction.candidates,elapsed:Date.now()-started,
++    return {exactAnalysis,branches:shown,status:"solved",method:"construction",complete,attempts:construction.candidates,elapsed:Date.now()-started,
+       constructionSteps:["由已知相邻边及夹角，用余弦定理计算对角线；无向线线角枚举两个顶角。","底面各点由两个已知距离对应的圆求交，枚举交点，排除交叉底面。","沿底面法向取正、负侧棱向量，平移生成顶面；回代全部原始条件。"],
+       diagnostics:[`解析构造得到 ${shown.length} 个可行构型，均已回代全部条件。`,
+         "用余弦定理和圆交点确定底面，再沿底面法向按侧棱长度平移生成顶面；无向线线角的两种顶角及镜像位置分别枚举。",
+@@ -316,7 +353,7 @@
+       if(e.verify(flatten(problem.points,branch.positions)).valid)branches.push(branch);
+       else complete=false;
+     }
+-    if(branches.length)return {branches,status:"solved",method:"construction",complete,attempts:plan.solutions.length,elapsed:Date.now()-started,constructionSteps:plan.steps,
++    if(branches.length)return {exactAnalysis,branches,status:"solved",method:"construction",complete,attempts:plan.solutions.length,elapsed:Date.now()-started,constructionSteps:plan.steps,
+       diagnostics:[`优先通过几何构造与轨迹求交得到 ${branches.length} 个可行构型，均已回代全部条件。`,
+         "辅助直线、平面、圆和球面只参与构造计算，不加入绘图区。",
+         complete?"此构造的有限分支已枚举完成；整体平移和旋转视为同一构型。":"存在连续自由度或尚未完成全部分支枚举，不声明穷尽。"]};
+@@ -356,7 +393,7 @@
+     if(branches.some(b=>b.dof>0))diagnostics.push("构型自由度只计形状变化，排除整图平移、旋转；轨迹上的移动会重新校验整组条件。");
+     if(branches.some(b=>b.rigidityPending))diagnostics.push("本轮时间不足以完成全部刚性扰动验证，仅固定已确认的参照关系，可继续搜索。");
+   }
+-  return {branches,status:branches.length?"solved":"notFound",method:hybrid?"hybrid":"numerical",approximationReason,complete:false,attempts,elapsed:Date.now()-started,
++  return {exactAnalysis,branches,status:branches.length?"solved":"notFound",method:hybrid?"hybrid":"numerical",approximationReason,complete:false,attempts,elapsed:Date.now()-started,
+     constructionSteps:hybrid?(plan.steps.length?plan.steps:request.previous?.constructionSteps):undefined,diagnostics};
+ }
+ export { align as alignPositions };
+diff --git a/apps/mindmap-notes/src/drawing/constraints/document.ts b/apps/mindmap-notes/src/drawing/constraints/document.ts
+--- a/apps/mindmap-notes/src/drawing/constraints/document.ts
++++ b/apps/mindmap-notes/src/drawing/constraints/document.ts
+@@ -14,6 +14,10 @@
+ import { resolveGeometry } from "../geometry";
+ import { planarMode,installPlanarSolution } from './planarModel';
+ import { planarEvaluator } from './planar';
++import {validateRoot} from './exactArithmetic';
++import {validateExactCertificate,validateRootExpression,solveExactSystem} from './exactSystem';
++import {symbolicSpatialEquations} from './spatialExact';
++import {symbolicPlanarEquations} from './planarSymbolic';
+ 
+ export function validPose(p:Pose) {
+   return p&&[p.origin,p.x,p.y,p.z].every(v=>Array.isArray(v)&&v.length===3&&v.every(n=>Number.isFinite(n)&&Math.abs(n)<=1e9))&&
+@@ -25,12 +29,19 @@
+   if(set.driver!==undefined&&(typeof set.driver!=="string"||!names.includes(set.driver)))throw new Error("条件作图动点无效");
+   if(!validPose(set.placement)||!r||
+     r.approximationReason!==undefined&&(typeof r.approximationReason!=="string"||r.approximationReason.length>16384)||!Array.isArray(r.branches)||!r.branches.length||r.branches.length>12||!Number.isInteger(set.activeBranch)||set.activeBranch<0||set.activeBranch>=r.branches.length||
++    r.precision!==undefined&&!['construction','algebraic','approximate'].includes(r.precision)||
+     r.method!==undefined&&!["construction","hybrid","numerical"].includes(r.method)||
+     r.constructionSteps!==undefined&&(!Array.isArray(r.constructionSteps)||r.constructionSteps.length>200||r.constructionSteps.some(s=>typeof s!=="string"||s.length>4096))||
+     typeof r.complete!=="boolean"||!["solved","notFound","contradiction"].includes(r.status)||!Number.isFinite(r.elapsed)||!Number.isInteger(r.attempts)||
+     !Array.isArray(r.diagnostics)||r.diagnostics.length>100||r.diagnostics.some(s=>typeof s!=="string"||s.length>4096))throw new Error("约束解集数据无效");
+   const vector=(p:unknown)=>Array.isArray(p)&&p.length===3&&p.every(n=>typeof n==="number"&&Number.isFinite(n)&&Math.abs(n)<=1e9);
+   const check=evaluator(set.problem),planar=planarMode(set.problem)?planarEvaluator(set.problem):undefined;
++  if(r.precision==='algebraic'&&r.branches.some(b=>!b.exactCertificate&&!Object.keys(b.exactValues??{}).length))throw Error('代数精度声明缺少精确信息');
++  if(r.exactAnalysis){const a=r.exactAnalysis;if(!['finite','family','unresolved'].includes(a.state)||typeof a.certified!=='boolean'||!Number.isInteger(a.totalSolutions)||a.totalSolutions<0||a.totalSolutions>256||!Number.isInteger(a.reducedVariables)||a.reducedVariables<0||a.solutions!==undefined&&(!Array.isArray(a.solutions)||a.solutions.length!==a.totalSolutions))throw Error('精确求解状态数据无效');}
++  if(r.exactAnalysis?.certified){
++    const symbolic=planar?symbolicPlanarEquations(set.problem,planar.variables):symbolicSpatialEquations(set.problem),verified=solveExactSystem(symbolic.sources,symbolic.tokens,{deadline:Date.now()+1500});
++    if(!symbolic.complete||!verified.complete||verified.kind!=='finite'||r.exactAnalysis.state!=='finite'||r.exactAnalysis.totalSolutions!==verified.candidates.length||r.complete&&r.branches.length!==verified.candidates.length)throw Error('解集完整性证据无效或无法在预算内验证');
++  }
+   for(const b of r.branches) {
+     if(!b||!b.positions||Object.keys(b.positions).length!==names.length||names.some(n=>!vector(b.positions[n]))||!Number.isInteger(b.dof)||b.dof<0||b.dof>(planar?.variables.length??names.length*3)||
+       !Array.isArray(b.reference)||!planar&&!b.reference.length||new Set(b.reference).size!==b.reference.length||b.reference.some(n=>!names.includes(n))||!Array.isArray(b.rigid)||b.rigid.length>2500||
+@@ -41,6 +52,18 @@
+       const values=planar.encode(b.positions,b.values),calculated=planar.model(values).positions;
+       if(names.some(n=>Math.abs(b.positions[n][2])>1e-9||norm(sub(b.positions[n],calculated[n]))>1e-6*Math.max(1,planar.scale))||planar.errors(values).length||b.motionDof!==undefined&&(!Number.isInteger(b.motionDof)||b.motionDof<0)||b.values&&Object.values(b.values).some(v=>!Number.isFinite(v)))throw new Error('保存的二维构型不满足条件');
+     }else if(!check.verify(flatten(names,b.positions)).valid)throw new Error("保存的约束构型不满足条件");
++    if(b.exactValues){
++      if(typeof b.exactValues!=='object'||Array.isArray(b.exactValues)||Object.keys(b.exactValues).length>(planar?.variables.length??names.length*3))throw Error('精确数值记录无效');
++      for(const [id,root]of Object.entries(b.exactValues)){
++        validateRoot(root);validateRootExpression(root as Parameters<typeof validateRootExpression>[0]);const value=planar?planar.encode(b.positions,b.values)[planar.variables.findIndex(v=>v.id===id)]:b.values?.[id];
++        if(value===undefined||!Number.isFinite(value)||Math.abs(root.approximate-value)>1e-11*Math.max(1,Math.abs(value)))throw Error('保存的坐标与代数根不一致');
++      }
++    }
++    if(b.exactCertificate){
++      const conditions=set.problem.conditions.map(c=>{if(c.alternateValue===undefined)return c;const first={...c,alternateValue:undefined};return {...first,value:evaluator({...set.problem,conditions:[first]}).verify(flatten(names,b.positions)).valid?c.value:c.alternateValue};});
++      const problem={...set.problem,conditions},symbolic=planar?symbolicPlanarEquations(problem,planar.variables):symbolicSpatialEquations(problem,false);
++      validateExactCertificate(b.exactCertificate,planar?planar.encode(b.positions,b.values):flatten(names,b.positions),symbolic.sources,symbolic.tokens);
++    }
+     for(const l of b.loci) {
+       if(!l||!names.includes(l.point)||!["line","segment","circle","plane","sphere","sampled"].includes(l.kind)||!vector(l.origin)||!vector(l.u)||!vector(l.v)||
+         Math.abs(norm(l.u)-1)>1e-5||Math.abs(norm(l.v)-1)>1e-5||Math.abs(dot(l.u,l.v))>1e-5||typeof l.radius!=="number"||!Number.isFinite(l.radius)||l.radius<=0||l.radius>1e9||typeof l.complete!=="boolean"||
+diff --git a/apps/mindmap-notes/src/drawing/constraints/types.ts b/apps/mindmap-notes/src/drawing/constraints/types.ts
+--- a/apps/mindmap-notes/src/drawing/constraints/types.ts
++++ b/apps/mindmap-notes/src/drawing/constraints/types.ts
+@@ -1,3 +1,4 @@
++import type {ExactCertificate,ExactFamily} from './exactSystem';
+ import type { Vec3,DrawingDocument } from "../types";
+ 
+ export type ConstraintMode="spatial"|"plane"|"coordinate";
+@@ -15,7 +16,7 @@
+   searchScale?:number;
+   searchBounds?:Record<string,{xMin?:number;xMax?:number;yMin?:number;yMax?:number}>;
+ }
+-export interface AlgebraicValue {polynomial:string[];interval:[number,number];approximate:number;expression?:string}
++export interface AlgebraicValue {polynomial:string[];interval:[number,number];rationalInterval?:[string,string];approximate:number;expression?:string}
+ 
+ export const constraintKinds = ["pointLineDistance","pointPlaneDistance","distance","equal","ratio","lineAngle","vertexAngle","linePlaneAngle","dihedral",
+   "parallel","perpendicular","collinear","onSegment","division","coplanar","parallelogram","rectangle","rhombus","square","prism","pyramid","frustum","regularPolygon","cube",
+@@ -28,7 +29,7 @@
+   method:"centerPoint"|"centerRadius"|"threePoint"|"foci";
+   points:string[]; plane?:string[]; value?:number; valueSource?:string;
+ }
+-export interface Condition { id: string; kind: ConstraintKind; refs: string[][]; value?: number; alternateValue?: number; coefficients?:number[]; solid?:VolumeShape; curve?:string; enabled: boolean; source: string }
++export interface Condition { id: string; kind: ConstraintKind; refs: string[][]; value?: number; alternateValue?: number; coefficients?:number[];coefficientSources?:string[]; solid?:VolumeShape; curve?:string; enabled: boolean; source: string }
+ export interface ConstraintProblem { points: string[]; segments: [string,string][]; conditions: Condition[]; curves?:ConstraintCurve[];mode?:ConstraintMode;planar?:PlanarContext }
+ export interface Pose { origin: Vec3; x: Vec3; y: Vec3; z: Vec3 }
+ export const identityPose = (): Pose => ({origin:[0,0,0],x:[1,0,0],y:[0,1,0],z:[0,0,1]});
+@@ -48,8 +49,10 @@
+   mobility?:{version:1|2;linear:number;removed:number;checked:boolean};
+   values?:Record<string,number>;
+   exactValues?:Record<string,AlgebraicValue>;
++  exactCertificate?:ExactCertificate;
+ }
+ export interface ConstraintResult {
++  exactAnalysis?:{state:'finite'|'family'|'unresolved';certified:boolean;totalSolutions:number;reducedVariables:number;reason?:string;reasonCode?:string;family?:ExactFamily;solutions?:ExactCertificate[]};
+   method?: "construction"|"hybrid"|"numerical";
+   precision?:"construction"|"algebraic"|"approximate";
+   constructionSteps?: string[];
+diff --git a/apps/mindmap-notes/src/drawing/constraints/compile.ts b/apps/mindmap-notes/src/drawing/constraints/compile.ts
+--- a/apps/mindmap-notes/src/drawing/constraints/compile.ts
++++ b/apps/mindmap-notes/src/drawing/constraints/compile.ts
+@@ -4,11 +4,11 @@
+ import { add, sub, mul, dot, cross, norm, unit } from "./math";
+ import { polygonArea,solidVolume,circleThrough,sphereThrough,curveGeometry } from "./measures";
+ 
+-export interface Primitive { owner:string; kind:Condition["kind"]|"vectorSum"|"homothety"|"curveDefinition"; refs:string[][]; value?:number;alternateValue?:number;coefficients?:number[];solid?:Condition["solid"];curve?:string }
++export interface Primitive { owner:string; kind:Condition["kind"]|"vectorSum"|"homothety"|"curveDefinition"; refs:string[][]; value?:number;alternateValue?:number;coefficients?:number[];coefficientSources?:string[];solid?:Condition["solid"];curve?:string }
+ export function expandConditions(problem:ConstraintProblem):Primitive[] {
+   const out:Primitive[]=[];
+   for(const c of problem.conditions.filter(c=>c.enabled)) {
+-    const put=(kind:Primitive["kind"],refs:string[][],value?:number)=>out.push({owner:c.id,kind,refs,value,alternateValue:kind===c.kind?c.alternateValue:undefined,coefficients:kind===c.kind?c.coefficients:undefined,solid:c.solid,curve:c.curve});
++    const put=(kind:Primitive["kind"],refs:string[][],value?:number)=>out.push({owner:c.id,kind,refs,value,alternateValue:kind===c.kind?c.alternateValue:undefined,coefficients:kind===c.kind?c.coefficients:undefined,coefficientSources:kind===c.kind?c.coefficientSources:undefined,solid:c.solid,curve:c.curve});
+     if(c.kind==="volume") {
+       out.push(...expandConditions({...problem,curves:[],conditions:[{...c,kind:c.solid!,solid:undefined,value:undefined}]}));put("volume",c.refs,c.value);continue;
+     }
+diff --git a/apps/mindmap-notes/src/drawing/constraints/vectors.ts b/apps/mindmap-notes/src/drawing/constraints/vectors.ts
+--- a/apps/mindmap-notes/src/drawing/constraints/vectors.ts
++++ b/apps/mindmap-notes/src/drawing/constraints/vectors.ts
+@@ -6,7 +6,7 @@
+ import { add,mul,sub,norm,dot } from "./math";
+ 
+ type Resolve=(source:string)=>string[];
+-type Term={ref:string[];coefficient:number};
++type Term={ref:string[];coefficient:number;source:string};
+ type Linear={scalar:number;terms:Term[]};
+ type Ast=ReturnType<typeof parseExpression>;
+ 
+@@ -45,13 +45,14 @@
+   return formula.replace(/\*/g,"\\cdot ");
+ }
+ 
+-export function parseVectorRelation(source:string,resolve:Resolve):Pick<Condition,"kind"|"refs"|"coefficients"> {
++export function parseVectorRelation(source:string,resolve:Resolve):Pick<Condition,"kind"|"refs"|"coefficients"|"coefficientSources"> {
+   const {text,refs}=vectorTokens(source,resolve);
+   const parts=text.split("=");if(parts.length!==2||parts.some(p=>!p.trim()))throw new Error("向量关系需要左右两侧，例如 AB = 2*AC - AD");
+-  const scale=(a:Linear,k:number):Linear=>({scalar:a.scalar*k,terms:a.terms.map(t=>({...t,coefficient:t.coefficient*k}))});
++  const astSource=(a:Ast):string=>a.type==='number'?a.constant??a.literal??String(a.value):a.type==='variable'?a.name:a.type==='unary'?`(${a.sign})*(${astSource(a.value)})`:a.type==='call'?`${a.name}(${a.args.map(astSource).join(',')})`:`(${astSource(a.left)})${a.op}(${astSource(a.right)})`;
++  const scale=(a:Linear,k:number,text=String(k)):Linear=>({scalar:a.scalar*k,terms:a.terms.map(t=>({...t,coefficient:t.coefficient*k,source:`(${t.source})*(${text})`}))});
+   const walk=(ast:Ast):Linear=>{
+     if(ast.type==="number")return {scalar:ast.value,terms:[]};
+-    if(ast.type==="variable")return {scalar:0,terms:[{ref:refs.get(ast.name)!,coefficient:1}]};
++    if(ast.type==="variable")return {scalar:0,terms:[{ref:refs.get(ast.name)!,coefficient:1,source:'1'}]};
+     if(ast.type==="unary")return scale(walk(ast.value),ast.sign);
+     if(ast.type==="call") {
+       if(ast.args.some(a=>walk(a).terms.length))throw new Error("向量不能作为数值函数的参数");
+@@ -64,8 +65,8 @@
+       if(result.terms.length&&Math.abs(result.scalar)>1e-12)throw new Error("向量不能与非零数值相加");
+       return result;
+     }
+-    if(ast.op==="*"&&(!a.terms.length||!b.terms.length))return a.terms.length?scale(a,b.scalar):scale(b,a.scalar);
+-    if(ast.op==="/"&&!b.terms.length){if(b.scalar===0)throw new Error("系数不能除以零");return scale(a,1/b.scalar);}
++    if(ast.op==="*"&&(!a.terms.length||!b.terms.length))return a.terms.length?scale(a,b.scalar,astSource(ast.right)):scale(b,a.scalar,astSource(ast.left));
++    if(ast.op==="/"&&!b.terms.length){if(b.scalar===0)throw new Error("系数不能除以零");return scale(a,1/b.scalar,`1/(${astSource(ast.right)})`);}
+     if(!a.terms.length&&!b.terms.length)return {scalar:evaluate(ast),terms:[]};
+     throw new Error("仅支持向量的线性运算；数量积请使用 dot(AB,CD)=数值");
+   };
+@@ -74,7 +75,7 @@
+   if(Math.abs(left.scalar)>1e-12||Math.abs(right.scalar)>1e-12)throw new Error("向量等式右侧可使用 0，不能使用其他数值");
+   const terms=[...left.terms,...scale(right,-1).terms];
+   if(terms.length>64||terms.some(t=>!Number.isFinite(t.coefficient)||Math.abs(t.coefficient)>1e6))throw new Error("向量项过多或系数超出范围");
+-  return {kind:"vectorRelation",refs:terms.map(t=>t.ref),coefficients:terms.map(t=>t.coefficient)};
++  return {kind:"vectorRelation",refs:terms.map(t=>t.ref),coefficients:terms.map(t=>t.coefficient),coefficientSources:terms.map(t=>t.source)};
+ }
+ 
+ export function vectorDotSource(source:string,resolve:Resolve):Pick<Condition,"kind"|"refs"|"value">|undefined {
+diff --git a/apps/mindmap-notes/src/drawing/constraints/input.ts b/apps/mindmap-notes/src/drawing/constraints/input.ts
+--- a/apps/mindmap-notes/src/drawing/constraints/input.ts
++++ b/apps/mindmap-notes/src/drawing/constraints/input.ts
+@@ -50,6 +50,7 @@
+ export function validateCondition(c:Condition,names:string[],curves?:ConstraintCurve[]) {
+   if(!constraintKinds.includes(c.kind)||typeof c.id!=="string"||!c.id||typeof c.source!=="string"||c.source.length>2048||typeof c.enabled!=="boolean"||
+     !Array.isArray(c.refs)||c.refs.some(r=>!Array.isArray(r)||r.some(p=>!names.includes(p))||new Set(r).size!==r.length))throw new Error("条件数据或点引用无效");
++  if(c.coefficientSources!==undefined&&(!Array.isArray(c.coefficientSources)||c.coefficientSources.length!==c.coefficients?.length||c.coefficientSources.some((source,i)=>typeof source!=='string'||source.length>2048||Math.abs(scalar(source)-c.coefficients![i])>1e-10*Math.max(1,Math.abs(c.coefficients![i])))))throw Error('向量系数源码与数值不一致');
+   const sizes=c.refs.map(r=>r.length).join(",");
+   const expected:Partial<Record<ConstraintKind,string>>={pointLineDistance:"1,2",pointPlaneDistance:"1,3",distance:"2",equal:"2,2",ratio:"2,2",lineAngle:"2,2",vertexAngle:"1,1,1",linePlaneAngle:"2,3",dihedral:"2,1,1",collinear:"3",onSegment:"1,2",division:"1,2",coplanar:"4",parallelogram:"4",rectangle:"4",rhombus:"4",square:"4",cube:"8"};
+   if(c.kind==="volume") {
+@@ -183,6 +184,12 @@
+   }
+   const c={id,kind,refs,value,source:original,enabled:true};validateCondition(c,names,curves);return c;
+ }
++/** Recover the written numeric operand instead of reconstructing it from a double. */
++export function conditionValueSource(c:Condition):string|undefined {
++  const normalized=normalizeConditionNotation(c.source,[...new Set(c.refs.flat())]),call=conditionCall(normalized);
++  if(call){if(call[3])return call[3];const args=splitArguments(call[2]);if(call[1].toLowerCase()==='midpoint'||c.kind==='division'&&args.length===2)return '1';if(c.value!==undefined)return args.at(-1);}
++  const equal=normalized.lastIndexOf('=');return equal>=0?normalized.slice(equal+1).trim():undefined;
++}
+ function conditionCall(source:string):[string,string,string,string?]|undefined {
+   const head=source.match(/^([A-Za-z]+)\s*\(/);if(!head)return;
+   let depth=1;
+diff --git a/apps/mindmap-notes/src/drawing/constraints/scalarRelations.ts b/apps/mindmap-notes/src/drawing/constraints/scalarRelations.ts
+--- a/apps/mindmap-notes/src/drawing/constraints/scalarRelations.ts
++++ b/apps/mindmap-notes/src/drawing/constraints/scalarRelations.ts
+@@ -21,7 +21,7 @@
+   prepared=prepared.replace(/\b(sin|cos|tan)\s*\(\s*(measure_\d+)\s*\)/g,'$1($2*pi/180)');
+   const parts=prepared.split('=');if(parts.length!==2||parts.some(s=>!s.trim())||!measures.length)throw Error('请输入长度或角的等式');
+   const ast=parts.map(s=>parseExpression(s,measures.map(m=>m.name))),refs=[...new Set(measures.flatMap(m=>m.points))].map(n=>[n]);
+-  return {refs,residual:(positions:Positions)=>{
++  return {refs,prepared,measures,residual:(positions:Positions)=>{
+     const scope=Object.fromEntries(measures.map(m=>{
+       const ps=m.points.map(n=>positions[n]);if(ps.some(p=>!p))throw Error('条件引用的点不存在');
+       if(!m.angle)return [m.name,norm(sub(ps[1],ps[0]))];
+diff --git a/apps/mindmap-notes/src/drawing/constraints/planar.test.ts b/apps/mindmap-notes/src/drawing/constraints/planar.test.ts
+--- a/apps/mindmap-notes/src/drawing/constraints/planar.test.ts
++++ b/apps/mindmap-notes/src/drawing/constraints/planar.test.ts
+@@ -35,3 +35,84 @@
+  it('rebinds references to absorbed virtual vertices and keeps a hidden source group hidden',()=>{const {d,problem}=setup(['B=(3,4)'],[]),set=solutionSetObject(problem,solve(problem));set.hidden=true;const doc=installSolutionSet(d,set),b=d.objects.find(o=>o.kind==='point'&&o.symbol==='B')!;if(b.kind!=='point')throw Error();const alias={...b,id:crypto.randomUUID(),name:'Q',symbol:'Q',construction:{type:'alias' as const,point:`${set.id}:v:1`}};doc.objects.push(alias);const context=planarContext(doc),q=context.document.objects.find(o=>o.id===alias.id);expect(q?.kind==='point'&&q.construction.type==='alias'&&q.construction.point).toBe(b.id);expect(context.document.objects.find(o=>o.id===b.id)?.hidden).toBe(true);expect(resolveGeometry(context.document).errors.size).toBe(0);});
+  it('retains presentation locks and slider settings during a constrained update',()=>{const {d,problem}=setup(['m=1','D=(m,2)'],[],[['m','value',-5,5]]),r=solve(problem),set=solutionSetObject(problem,r),doc=installSolutionSet(d,set),m=doc.objects.find(o=>o.symbol==='m'),point=doc.objects.find(o=>o.symbol==='D');if(m?.kind!=='number'||!point)throw Error();m.slider.min=-20;point.locked=true;point.name='Label';const next=installSolutionSet(doc,{...set,result:r});expect(next.objects.find(o=>o.id===point.id)?.locked).toBe(true);expect(next.objects.find(o=>o.id===point.id)?.name).toBe('Label');const n=next.objects.find(o=>o.id===m.id);expect(n?.kind==='number'&&n.slider.min).toBe(-20);});
+ });
++
++
++describe('planar solver result integrity',()=>{
++ it('retains isolated algebraic roots when changing only the reference',()=>{
++  const {problem}=setup(['m=1','A=(0,0)'],['m^2=2'],[['m','value']]),previous=solve(problem),before=structuredClone(previous);
++  const next=solveConstraints({id:2,problem,previous,reference:{branch:0,points:['A']}});
++  expect(next.branches[0].exactValues).toEqual(before.branches[0].exactValues);
++  expect(next.precision).toBe('algebraic');expect(next.complete).toBe(previous.complete);expect(previous).toEqual(before);
++ });
++ it('does not merge distinct algebraic roots within drawing tolerance',()=>{
++  const {problem}=setup(['m=0'],['m*(m-0.0000005)=0'],[['m','value']]),r=solve(problem);
++  expect(r.branches).toHaveLength(2);
++  const roots=r.branches.map(b=>Object.values(b.exactValues!)[0]);
++  expect(roots[0].interval[1]).toBeLessThanOrEqual(roots[1].interval[0]);expect(roots[0].approximate).toBe(0);expect(roots[1].interval[0]).toBeLessThanOrEqual(0.0000005);expect(roots[1].interval[1]).toBeGreaterThanOrEqual(0.0000005);
++ });
++ it('replaces the certificate and invalidates enumeration after algebraic parameter updates',()=>{
++  const {problem}=setup(['m=1'],['m^2=4'],[['m','value']]),previous=solve(problem);expect(previous.complete).toBe(true);
++  const variable=problem.planar!.unknowns[0].id,next=solveConstraints({id:2,problem,previous,parameter:{branch:0,variable,target:2}});
++  expect(next.complete).toBe(false);expect(next.precision).toBe('algebraic');expect(next.branches[0].exactValues![variable].approximate).toBe(2);validateSolutionSet(solutionSetObject(problem,next));
++  expect(previous.branches[0].exactValues).toBeDefined();expect(previous.complete).toBe(true);
++ });
++ it('does not preserve an enumeration claim after numerical point motion',()=>{
++  const {problem}=setup(['A=(0,0)'],[],[['A','x',-5,5]]),previous=solve(problem);previous.complete=true;
++  const next=solveConstraints({id:2,problem,previous,move:{branch:0,point:'A',target:[2,0,0]}});
++  expect(next.branches[0].positions.A[0]).toBeCloseTo(2,5);expect(next.complete).toBe(false);expect(next.precision).toBe('algebraic');validateSolutionSet(solutionSetObject(problem,next));expect(previous.complete).toBe(true);
++ });
++ it('certifies bivariate candidates after exact linear elimination',()=>{
++  const {problem}=setup(['m=1','n=1'],['m^2=2','n=m'],[['m','value'],['n','value']]),r=solve(problem);
++  expect(r.branches).toHaveLength(2);expect(r.precision).toBe('algebraic');expect(r.complete).toBe(true);expect(r.exactAnalysis?.certified).toBe(true);expect(r.branches.every(b=>!!b.exactCertificate)).toBe(true);
++ });
++ it('retains conic intersections without claiming certified enumeration',()=>{
++  const {problem}=setup(['c: x^2+y^2=pi','d: y=0'],['intersection(P,c,d)']);problem.points.push('P');
++  const r=solve(problem);expect(r.branches).toHaveLength(2);expect(r.complete).toBe(false);expect(r.branches.every(b=>Math.abs(b.positions.P[0])>1)).toBe(true);
++ });
++});
++
++
++describe('exact solver integration',()=>{
++ it('solves a coupled parameter graph beyond two variables without search bounds',()=>{
++  const {problem}=setup(['m=0','n=0','k=0','D=(m,n)'],['n=2*m','k=n+1','m^2=2','m>0'],[['m','value'],['n','value'],['k','value']]),r=solve(problem);
++  expect(r.complete).toBe(true);expect(r.exactAnalysis?.reducedVariables).toBe(1);expect(r.branches[0].exactCertificate).toBeDefined();validateSolutionSet(solutionSetObject(problem,r));
++ });
++ it('preserves both allowed sine-angle branches in coordinate-free planar geometry',()=>{
++  const points=['A','B','C'],problem:ConstraintProblem={mode:'plane',points,segments:[],conditions:['AB=2','BC=3','sin(vertexAngle(A,B,C))=1/2'].map(s=>parseCondition(s,points))},r=solve(problem);
++  const lengths=r.branches.map(b=>Math.hypot(...b.positions.A.map((v,i)=>v-b.positions.C[i])));expect(Math.min(...lengths)).toBeLessThan(2);expect(Math.max(...lengths)).toBeGreaterThan(4);
++  validateSolutionSet(solutionSetObject(problem,r));
++ });
++ it('computes all exact solutions independently of the twelve-branch display limit',()=>{
++  const {problem}=setup(['a=0','b=0','c=0','d=0'],['a^2=2','b^2=3','c^2=5','d^2=7'],[['a','value'],['b','value'],['c','value'],['d','value']]),r=solve(problem);
++  expect(r.branches).toHaveLength(12);expect(r.exactAnalysis?.totalSolutions).toBe(16);expect(r.exactAnalysis?.solutions).toHaveLength(16);expect(r.complete).toBe(false);validateSolutionSet(solutionSetObject(problem,r));
++ });
++ it('retains an implicit exact circle family and obtains a certified sample without a search box',()=>{
++  const {problem}=setup(['c: x^2+y^2=4'],['onCurve(P,c)']);problem.points.push('P');const r=solve(problem);
++  expect(r.exactAnalysis?.state).toBe('family');expect(r.exactAnalysis?.family?.conditions.length).toBeGreaterThan(0);expect(r.branches[0].exactCertificate).toBeDefined();expect(r.branches[0].dof).toBe(1);validateSolutionSet(solutionSetObject(problem,r));
++ });
++ it('rejects corrupted exact root metadata and source certificates on save',()=>{
++  const {problem}=setup(['m=1'],['m^2=2','m>0'],[['m','value']]),r=solve(problem),bad=structuredClone(r),id=problem.planar!.unknowns[0].id;
++  bad.branches[0].exactValues![id].polynomial=['-7','0','1'];expect(()=>validateSolutionSet(solutionSetObject(problem,bad))).toThrow();
++  const forged=structuredClone(r);forged.branches[0].exactCertificate!.assignments.q_0='7';expect(()=>validateSolutionSet(solutionSetObject(problem,forged))).toThrow();
++ });
++ it('uses numerical fallback honestly when transcendental parameter motion cannot be certified',()=>{
++  const {problem}=setup(['m=0','n=1'],['n=sin(m)'],[['m','value',-5,5],['n','value',-2,2]]),previous=solve(problem),variable=problem.planar!.unknowns[0].id;
++  const next=solveConstraints({id:2,problem,previous,parameter:{branch:0,variable,target:0.5},budget:1000});expect(next.precision).toBe('approximate');expect(next.complete).toBe(false);expect(next.branches[0].exactCertificate).toBeUndefined();validateSolutionSet(solutionSetObject(problem,next));
++ });
++});
++
++
++describe('planar shape mobility with imported definitions',()=>{
++ it('does not subtract rigid motions already removed by definitions',()=>{
++  const {problem}=setup(['m=1','A=(0,0)','B=(m,0)'],['m>0'],[['m','value']]);problem.mode='plane';const r=solve(problem);expect(r.branches[0].dof).toBe(1);
++ });
++ it('rejects an algebraic precision label with no evidence',()=>{
++  const {problem}=setup(['A=(1,2)'],[]),r=solve(problem);r.precision='algebraic';expect(()=>validateSolutionSet(solutionSetObject(problem,r))).toThrow(/精确信息/);
++ });
++});
++
++
++it('tracks the pointer side when planar exact motion has two algebraic candidates',()=>{
++ const {problem}=setup(['c: x^2+y^2=4'],['onCurve(P,c)']);problem.points.push('P');const previous=solve(problem),next=solveConstraints({id:2,problem,previous,budget:1000,move:{branch:0,point:'P',target:[1,Math.sqrt(3),0]}});
++ expect(next.branches[0].positions.P[1]).toBeGreaterThan(0);expect(next.branches[0].exactCertificate).toBeDefined();validateSolutionSet(solutionSetObject(problem,next));
++});
+diff --git a/apps/mindmap-notes/src/drawing/constraints/exactArithmetic.ts b/apps/mindmap-notes/src/drawing/constraints/exactArithmetic.ts
+new file mode 100644
+--- /dev/null
++++ b/apps/mindmap-notes/src/drawing/constraints/exactArithmetic.ts
+@@ -0,0 +1,85 @@
++import {parseExpression} from '../expression';
++/** Exact rational/polynomial arithmetic. No decimal reconstruction is used to
++ * certify an input literal or an algebraic root. All loops are budgeted. */
++export class ExactLimit extends Error {
++  constructor(public code:'timeout'|'complexity'|'unsupported', message:string){super(message);}
++}
++export class Budget {
++  operations=0;
++  constructor(public deadline=Date.now()+1000,public limit=150000){}
++  tick(n=1){this.operations+=n;if(this.operations>this.limit)throw new ExactLimit('complexity','精确运算规模超限');if(Date.now()>this.deadline)throw new ExactLimit('timeout','精确计算时间预算耗尽');}
++}
++export type Q={n:bigint;d:bigint};
++export const gcd=(a:bigint,b:bigint):bigint=>{while(b){[a,b]=[b,a%b];}return a<0n?-a:a;};
++export function q(n:bigint,d=1n):Q {if(!d)throw Error('精确表达式除以零');const g=gcd(n,d);n/=g;d/=g;if(d<0n){n=-n;d=-d;}if(n.toString(2).length+d.toString(2).length>20000)throw new ExactLimit('complexity','有理系数过大');return {n,d};}
++export const Z=q(0n),O=q(1n);
++export const plus=(a:Q,b:Q)=>q(a.n*b.d+b.n*a.d,a.d*b.d),neg=(a:Q)=>q(-a.n,a.d),minus=(a:Q,b:Q)=>plus(a,neg(b)),times=(a:Q,b:Q)=>q(a.n*b.n,a.d*b.d),divide=(a:Q,b:Q)=>q(a.n*b.d,a.d*b.n);
++export const sign=(a:Q)=>a.n<0n?-1:a.n>0n?1:0,cmp=(a:Q,b:Q)=>sign(minus(a,b)),str=(a:Q)=>a.d===1n?String(a.n):`${a.n}/${a.d}`;
++export function num(a:Q):number {
++ const n=Number(a.n),d=Number(a.d);if(Number.isFinite(n)&&Number.isFinite(d))return n/d;if(!a.n)return 0;
++ const negative=a.n<0n,ns=(negative?-a.n:a.n).toString(),ds=a.d.toString(),np=ns.slice(0,17),dp=ds.slice(0,17);
++ return (negative?-1:1)*(Number(np)/Number(dp))*10**(ns.length-np.length-ds.length+dp.length);
++}
++export function rational(s:string|number):Q {
++  const source=String(s).replace(/[()\s]/g,'');
++  if(source.includes('/')){const [a,b,...rest]=source.split('/');if(rest.length)throw Error('有理数格式错误');return divide(rational(a),rational(b));}
++  const m=source.match(/^([+-]?)(\d*)(?:\.(\d*))?(?:e([+-]?\d+))?$/i);if(!m||!(m[2]||m[3]))throw Error('有理数格式错误');
++  const exponent=Number(m[4]??0)-(m[3]?.length??0);if(!Number.isSafeInteger(exponent)||Math.abs(exponent)>4000)throw new ExactLimit('complexity','十进制指数超限');
++  const n=BigInt((m[1]??'')+(m[2]||'0')+(m[3]??''));return exponent>=0?q(n*10n**BigInt(exponent)):q(n,10n**BigInt(-exponent));
++}
++export type U=Q[];
++export const trim=(p:U):U=>{while(p.length>1&&!p.at(-1)!.n)p.pop();return p;};
++export const ua=(a:U,b:U)=>trim(Array.from({length:Math.max(a.length,b.length)},(_,i)=>plus(a[i]??Z,b[i]??Z)));
++export const us=(a:U,b:U)=>ua(a,b.map(neg));
++export function um(a:U,b:U):U {if(a.length+b.length>100)throw new ExactLimit('complexity','多项式次数超限');const p=Array(a.length+b.length-1).fill(Z) as U;a.forEach((x,i)=>b.forEach((y,j)=>p[i+j]=plus(p[i+j],times(x,y))));return trim(p);}
++export function udiv(a:U,b:U):{quotient:U;remainder:U}{if(!b.some(x=>x.n))throw Error('零多项式除数');let r=[...a];const out=Array(Math.max(1,a.length-b.length+1)).fill(Z) as U;while(r.length>=b.length&&r.some(x=>x.n)){const k=r.length-b.length,c=divide(r.at(-1)!,b.at(-1)!);out[k]=plus(out[k],c);b.forEach((v,i)=>r[k+i]=minus(r[k+i],times(c,v)));r=trim(r);}return {quotient:trim(out),remainder:r};}
++export function ugcd(a:U,b:U):U {while(b.some(x=>x.n)){const r=udiv(a,b).remainder;a=b;b=r;}return a.some(x=>x.n)?a.map(x=>divide(x,a.at(-1)!)):[Z];}
++export const uat=(p:U,x:Q)=>p.reduceRight((s,v)=>plus(times(s,x),v),Z);
++export const derivative=(p:U)=>p.length<2?[Z]:p.slice(1).map((v,i)=>times(v,q(BigInt(i+1))));
++export function integerPolynomial(p:U):string[]{p=trim([...p]);const common=p.reduce((n,v)=>n*v.d/gcd(n,v.d),1n),ints=p.map(v=>v.n*(common/v.d)),g=ints.reduce(gcd)||1n,flip=ints.at(-1)!<0n?-1n:1n;return ints.map(v=>String(v/g*flip));}
++export function sturm(p:U,budget:Budget):U[]{const chain=[p,derivative(p)];while(chain.at(-1)!.length>1){budget.tick();const r=udiv(chain.at(-2)!,chain.at(-1)!).remainder.map(neg);if(!r.some(x=>x.n))break;chain.push(r);}return chain;}
++export function variations(chain:U[],x:Q){let last=0,n=0;for(const p of chain){const s=sign(uat(p,x));if(s&&last&&s!==last)n++;if(s)last=s;}return n;}
++export type Root={polynomial:string[];interval:[number,number];rationalInterval:[string,string];approximate:number;expression?:string};
++export function rootInterval(root:Root):[Q,Q]{return root.rationalInterval.map(rational) as [Q,Q];}
++export function refineRoot(root:Root,budget:Budget){budget.tick();const p=root.polynomial.map(rational),[a,b]=rootInterval(root);if(cmp(a,b)===0)return;
++ const mid=divide(plus(a,b),q(2n));if(!uat(p,mid).n){root.rationalInterval=[str(mid),str(mid)];root.interval=[num(mid),num(mid)];root.approximate=num(mid);root.expression=str(mid);return;}
++ const chain=sturm(p,budget),left=variations(chain,a)-variations(chain,mid),next:[Q,Q]=left?[a,mid]:[mid,b];root.rationalInterval=next.map(str) as [string,string];root.interval=next.map(num) as [number,number];root.approximate=num(divide(plus(...next),q(2n)));
++}
++export function isolate(p:U,budget:Budget):Root[]|undefined {
++ p=trim([...p]);if(p.length===1)return p[0].n?[]:undefined;
++ p=udiv(p,ugcd(p,derivative(p))).quotient;
++ if(p.length===2){const x=divide(neg(p[0]),p[1]);return [{polynomial:integerPolynomial(p),interval:[num(x),num(x)],rationalInterval:[str(x),str(x)],approximate:num(x),expression:str(x)}];}
++ const chain=sturm(p,budget);let bound=2n;for(const c of p.slice(0,-1)){const v=divide(c,p.at(-1)!);const b=(v.n<0n?-v.n:v.n)/v.d+3n;if(b>bound)bound=b;}
++ const a=q(-bound),b=q(bound),queue:[Q,Q,number][]=[[a,b,variations(chain,a)-variations(chain,b)]],out:Root[]=[];
++ while(queue.length){budget.tick();const [lo,hi,count]=queue.pop()!;if(!count)continue;
++  if(count===1&&num(minus(hi,lo))<1e-13*Math.max(p[0].n?0:1,Math.abs(num(lo)),Math.abs(num(hi)))&&(!p[0].n||!(sign(lo)<=0&&sign(hi)>=0))){
++   const root:Root={polynomial:integerPolynomial(p),interval:[num(lo),num(hi)],rationalInterval:[str(lo),str(hi)],approximate:num(divide(plus(lo,hi),q(2n)))};
++   if(p.length===3){const [c,b,a]=p,D=minus(times(b,b),times(q(4n),times(a,c))),den=times(q(2n),a);const plusValue=(-num(b)+Math.sqrt(num(D)))/num(den),minusValue=(-num(b)-Math.sqrt(num(D)))/num(den);root.expression=`(-(${str(b)})${Math.abs(plusValue-root.approximate)<Math.abs(minusValue-root.approximate)?'+':'-'}sqrt(${str(D)}))/(${str(den)})`;}
++   // Recognize only candidates verified by exact substitution.
++   for(let d=1;d<=128;d++){const x=q(BigInt(Math.round(root.approximate*d)),BigInt(d));if(cmp(x,lo)>0&&cmp(x,hi)<=0&&!uat(p,x).n){root.rationalInterval=[str(x),str(x)];root.interval=[num(x),num(x)];root.approximate=num(x);root.expression=str(x);break;}}
++   out.push(root);continue;
++  }
++  const mid=divide(plus(lo,hi),q(2n)),left=variations(chain,lo)-variations(chain,mid);queue.push([mid,hi,count-left],[lo,mid,left]);
++ }
++ return out.sort((a,b)=>cmp(rootInterval(a)[0],rootInterval(b)[0]));
++}
++export type Interval=[Q,Q];
++export const ia=(a:Interval,b:Interval):Interval=>[plus(a[0],b[0]),plus(a[1],b[1])];
++export function im(a:Interval,b:Interval):Interval{const values=[times(a[0],b[0]),times(a[0],b[1]),times(a[1],b[0]),times(a[1],b[1])].sort(cmp);return [values[0],values[3]];}
++export function ui(p:U,x:Interval):Interval{return p.reduceRight<Interval>((s,c)=>ia(im(s,x),[c,c]),[Z,Z]);}
++export function signAt(p:U,root:Root,budget:Budget):number {
++ const poly=root.polynomial.map(rational);p=udiv(p,poly).remainder;if(!p.some(x=>x.n))return 0;
++ const [a,b]=rootInterval(root);if(cmp(a,b)===0)return sign(uat(p,a));
++ const common=ugcd(poly,p);if(common.length>1){const chain=sturm(common,budget);if(variations(chain,a)-variations(chain,b))return 0;}
++ for(let i=0;i<512;i++){budget.tick();const r=ui(p,rootInterval(root));if(sign(r[0])>0)return 1;if(sign(r[1])<0)return -1;refineRoot(root,budget);}
++ throw new ExactLimit('complexity','代数符号判定未完成');
++}
++export function validateRoot(value:unknown,budget=new Budget(Date.now()+500)):asserts value is Root {
++ const r=value as Root;if(!r||!Array.isArray(r.polynomial)||r.polynomial.length<2||r.polynomial.length>100||r.polynomial.some(c=>typeof c!=='string'||!/^[-+]?\d{1,7000}$/.test(c))||BigInt(r.polynomial.at(-1)!)===0n||!Array.isArray(r.interval)||r.interval.length!==2||r.interval.some(v=>!Number.isFinite(v))||!Number.isFinite(r.approximate))throw Error('代数根数据无效');
++ if(r.expression!==undefined){if(typeof r.expression!=='string'||r.expression.length>32768)throw Error('代数根显示表达式无效');parseExpression(r.expression,[],{length:32768,nodes:8192,depth:128});}
++ const bounds=r.rationalInterval??r.interval.map(String);if(!Array.isArray(bounds)||bounds.length!==2||bounds.some(s=>typeof s!=='string'||s.length>15000))throw Error('根隔离区间无效');
++ const [a,b]=bounds.map(rational),p=r.polynomial.map(rational);if(cmp(a,b)>0||r.approximate< num(a)-1e-14*Math.max(1,Math.abs(num(a)))||r.approximate>num(b)+1e-14*Math.max(1,Math.abs(num(b))))throw Error('根近似值不在隔离区间内');
++ if(cmp(a,b)===0){if(uat(p,a).n)throw Error('有理根不满足多项式');}
++ else{const sf=udiv(p,ugcd(p,derivative(p))).quotient,chain=sturm(sf,budget);if(variations(chain,a)-variations(chain,b)!==1)throw Error('区间没有隔离唯一实根');}
++ if(Math.abs(r.interval[0]-num(a))>1e-14*Math.max(1,Math.abs(num(a)))||Math.abs(r.interval[1]-num(b))>1e-14*Math.max(1,Math.abs(num(b))))throw Error('根区间缓存不一致');
++}
+diff --git a/apps/mindmap-notes/src/drawing/constraints/exactSystem.ts b/apps/mindmap-notes/src/drawing/constraints/exactSystem.ts
+new file mode 100644
+--- /dev/null
++++ b/apps/mindmap-notes/src/drawing/constraints/exactSystem.ts
+@@ -0,0 +1,318 @@
++import {parseExpression} from '../expression';
++import {Budget,ExactLimit,type Q,type U,type Root,type Interval,Z,O,q,plus,minus,neg,times,divide,sign,cmp,num,str,rational,trim,udiv,uat,isolate,rootInterval,refineRoot,signAt,validateRoot,ia,im} from './exactArithmetic';
++
++// Sparse multivariate polynomials, ordered lexicographically. Exponent vectors
++// omit trailing zeros, so auxiliary variables can be introduced without copying.
++type P=Map<string,Q>;
++type R={n:P;d:P};
++type Relation='='|'!='|'>'|'>='|'<'|'<=';
++type Guard={p:P;op:Relation};
++const key=(input:number[])=>{const e=Array.from({length:input.length},(_,i)=>input[i]??0);while(e.at(-1)===0)e.pop();return e.join(',');};
++const exps=(k:string)=>k?k.split(',').map(Number):[];
++const constant=(c:Q):P=>c.n?new Map([['',c]]):new Map();
++const variable=(i:number):P=>new Map([[key(Array.from({length:i+1},(_,k)=>k===i?1:0)),O]]);
++const one=()=>constant(O);
++const scalar=(p:P,c:Q):P=>new Map([...p].map(([k,v])=>[k,times(v,c)] as const).filter(([,v])=>v.n));
++const add=(a:P,b:P):P=>{const p=new Map(a);for(const [k,v]of b){const c=plus(p.get(k)??Z,v);if(c.n)p.set(k,c);else p.delete(k);}return p;};
++const sub=(a:P,b:P)=>add(a,scalar(b,q(-1n)));
++function product(a:P,b:P,budget:Budget):P {budget.tick(a.size*b.size);if(a.size*b.size>20000)throw new ExactLimit('complexity','多项式项数超限');const p:P=new Map();for(const [ka,x]of a)for(const [kb,y]of b){const u=exps(ka),v=exps(kb),w=Array.from({length:Math.max(u.length,v.length)},(_,i)=>(u[i]??0)+(v[i]??0));if(w.reduce((s,n)=>s+n,0)>32)throw new ExactLimit('complexity','代数次数超限');const k=key(w),c=plus(p.get(k)??Z,times(x,y));if(c.n)p.set(k,c);else p.delete(k);}return p;}
++function power(p:P,n:number,budget:Budget):P{let out=one();for(let i=0;i<n;i++)out=product(out,p,budget);return out;}
++const compare=(a:string,b:string)=>{const u=exps(a),v=exps(b);for(let i=0;i<Math.max(u.length,v.length);i++)if((u[i]??0)!==(v[i]??0))return (u[i]??0)-(v[i]??0);return 0;};
++const lead=(p:P)=>[...p.keys()].sort((a,b)=>compare(b,a))[0];
++const monoDivide=(a:string,b:string):string|undefined=>{const u=exps(a),v=exps(b),w=Array.from({length:Math.max(u.length,v.length)},(_,i)=>(u[i]??0)-(v[i]??0));return w.some(n=>n<0)?undefined:key(w);};
++const support=(p:P)=>new Set([...p.keys()].flatMap(k=>exps(k).flatMap((n,i)=>n?[i]:[])));
++const degree=(p:P)=>Math.max(0,...[...p.keys()].map(k=>exps(k).reduce((a,b)=>a+b,0)));
++function substitute(p:P,replacements:Map<number,P>,budget:Budget):P{let out:P=new Map();for(const [k,c]of p){let term=constant(c);for(const [i,n]of exps(k).entries())if(n)term=product(term,power(replacements.get(i)??variable(i),n,budget),budget);out=add(out,term);}return out;}
++function fractionAdd(a:R,b:R,budget:Budget):R{return {n:add(product(a.n,b.d,budget),product(b.n,a.d,budget)),d:product(a.d,b.d,budget)};}
++function fractionProduct(a:R,b:R,budget:Budget):R{return {n:product(a.n,b.n,budget),d:product(a.d,b.d,budget)};}
++function fractionSubstitute(p:P,replacements:Map<number,R>,budget:Budget,roots?:Map<number,Root>):R{const simplify=(r:R):R=>{
++ if(roots)r={n:reduceByRoots(r.n,roots,budget),d:reduceByRoots(r.d,roots,budget)};
++ if(!r.d.size)return r;
++ const variables=[...new Set([...support(r.n),...support(r.d)])];
++ if(variables.length===1){const i=variables[0],g=gcdU(univariate(r.n,i),univariate(r.d,i));if(g.length>1){const from=(p:U):P=>new Map(p.flatMap((c,k)=>c.n?[[key(Array.from({length:i+1},(_,j)=>j===i?k:0)),c] as [string,Q]]:[]));r={n:from(udiv(univariate(r.n,i),g).quotient),d:from(udiv(univariate(r.d,i),g).quotient)};}}
++ const factor=divide(O,r.d.get(lead(r.d))!);return {n:scalar(r.n,factor),d:scalar(r.d,factor)};
++ };let out:R={n:new Map(),d:one()};for(const [k,c]of p){let term:R={n:constant(c),d:one()};for(const [i,n]of exps(k).entries())if(n){const r=replacements.get(i)??{n:variable(i),d:one()};term=simplify(fractionProduct(term,simplify({n:power(r.n,n,budget),d:power(r.d,n,budget)}),budget));}out=simplify(fractionAdd(out,term,budget));}return out;}
++function formula(p:P,names:string[]):string{return p.size?[...p].map(([k,c])=>`(${str(c)})${exps(k).map((n,i)=>n?`*${names[i]}${n===1?'':`^${n}`}`:'').join('')}`).join('+'):'0';}
++const fractionFormula=(r:R,names:string[])=>`(${formula(r.n,names)})/(${formula(r.d,names)})`;
++function univariate(p:P,index:number):U{if([...support(p)].some(i=>i!==index))throw Error('不是一元式');const out:U=[Z];for(const [k,c]of p){const n=exps(k)[index]??0;while(out.length<=n)out.push(Z);out[n]=plus(out[n],c);}return trim(out);}
++const satisfied=(s:number,op:Relation)=>op==='='?s===0:op==='!='?s!==0:op==='>'?s>0:op==='>='?s>=0:op==='<'?s<0:s<=0;
++
++class Compiler {
++ names:string[];equations:P[]=[];guards:Guard[]=[];formal=new Map<string,number>();calls=new Map<string,number>();constantRadicals=new Map<number,Q>();
++ constructor(names:string[],public budget:Budget){this.names=[...names];}
++ parse(source:string):R{
++  const ast=parseExpression(source,this.names,{length:32768,nodes:8192,depth:128});
++  const walk=(a:ReturnType<typeof parseExpression>):R=>{
++   this.budget.tick();
++   if(a.type==='number'){if(a.constant){let index=this.formal.get(a.constant);if(index===undefined){index=this.names.length;this.formal.set(a.constant,index);this.names.push(`aux_${index}`);}return {n:variable(index),d:one()};}return {n:constant(rational(a.literal??a.value)),d:one()};}
++   if(a.type==='variable'){const i=this.names.indexOf(a.name);if(i<0)throw new ExactLimit('unsupported','未知符号');return {n:variable(i),d:one()};}
++   if(a.type==='unary'){const r=walk(a.value);return {n:scalar(r.n,q(BigInt(a.sign))),d:r.d};}
++   if(a.type==='call'){
++    if(['sin','cos','tan'].includes(a.name)){
++      const arg=walk(a.args[0]),pi=this.formal.get('pi');
++      if(pi!==undefined&&arg.n.size===1&&arg.d.size===1&&support(arg.d).size===0){
++        const e=exps(lead(arg.n));if(e[pi]===1&&e.reduce((s,v)=>s+v,0)===1){
++          const angle=times(divide(arg.n.get(lead(arg.n))!,arg.d.get('')!),q(180n));
++          if(angle.d===1n){const deg=Number((angle.n%360n+360n)%360n),cos:Record<number,string>={0:'1',30:'sqrt(3)/2',45:'sqrt(2)/2',60:'1/2',90:'0',120:'-1/2',135:'-sqrt(2)/2',150:'-sqrt(3)/2',180:'-1',210:'-sqrt(3)/2',225:'-sqrt(2)/2',240:'-1/2',270:'0',300:'1/2',315:'sqrt(2)/2',330:'sqrt(3)/2'},c=cos[deg],s=cos[(90-deg+360)%360];
++            if(c!==undefined&&s!==undefined)return walk(parseExpression(a.name==='cos'?c:a.name==='sin'?s:`(${s})/(${c})`,this.names));
++          }
++        }
++      }
++      throw new ExactLimit('unsupported','该三角表达式未覆盖精确常数化');
++    }
++    if(!['sqrt','abs'].includes(a.name))throw new ExactLimit('unsupported',`暂不支持函数 ${a.name} 的精确消元`);
++    const r=walk(a.args[0]),signature=JSON.stringify([a.name,[...r.n].sort(([a],[b])=>compare(a,b)).map(([k,c])=>[k,str(c)]),[...r.d].sort(([a],[b])=>compare(a,b)).map(([k,c])=>[k,str(c)])]);
++    const existing=this.calls.get(signature);if(existing!==undefined)return {n:variable(existing),d:one()};
++    const i=this.names.length;this.names.push(`aux_${i}`);this.calls.set(signature,i);const v=variable(i);
++    if(a.name==='sqrt'&&!support(r.n).size&&!support(r.d).size)this.constantRadicals.set(i,divide(r.n.get('')??Z,r.d.get('')??Z));
++    this.guards.push({p:r.d,op:'!='},{p:v,op:'>='});
++    this.equations.push(a.name==='sqrt'?sub(product(power(v,2,this.budget),r.d,this.budget),r.n):sub(product(power(v,2,this.budget),power(r.d,2,this.budget),this.budget),power(r.n,2,this.budget)));
++    return {n:v,d:one()};
++   }
++   const x=walk(a.left),y=walk(a.right);
++   if(a.op==='+')return fractionAdd(x,y,this.budget);
++   if(a.op==='-')return fractionAdd(x,{n:scalar(y.n,q(-1n)),d:y.d},this.budget);
++   if(a.op==='*')return fractionProduct(x,y,this.budget);
++   if(a.op==='/'){this.guards.push({p:y.n,op:'!='});return fractionProduct(x,{n:y.d,d:y.n},this.budget);}
++   if(support(y.n).size||support(y.d).size)throw new ExactLimit('unsupported','指数必须为常数整数');
++   const n=divide(y.n.get('')??Z,y.d.get('')??Z);if(n.d!==1n||n.n>16n||n.n< -16n)throw new ExactLimit('unsupported','整数幂范围为 -16～16');
++   if(n.n<0n)this.guards.push({p:x.n,op:'!='});return {n:power(n.n<0n?x.d:x.n,Number(n.n<0n?-n.n:n.n),this.budget),d:power(n.n<0n?x.n:x.d,Number(n.n<0n?-n.n:n.n),this.budget)};
++  };
++  return walk(ast);
++ }
++ normalize(){
++  // π and e are positive and nonzero. Cancel only a common monomial factor;
++  // a genuine coefficient such as x-π remains unsupported, never rationalized.
++  const cancel=(p:P):P=>{
++    for(const index of this.formal.values()){
++      if(!p.size)continue;const minimum=Math.min(...[...p.keys()].map(k=>exps(k)[index]??0));
++      if(minimum){const next:P=new Map();for(const [k,c]of p){const e=exps(k);e[index]-=minimum;next.set(key(e),c);}p=next;}
++      if(support(p).has(index))throw new ExactLimit('unsupported','超越常数不能作为有理系数；仅支持合法的公共因子消去');
++    }
++    return p;
++  };
++  this.equations=this.equations.map(cancel);this.guards=this.guards.map(g=>({...g,p:cancel(g.p)}));
++  for(const [index,value]of this.constantRadicals){
++    const simplify=(p:P)=>{
++      const coefficient=p.get(key(Array.from({length:index+1},(_,i)=>i===index?2:0)));
++      if(coefficient&&[...support(p)].every(i=>i===index)&&p.size<=2&&str(p.get('')??Z)===str(neg(times(coefficient,value))))return p;
++      let out:P=new Map();for(const [k,c]of p){const e=exps(k),n=e[index]??0;e[index]=n%2;let coefficient=c;for(let j=0;j<Math.floor(n/2);j++)coefficient=times(coefficient,value);out=add(out,new Map([[key(e),coefficient]]));}return out;
++    };
++    this.equations=this.equations.map(simplify);this.guards=this.guards.map(g=>({...g,p:simplify(g.p)}));
++  }
++  // These slots were bookkeeping for canceled formal factors, not unknowns.
++  for(const index of this.formal.values())this.equations.push(sub(variable(index),one()));
++ }
++ relation(source:string){
++  const normalized=source.replace(/＝/g,'=').replace(/≤/g,'<=').replace(/≥/g,'>=').replace(/≠/g,'!='),m=normalized.match(/^(.*?)(!=|>=|<=|=|>|<)(.*)$/);
++  if(!m)throw new ExactLimit('unsupported','条件需要等号或不等号');
++  const a=this.parse(m[1]),b=this.parse(m[3]),r=fractionAdd(a,{n:scalar(b.n,q(-1n)),d:b.d},this.budget);this.guards.push({p:r.d,op:'!='});
++  if(m[2]==='=')this.equations.push(r.n);
++  else this.guards.push({p:product(r.n,r.d,this.budget),op:m[2] as Relation});
++ }
++}
++/** Real zero sets of semidefinite quadratic equations can be smaller than
++ * their complex algebraic varieties. Exact completion of squares handles
++ * tangency/extremum locks before a Jacobian or a complex elimination is used. */
++function realQuadratic(p:P,budget:Budget):P[]{
++ const signs=new Set([...p.values()].map(sign));
++ if(p.size&&signs.size===1&&[...p.keys()].every(k=>exps(k).every(n=>n%2===0))){
++  if(p.has(''))return [one()];
++  return [...p.keys()].map(k=>new Map([[key(exps(k).map(n=>n?1:0)),O]]));
++ }
++ if(degree(p)!==2)return [p];let rest=p;const forms:P[]=[];let orientation=0;
++ for(let pass=0;pass<100&&degree(rest)===2;pass++){
++  const diagonal=[...rest.keys()].find(k=>{const e=exps(k);return e.reduce((a,b)=>a+b,0)===2&&e.some(n=>n===2);});if(diagonal===undefined)return [p];
++  const index=exps(diagonal).findIndex(n=>n===2),coefficient=rest.get(diagonal)!,s=sign(coefficient);if(orientation&&orientation!==s)return [p];orientation=s;
++  const derivative:P=new Map();for(const [k,c]of rest){const e=exps(k),n=e[index]??0;if(n){e[index]=n-1;derivative.set(key(e),times(c,q(BigInt(n))));}}
++  const linear=scalar(derivative,divide(O,times(q(2n),coefficient)));forms.push(linear);rest=sub(rest,scalar(product(linear,linear,budget),coefficient));
++ }
++ if(support(rest).size)return [p];const c=sign(rest.get('')??Z);return c===0?forms:c===orientation?[one()]:[p];
++}
++function linearReduction(equations:P[],count:number,budget:Budget){
++ const replacements=new Map<number,P>(Array.from({length:count},(_,i)=>[i,variable(i)]));let eq=equations;
++ for(let pass=0;pass<count+1;pass++){
++  budget.tick();const rows=eq.filter(p=>degree(p)<=1).map(p=>Array.from({length:count+1},(_,i)=>i===count?neg(p.get('')??Z):p.get(lead(variable(i)))??Z));
++  const pivots:number[]=[];let rank=0;
++  for(let col=0;col<count&&rank<rows.length;col++){
++   const index=rows.findIndex((r,i)=>i>=rank&&r[col].n!==0n);if(index<0)continue;[rows[index],rows[rank]]=[rows[rank],rows[index]];
++   const d=rows[rank][col];rows[rank]=rows[rank].map(x=>divide(x,d));
++   for(let i=0;i<rows.length;i++)if(i!==rank&&rows[i][col].n){const c=rows[i][col];rows[i]=rows[i].map((x,j)=>minus(x,times(c,rows[rank][j])));budget.tick(count);}
++   pivots.push(col);rank++;
++  }
++  if(rows.some(r=>r.slice(0,count).every(x=>!x.n)&&r[count].n))return {equations:[one()],replacements,inconsistent:true};
++  if(!pivots.length)break;
++  const next=new Map<number,P>();pivots.forEach((pivot,row)=>{let p=constant(rows[row][count]);for(let i=0;i<count;i++)if(i!==pivot&&rows[row][i].n)p=add(p,scalar(variable(i),neg(rows[row][i])));next.set(pivot,p);});
++  eq=eq.map(p=>substitute(p,next,budget)).filter(p=>p.size);for(const [i,p]of replacements)replacements.set(i,substitute(p,next,budget));
++ }
++ return {equations:eq,replacements,inconsistent:false};
++}
++function reduce(p:P,basis:P[],budget:Budget):P{p=new Map(p);let remainder:P=new Map();while(p.size){budget.tick();const k=lead(p),c=p.get(k)!;let changed=false;for(const b of basis){const l=lead(b),d=monoDivide(k,l);if(d!==undefined){p=sub(p,product(new Map([[d,divide(c,b.get(l)!)]]),b,budget));changed=true;break;}}if(!changed){remainder.set(k,c);p.delete(k);}}return remainder;}
++interface BasisTask {basis:P[];pairs:[number,number][];cursor:number;initial:number}
++const basisTasks=new Map<string,BasisTask>();
++function groebner(polynomials:P[],budget:Budget):P[]{
++ const signature=JSON.stringify(polynomials.map(p=>[...p].sort(([a],[b])=>compare(a,b)).map(([k,c])=>[k,str(c)])));
++ let task=basisTasks.get(signature);
++ if(!task){if(basisTasks.size>=16)basisTasks.delete(basisTasks.keys().next().value!);task={basis:[],pairs:[],cursor:0,initial:0};basisTasks.set(signature,task);}
++ const {basis,pairs}=task;
++ const put=(p:P)=>{p=reduce(p,basis,budget);if(!p.size)return;const c=p.get(lead(p))!;p=scalar(p,divide(O,c));if(basis.length>=100){basisTasks.delete(signature);throw new ExactLimit('complexity','消元基规模超限');}for(let i=0;i<basis.length;i++)pairs.push([i,basis.length]);basis.push(p);};
++ while(task.initial<polynomials.length){put(polynomials[task.initial]);task.initial++;}
++ while(task.cursor<pairs.length){
++  budget.tick();const [i,j]=pairs[task.cursor],a=basis[i],b=basis[j],ka=lead(a),kb=lead(b),u=exps(ka),v=exps(kb);
++  if(!u.some((x,k)=>x&&(v[k]??0))){task.cursor++;continue;}
++  const lcm=key(Array.from({length:Math.max(u.length,v.length)},(_,k)=>Math.max(u[k]??0,v[k]??0)));
++  put(sub(product(new Map([[monoDivide(lcm,ka)!,O]]),a,budget),product(new Map([[monoDivide(lcm,kb)!,O]]),b,budget)));task.cursor++;
++  if(basis.some(p=>degree(p)===0)){basisTasks.delete(signature);return [one()];}
++ }
++ const result=basis.map((p,i)=>reduce(p,basis.filter((_,j)=>j!==i),budget)).filter(p=>p.size);basisTasks.delete(signature);return result;
++}
++
++export interface ExactCertificate {
++ version:1;variables:string[];sources:string[];auxiliary:string[];roots:Record<string,Root>;assignments:Record<string,string>;
++}
++export interface ExactFamily {parameters:string[];assignments:Record<string,string>;conditions:string[];implicit?:boolean}
++export interface ExactCandidate {values:number[];certificate:ExactCertificate;exactValues:Record<string,Root>}
++export interface ExactSystemResult {
++ kind:'finite'|'family'|'unresolved';complete:boolean;candidates:ExactCandidate[];family?:ExactFamily;
++ reason?:string;reasonCode?:string;operations:number;reducedVariables:number;cacheHit?:boolean;
++}
++const cache=new Map<string,ExactSystemResult>();
++function copy<T>(x:T):T{return structuredClone(x);}
++function rationalRoot(x:Q):Root{return {polynomial:[String(-x.n),String(x.d)],interval:[num(x),num(x)],rationalInterval:[str(x),str(x)],approximate:num(x),expression:str(x)};}
++function evalFraction(r:R,roots:Map<number,Root>,budget:Budget):Q{
++ const value=(p:P)=>{let out=Z;for(const [k,c]of p){let term=c;for(const [i,n]of exps(k).entries())if(n){const root=roots.get(i);if(!root)throw Error('缺少代数生成元');const [a,b]=rootInterval(root),x=divide(plus(a,b),q(2n));for(let j=0;j<n;j++)term=times(term,x);}out=plus(out,term);budget.tick();}return out;};
++ return divide(value(r.n),value(r.d));
++}
++function reduceByRoots(p:P,roots:Map<number,Root>,budget:Budget):P{
++ for(const [i,r]of roots){const f=r.polynomial.map(rational),m=f.length-1;let next:P=new Map();for(const [k,c]of p){const e=exps(k),n=e[i]??0;e[i]=0;const mon:U=Array(n+1).fill(Z);mon[n]=O;const rem=udiv(mon,f).remainder;for(const [j,a]of rem.entries())if(a.n){const powers=[...e];powers[i]=j;const t=key(powers);next=add(next,new Map([[t,times(c,a)]]));}budget.tick(m);}p=next;}return p;
++}
++function signWithRoots(p:P,roots:Map<number,Root>,budget:Budget):number{
++ p=reduceByRoots(p,roots,budget);if(!p.size)return 0;const used=[...support(p)];if(!used.length)return sign(p.get('')??Z);
++ if(used.length===1)return signAt(univariate(p,used[0]),roots.get(used[0])!,budget);
++ for(let attempt=0;attempt<256;attempt++){
++  let interval:Interval=[Z,Z];for(const [k,c]of p){let term:Interval=[c,c];for(const [i,n]of exps(k).entries())for(let j=0;j<n;j++)term=im(term,rootInterval(roots.get(i)!));interval=ia(interval,term);}
++  if(sign(interval[0])>0)return 1;if(sign(interval[1])<0)return -1;for(const i of used)refineRoot(roots.get(i)!,budget);
++ }
++ throw new ExactLimit('complexity','多个代数生成元的符号判定未完成');
++}
++function components(equations:P[],variables:number[]):number[][]{
++ const groups:number[][]=[];const pending=new Set(variables);
++ while(pending.size){const first=pending.values().next().value!,group=new Set([first]);pending.delete(first);let changed=true;while(changed){changed=false;for(const p of equations){const vars=[...support(p)];if(vars.some(i=>group.has(i)))for(const i of vars)if(pending.delete(i)){group.add(i);changed=true;}}}groups.push([...group]);}return groups;
++}
++interface ComponentSolution {roots:Map<number,Root>;assignments:Map<number,R>}
++function solveComponent(equations:P[],vars:number[],generator:number,budget:Budget):ComponentSolution[]|undefined{
++ if(vars.length===1){let poly:U|undefined;for(const p of equations){const next=univariate(p,vars[0]);poly=poly?gcdU(poly,next):next;}const roots=isolate(poly??[Z],budget);return roots?.map(root=>({roots:new Map([[generator,root]]),assignments:new Map([[vars[0],{n:variable(generator),d:one()}]])}));}
++ if(vars.length>6)throw new ExactLimit('complexity','耦合块超过六个非线性变量');
++ for(let trial=1;trial<=4;trial++){
++  budget.tick();let relation=variable(generator);vars.forEach((i,k)=>relation=sub(relation,scalar(variable(i),q(BigInt((k+1)**trial)))));
++  const basis=groebner([...equations,relation],budget);if(basis.some(p=>degree(p)===0))return [];
++  const polys=basis.filter(p=>[...support(p)].every(i=>i===generator)&&p.size);if(!polys.length)return;
++  let f=univariate(polys[0],generator);for(const p of polys.slice(1))f=gcdU(f,univariate(p,generator));
++  const roots=isolate(f,budget);if(!roots)return;
++  const mappings=new Map<number,R>();
++  for(const i of vars){
++   const p=basis.find(p=>support(p).has(i)&&[...support(p)].every(j=>j===i||j===generator)&&[...p.keys()].every(k=>(exps(k)[i]??0)<=1));if(!p)break;
++   let coefficient:P=new Map(),rest:P=new Map();for(const [k,c]of p){const e=exps(k);if(e[i]){e[i]=0;coefficient.set(key(e),c);}else rest.set(k,c);}mappings.set(i,{n:scalar(rest,q(-1n)),d:coefficient});
++  }
++  if(mappings.size!==vars.length)continue;
++  const result:ComponentSolution[]=[];let exceptional=false;
++  for(const root of roots){const scope=new Map([[generator,root]]);if([...mappings.values()].some(r=>signWithRoots(r.d,scope,budget)===0)){exceptional=true;break;}
++   if(equations.every(p=>{const r=fractionSubstitute(p,mappings,budget,scope);return signWithRoots(r.n,scope,budget)===0&&signWithRoots(r.d,scope,budget)!==0;}))result.push({roots:scope,assignments:mappings});
++  }
++  if(!exceptional)return result;
++ }
++ throw new ExactLimit('complexity','代数分支不能在预算内分离，未丢弃异常分支');
++}
++function gcdU(a:U,b:U):U{while(b.some(x=>x.n)){const r=udiv(a,b).remainder;a=b;b=r;}return a;}
++
++export function solveExactSystem(sources:string[],variables:string[],options:{deadline?:number;initial?:number[];maxCandidates?:number;sectionDepth?:number}={}):ExactSystemResult{
++ const budget=new Budget(options.deadline??Date.now()+1500),cacheKey=JSON.stringify([sources,variables,options.maxCandidates??256]);
++ const cached=cache.get(cacheKey);if(cached)return {...copy(cached),cacheHit:true,operations:0};
++ const result:ExactSystemResult={kind:'unresolved',complete:false,candidates:[],operations:0,reducedVariables:variables.length};
++ try{
++  if(variables.length>100)throw new ExactLimit('complexity','待求变量过多');
++  const compiler=new Compiler(variables,budget);for(const source of sources)compiler.relation(source);compiler.normalize();
++  let reduced=linearReduction(compiler.equations.flatMap(p=>realQuadratic(p,budget)),compiler.names.length,budget);
++  for(let pass=0;pass<2&&!reduced.inconsistent;pass++){
++    const variables=[...new Set([...reduced.replacements.values()].flatMap(p=>[...support(p)]))],blocks=components(reduced.equations,variables),basis:P[]=[];
++    for(const block of blocks){const eq=reduced.equations.filter(p=>[...support(p)].some(v=>block.includes(v)));basis.push(...(block.length>1&&block.length<=6?groebner(eq,budget):eq));}
++    const next=linearReduction(basis.flatMap(p=>realQuadratic(p,budget)),compiler.names.length,budget),maps=new Map([...reduced.replacements].map(([i,p])=>[i,substitute(p,next.replacements,budget)]));
++    const oldCount=variables.length,newCount=new Set([...maps.values()].flatMap(p=>[...support(p)])).size;reduced={...next,replacements:maps};if(newCount===oldCount)break;
++  }
++  const maps=reduced.replacements;
++  const guards=compiler.guards.map(g=>({...g,p:substitute(g.p,maps,budget)}));
++  const free=[...new Set([...maps.values()].flatMap(p=>[...support(p)]))];result.reducedVariables=free.length;
++  if(reduced.inconsistent||reduced.equations.some(p=>!support(p).size&&p.size)){result.kind='finite';result.complete=true;return result;}
++  const groups=components([...reduced.equations,...guards.map(g=>g.p)],free),blocks:ComponentSolution[][]=[];
++  let family=false;
++  for(const [i,group]of groups.entries()){
++   const eq=reduced.equations.filter(p=>[...support(p)].some(v=>group.includes(v)));
++   if(!eq.length){family=true;break;}
++   const solved=solveComponent(eq,group,compiler.names.length+i,budget);if(!solved){family=true;break;}blocks.push(solved);
++   if(!solved.length){result.kind='finite';result.complete=true;return result;}
++  }
++  if(family){
++   result.kind='family';result.family={parameters:free.map(i=>compiler.names[i]),assignments:Object.fromEntries(variables.map((v,i)=>[v,formula(maps.get(i)!,compiler.names)])),conditions:[...reduced.equations.map(p=>formula(p,compiler.names)+'=0'),...guards.map(g=>formula(g.p,compiler.names)+g.op+'0')],implicit:reduced.equations.length>0};
++   // An affine parameterization is exact; its feasible domain remains explicit.
++   // Samples are previews only and never stand for the whole family.
++   if(!reduced.equations.length){
++    const trials=[options.initial??variables.map(()=>0),...[-1,0,1,2,-2,3,-3,5,-5,10].map(v=>compiler.names.map(()=>v))];
++    for(const trial of trials){const repl=new Map(free.map(i=>[i,{n:constant(rational(trial[i]??0)),d:one()}])),scope=new Map<number,Root>();
++     if(!guards.every(g=>{const r=fractionSubstitute(g.p,repl,budget);return satisfied(signWithRoots(r.n,scope,budget)*signWithRoots(r.d,scope,budget),g.op);} ))continue;
++     const assignments=new Map([...maps].map(([i,p])=>[i,fractionSubstitute(p,repl,budget)]));result.candidates.push(makeCandidate(assignments,scope,sources,variables,compiler.names,budget));break;
++    }
++   }
++   if(!result.candidates.length&&free.length<=6&&(options.sectionDepth??0)<3){
++    const parameter=free.slice().sort((a,b)=>reduced.equations.filter(p=>support(p).has(b)).length-reduced.equations.filter(p=>support(p).has(a)).length)[0];
++    if(parameter!==undefined)for(const value of [...new Set([options.initial?.[parameter]??0,1,-1,2])]){
++      budget.tick();const section=solveExactSystem([...sources,`${compiler.names[parameter]}=${value}`],variables,{...options,sectionDepth:(options.sectionDepth??0)+1,maxCandidates:16});
++      if(section.candidates.length){result.candidates=section.candidates.slice(0,2);break;}
++    }
++   }
++   return result;
++  }
++  let combined:ComponentSolution[]=[{roots:new Map(),assignments:new Map()}];
++  for(const block of blocks){const next:ComponentSolution[]=[];for(const a of combined)for(const b of block){if(next.length>=(options.maxCandidates??256))throw new ExactLimit('complexity','精确解组合超出计算上限，保留未完成状态');next.push({roots:new Map([...a.roots,...b.roots]),assignments:new Map([...a.assignments,...b.assignments])});}combined=next;}
++  for(const branch of combined){
++   const assignments=new Map([...maps].map(([i,p])=>[i,fractionSubstitute(p,branch.assignments,budget,branch.roots)]));
++   if(!guards.every(g=>{const r=fractionSubstitute(g.p,branch.assignments,budget,branch.roots),d=signWithRoots(r.d,branch.roots,budget);return d!==0&&satisfied(signWithRoots(r.n,branch.roots,budget)*d,g.op);} ))continue;
++   result.candidates.push(makeCandidate(assignments,branch.roots,sources,variables,compiler.names,budget));
++  }
++  result.kind='finite';result.complete=true;
++ }catch(e){result.reasonCode=e instanceof ExactLimit?e.code:'unsupported';result.reason=(e as Error).message;result.complete=false;}
++ finally{result.operations=budget.operations;if(result.kind!=='unresolved'&&result.complete){if(cache.size>=32)cache.delete(cache.keys().next().value!);cache.set(cacheKey,copy(result));}}
++ return result;
++}
++function makeCandidate(assignments:Map<number,R>,roots:Map<number,Root>,sources:string[],variables:string[],names:string[],budget:Budget):ExactCandidate{
++ const rootNames=new Map([...roots.keys()].map((i,k)=>[i,`root_${k}`])),allNames=[...names];for(const [i,n]of rootNames)allNames[i]=n;
++ const expressions=Object.fromEntries(names.map((v,i)=>[v,fractionFormula(assignments.get(i)!,allNames)]));
++ const values=variables.map((_,i)=>num(evalFraction(assignments.get(i)!,roots,budget))),exactValues:Record<string,Root>={};
++ for(const [i,v]of variables.entries()){
++  const r=assignments.get(i)!;if(!support(r.n).size&&!support(r.d).size)exactValues[v]=rationalRoot(divide(r.n.get('')??Z,r.d.get('')??Z));
++  else if(r.n.size===1&&r.d.size===1&&r.d.get('')?.n===1n&&r.d.get('')?.d===1n){const k=lead(r.n),e=exps(k),idx=e.findIndex(n=>n);if(e[idx]===1&&e.reduce((a,b)=>a+b,0)===1&&r.n.get(k)!.n===1n&&r.n.get(k)!.d===1n&&roots.has(idx))exactValues[v]=copy(roots.get(idx)!);}
++ }
++ return {values,exactValues,certificate:{version:1,variables:[...variables],sources:[...sources],auxiliary:names.slice(variables.length),roots:Object.fromEntries([...roots].map(([i,r])=>[rootNames.get(i)!,copy(r)])),assignments:expressions}};
++}
++
++const expressionEvidence=new Set<string>();
++export function validateRootExpression(root:Root,deadline=Date.now()+1000){
++ if(!root.expression)return;const signature=JSON.stringify([root.polynomial,root.rationalInterval??root.interval,root.expression]);if(expressionEvidence.has(signature))return;
++ const [lo,hi]=root.rationalInterval??root.interval.map(String);
++ try{const value=rational(root.expression),a=rational(lo),b=rational(hi);if(!uat(root.polynomial.map(rational),value).n&&(cmp(a,b)===0?cmp(value,a)===0:cmp(value,a)>0&&cmp(value,b)<=0)){expressionEvidence.add(signature);return;}}catch{/* Radical expressions are checked by exact elimination below. */}
++ const polynomial=root.polynomial.reduceRight((out,c)=>`(${out})*x+(${c})`,'0');
++ const result=solveExactSystem([`x=(${root.expression})`,`${polynomial}=0`,`x${lo===hi?'>=':'>'}(${lo})`,`x<=(${hi})`],['x'],{deadline});
++ if(result.kind!=='finite'||!result.complete||result.candidates.length!==1)throw Error('代数根显示表达式未通过精确验证');
++ if(expressionEvidence.size>=512)expressionEvidence.delete(expressionEvidence.values().next().value!);expressionEvidence.add(signature);
++}
++/** Recheck stored algebraic evidence, not just its decimal rendering. */
++export function validateExactCertificate(c:ExactCertificate,values:number[],expectedSources:string[],variables:string[],deadline=Date.now()+1000):void{
++ const budget=new Budget(deadline);if(!c||c.version!==1||(!Array.isArray(c.sources)||c.sources.length>500||JSON.stringify(c.sources.slice(0,expectedSources.length))!==JSON.stringify(expectedSources))||JSON.stringify(c.variables)!==JSON.stringify(variables)||!c.roots||!c.assignments||!Array.isArray(c.auxiliary)||c.auxiliary.some(n=>typeof n!=='string'||!/^aux_\d+$/.test(n))||Object.keys(c.assignments).length!==variables.length+c.auxiliary.length||Object.keys(c.roots).length>100)throw Error('精确解证书与当前问题不一致');
++ const names=Object.keys(c.roots);if(names.some(n=>!/^root_\d+$/.test(n)))throw Error('代数生成元名称无效');
++ const compiler=new Compiler(names,budget),scope=new Map<number,Root>();names.forEach((name,i)=>{validateRoot(c.roots[name],budget);validateRootExpression(c.roots[name],budget.deadline);scope.set(i,copy(c.roots[name]));});
++ const maps=new Map<number,R>();[...variables,...c.auxiliary].forEach((v,i)=>{const source=c.assignments[v];if(typeof source!=='string'||source.length>32768)throw Error('精确坐标表达式无效');maps.set(i,compiler.parse(source));const r=maps.get(i)!,d=signWithRoots(r.d,scope,budget);if(!d)throw Error('精确坐标分母为零');const computed=num(evalFraction(r,scope,budget));if(i<variables.length&&(!Number.isFinite(values[i])||Math.abs(computed-values[i])>1e-11*Math.max(1,Math.abs(computed))))throw Error('坐标与精确证书不一致');});
++ if(compiler.equations.length||compiler.names.length!==names.length)throw Error('证书坐标必须是生成元的有理式');
++ const original=new Compiler(variables,budget);for(const source of c.sources)original.relation(source);original.normalize();
++ if(JSON.stringify(original.names)!==JSON.stringify([...variables,...c.auxiliary]))throw Error('辅助变量与原始条件不一致');
++ const check=(g:Guard)=>{const r=fractionSubstitute(g.p,maps,budget,scope);const d=signWithRoots(r.d,scope,budget);return d!==0&&satisfied(signWithRoots(r.n,scope,budget)*d,g.op);};
++ if(!original.equations.every(p=>check({p,op:'='}))||!original.guards.every(check))throw Error('精确证书不满足原始条件');
++}
+diff --git a/apps/mindmap-notes/src/drawing/constraints/exactSystem.test.ts b/apps/mindmap-notes/src/drawing/constraints/exactSystem.test.ts
+new file mode 100644
+--- /dev/null
++++ b/apps/mindmap-notes/src/drawing/constraints/exactSystem.test.ts
+@@ -0,0 +1,25 @@
++import {describe,it,expect} from 'vitest';
++import {solveExactSystem,validateExactCertificate} from './exactSystem';
++import {Budget,isolate,rational,validateRoot} from './exactArithmetic';
++function solve(sources:string[],vars:string[]){const r=solveExactSystem(sources,vars,{deadline:Date.now()+5000});expect(r.kind,r.reason).toBe('finite');expect(r.complete,r.reason).toBe(true);for(const c of r.candidates)validateExactCertificate(c.certificate,c.values,sources,vars,Date.now()+5000);return r;}
++describe('certified exact constraint systems',()=>{
++ it('keeps source decimals beyond binary integer precision',()=>{const r=solve(['x=9007199254740993/9007199254740992'],['x']);expect(r.candidates[0].exactValues.x.expression).toBe('9007199254740993/9007199254740992');});
++ it('renders long rational literals without Infinity divided by Infinity',()=>{const literal='0.'+'3'.repeat(400),r=solve([`x=${literal}`],['x']);expect(r.candidates[0].values[0]).toBeCloseTo(1/3,15);expect(r.candidates[0].exactValues.x.expression!.length).toBeGreaterThan(400);});
++ it('refines nonzero tiny roots relatively instead of rendering them as zero',()=>{const r=solve(['x^2=1e-40'],['x']);expect(r.candidates).toHaveLength(2);expect(Math.abs(r.candidates[1].values[0]/1e-20-1)).toBeLessThan(1e-12);});
++ it('isolates and validates repeated and non-radical roots',()=>{for(const p of [['-1','-1','0','0','0','1'],['0','0','1']]){const roots=isolate(p.map(rational),new Budget(Date.now()+5000))!;expect(roots.length).toBe(1);for(const root of roots)validateRoot(root);}});
++ it('cancels positive formal constants and evaluates written special angles exactly',()=>{expect(solve(['pi*x=12*pi'],['x']).candidates[0].values).toEqual([12]);expect(solve(['x=pi/pi'],['x']).candidates[0].values).toEqual([1]);expect(solve(['x=sin(pi/6)'],['x']).candidates[0].values).toEqual([0.5]);expect(solveExactSystem(['x=pi'],['x']).reasonCode).toBe('unsupported');});
++ it('rejects poles, including canceled and nested zero denominators',()=>{expect(solve(['(x^2-1)/(x-1)=2'],['x']).candidates).toHaveLength(0);expect(solve(['1/(1/x)=0'],['x']).candidates).toHaveLength(0);});
++ it('uses exact signs at strict inequality boundaries and very small nonzero denominators',()=>{expect(solve(['x^2=2','x>0'],['x']).candidates).toHaveLength(1);expect(solve(['x^2=0','x>0'],['x']).candidates).toHaveLength(0);const r=solve(['x=1/1000000000000000000','1/x>0'],['x']);expect(r.candidates).toHaveLength(1);});
++ it('reduces more than two variables before nonlinear elimination',()=>{const r=solve(['y=2*x','z=y+1','w=z+1','x^2=2','x>0'],['x','y','z','w']);expect(r.reducedVariables).toBe(1);expect(r.candidates).toHaveLength(1);expect(r.candidates[0].values[3]).toBeCloseTo(2*Math.sqrt(2)+2,10);});
++ it('certifies paired roots using a common separating generator',()=>{const r=solve(['x^2+y^2=5','x*y=2'],['x','y']);expect(r.candidates).toHaveLength(4);for(const c of r.candidates)expect(c.values[0]*c.values[1]).toBeCloseTo(2,10);});
++ it('handles tangent, empty, and four-way conic intersections',()=>{expect(solve(['x^2+y^2=1','x=1'],['x','y']).candidates).toHaveLength(1);expect(solve(['x^2+y^2=1','x=2'],['x','y']).candidates).toHaveLength(0);expect(solve(['x^2/9+y^2/4=1','x^2/4+y^2/9=1'],['x','y']).candidates).toHaveLength(4);});
++ it('combines independent nonlinear blocks without losing solutions',()=>{expect(solve(['x^2=2','y^2=3','z=x+y'],['x','y','z']).candidates).toHaveLength(4);});
++ it('resolves real singularities and affine squared locks exactly',()=>{for(const sources of [['x^2+y^2=0'],['x^2+y^4=0'],['(x+y-1)^2+(x-y)^2=0'],['(x+y)^2=0','(x-y)^2=0']]){const r=solve(sources,['x','y']);expect(r.candidates).toHaveLength(1);}expect(solve(['x^2+y^2+1=0'],['x','y']).candidates).toHaveLength(0);});
++ it('separates close coupled roots and rejects all incompatible overdetermined candidates',()=>{const r=solve(['x*(x-0.0000005)=0','y=x+0.0000001'],['x','y']);expect(r.candidates).toHaveLength(2);expect(r.candidates[1].values[1]).toBeCloseTo(0.0000006,13);expect(solve(['x^2=2','y=x','x+y=0'],['x','y']).candidates).toHaveLength(0);});
++ it('decides exact zero boundaries between algebraically dependent blocks',()=>{expect(solve(['x^2=2','y^2=8','x>0','y>0','2*x-y>0'],['x','y']).candidates).toHaveLength(0);expect(solve(['x^2=2','y^2=8','x>0','y>0','2*x-y>=0'],['x','y']).candidates).toHaveLength(1);});
++ it('supports radicals with principal-root signs',()=>{expect(solve(['x=sqrt(2)'],['x']).candidates).toHaveLength(1);expect(solve(['x=sqrt(1/2)'],['x']).candidates[0].values[0]).toBeCloseTo(Math.sqrt(0.5),12);expect(solve(['sqrt(x)=-1'],['x']).candidates).toHaveLength(0);expect(solve(['abs(x)=2'],['x']).candidates).toHaveLength(2);});
++ it('preserves affine families with explicit domains',()=>{const r=solveExactSystem(['y=2*x','x>0'],['x','y'],{initial:[1,2]});expect(r.kind).toBe('family');expect(r.family?.parameters).toHaveLength(1);expect(r.family?.conditions.some(s=>s.includes('>'))).toBe(true);expect(r.candidates[0].values[1]).toBe(2*r.candidates[0].values[0]);});
++ it('does not certify unsupported functions or exhausted budgets as contradictions',()=>{for(const r of [solveExactSystem(['sin(x)=0'],['x']),solveExactSystem(['x^2=2'],['x'],{deadline:Date.now()-10})]){expect(r.complete).toBe(false);expect(r.kind).toBe('unresolved');expect(r.reasonCode).toBeTruthy();}});
++ it('validates root and coordinate certificates against tampering',()=>{const sources=['x^2=2','x>0'],vars=['x'],r=solve(sources,vars),c=r.candidates[0],bad=structuredClone(c.certificate);Object.values(bad.roots)[0].polynomial=['-3','0','1'];expect(()=>validateExactCertificate(bad,c.values,sources,vars)).toThrow();expect(()=>validateExactCertificate(c.certificate,[7],sources,vars)).toThrow();});
++ it('caches completed elimination without sharing mutable result objects',()=>{const a=solve(['x^2=7'],['x']);a.candidates.length=0;const b=solveExactSystem(['x^2=7'],['x']);expect(b.cacheHit).toBe(true);expect(b.candidates).toHaveLength(2);});
++});
+diff --git a/apps/mindmap-notes/src/drawing/constraints/symbolicGeometry.ts b/apps/mindmap-notes/src/drawing/constraints/symbolicGeometry.ts
+new file mode 100644
+--- /dev/null
++++ b/apps/mindmap-notes/src/drawing/constraints/symbolicGeometry.ts
+@@ -0,0 +1,131 @@
++import type {ConstraintProblem,Condition} from './types';
++import {expandConditions} from './compile';
++import {latexToExpression} from '../latex';
++import {scalarRelation} from './scalarRelations';
++import {parseVectorRelation} from './vectors';
++import {entity,conditionValueSource} from './input';
++import {substituteNames} from '../parameters';
++
++export const sum=(v:string[])=>v.length?v.map(x=>`(${x})`).join('+'):'0';
++export const difference=(a:string[],b:string[])=>a.map((x,i)=>`(${x})-(${b[i]})`);
++export const productSum=(a:string[],b:string[])=>sum(a.map((x,i)=>`(${x})*(${b[i]})`));
++export const crossSource=(a:string[],b:string[])=>[0,1,2].map(i=>`(${a[(i+1)%3]})*(${b[(i+2)%3]})-(${a[(i+2)%3]})*(${b[(i+1)%3]})`);
++const square=(a:string[])=>productSum(a,a);
++/** Exact trigonometric constants for written special angles or written trig
++ * values. No near-integer recognition of a floating cosine is performed. */
++export function angleConstant(c:Condition,sine=false):string|undefined{
++ const m=c.source.trim().match(/^(sin|cos|tan)(?:Acute|Obtuse)?\s*\([\s\S]*\)\s*=\s*([\s\S]+)$/i);
++ if(m){const v=`(${latexToExpression(m[2])})`,s=m[1].toLowerCase();if(sine)return s==='sin'?v:s==='cos'?`sqrt(1-${v}^2)`:`abs(${v})/sqrt(1+${v}^2)`;
++  const cos=s==='cos'?v:s==='sin'?`sqrt(1-${v}^2)`:`1/sqrt(1+${v}^2)`;return s==='cos'||(c.value??0)<=90?cos:`-(${cos})`;
++ }
++ const written=c.source.split('=').at(-1)?.trim(),radians=written?.match(/^rad\(([\s\S]*)\)$/i);if(radians||written&&/\\pi|\bpi\b|π/.test(written))return `${sine?'sin':'cos'}(${latexToExpression(radians?.[1]??written!)})`;
++ const cos:Record<number,string>={0:'1',30:'sqrt(3)/2',45:'sqrt(2)/2',60:'1/2',90:'0',120:'-1/2',135:'-sqrt(2)/2',150:'-sqrt(3)/2',180:'-1',210:'-sqrt(3)/2',225:'-sqrt(2)/2',240:'-1/2',270:'0',300:'1/2',315:'sqrt(2)/2',330:'sqrt(3)/2'};
++ return cos[((sine?90-(c.value??0):c.value??0)%360+360)%360]??(sine&&c.value===180?'0':undefined);
++}
++function exactValue(c:Condition|undefined,fallback:number|undefined){
++ const source=c&&conditionValueSource(c);
++ if(source&&c&&!/^(sin|cos|tan)/i.test(c.source))return latexToExpression(source);
++ return String(fallback??0);
++}
++/** Shared polynomial/semialgebraic compilation for planar and spatial geometry.
++ * Unsupported checks remain explicit; they are never frozen as constants. */
++export function symbolicGeometry(problem:ConstraintProblem,point:(name:string)=>string[]){
++ const sources:string[]=[],unsupported:string[]=[],owners=new Map(problem.conditions.map(c=>[c.id,c]));
++ const v=(r:string[])=>r.length===1?point(r[0]):difference(point(r[1]),point(r[0]));
++ const normal=(r:string[])=>crossSource(difference(point(r[1]),point(r[0])),difference(point(r[2]),point(r[0])));
++ const direction=(r:string[])=>r.length===1?point(r[0]):r.length===2?v(r):normal(r);
++ const nonzero=(a:string[])=>sources.push(`${square(a)}>0`);
++ const zero=(a:string[])=>sources.push(...a.map(x=>`${x}=0`));
++ for(const c of expandConditions(problem)){
++  const r=c.refs,owner=owners.get(c.owner),value=exactValue(owner,c.value),a=r[0]?direction(r[0]):[],b=r[1]?direction(r[1]):[];
++  try{
++   switch(c.kind){
++    case 'distance':sources.push(`${square(v(r[0]))}=(${value})^2`,`(${value})>0`);break;
++    case 'equal':case 'ratio':sources.push(`${square(v(r[0]))}=(${c.kind==='ratio'?value:'1'})^2*(${square(v(r[1]))})`);nonzero(v(r[0]));nonzero(v(r[1]));break;
++    case 'vectorSum':zero(difference(point(r[0][0]).map((x,i)=>`(${x})+(${point(r[0][1])[i]})`),point(r[0][2]).map((x,i)=>`(${x})+(${point(r[0][3])[i]})`)));break;
++    case 'vectorRelation':{const coefficients=c.coefficientSources??(owner?parseVectorRelation(owner.source,s=>entity(s,problem.points)).coefficientSources:undefined);if(!coefficients){unsupported.push(owner?.source??'向量系数');break;}zero([0,1,2].map(axis=>sum(r.map((ref,i)=>`(${coefficients[i]})*(${v(ref)[axis]})`))));break;}
++    case 'division':{const t=`(${value})/(1+(${value}))`;zero(difference(point(r[0][0]),point(r[1][0]).map((x,i)=>`(${x})+(${t})*(${v(r[1])[i]})`)));nonzero(v(r[1]));break;}
++    case 'vectorDot':sources.push(`${productSum(a,b)}=${value}`);break;
++    case 'parallel':case 'perpendicular':{
++     nonzero(a);nonzero(b);const same=r[0].length===r[1].length;
++     if((c.kind==='parallel')===same)zero(crossSource(a,b));else sources.push(`${productSum(a,b)}=0`);break;
++    }
++    case 'collinear':zero(crossSource(difference(point(r[0][1]),point(r[0][0])),difference(point(r[0][2]),point(r[0][0]))));nonzero(difference(point(r[0][1]),point(r[0][0])));break;
++    case 'coplanar':sources.push(`${productSum(normal(r[0]),difference(point(r[0][3]),point(r[0][0])))}=0`);nonzero(normal(r[0]));break;
++    case 'onSegment':{
++     const d=v(r[1]),delta=difference(point(r[0][0]),point(r[1][0]));nonzero(d);zero(crossSource(d,delta));sources.push(`${productSum(delta,d)}>=0`,`(${square(d)})-(${productSum(delta,d)})>=0`);break;
++    }
++    case 'pointLineDistance':{
++     const d=v(r[1]),delta=difference(point(r[0][0]),point(r[1][0]));nonzero(d);sources.push(`${square(crossSource(delta,d))}=(${value})^2*(${square(d)})`,`(${value})>=0`);break;
++    }
++    case 'pointPlaneDistance':{
++     const n=normal(r[1]),delta=difference(point(r[0][0]),point(r[1][0]));nonzero(n);sources.push(`(${productSum(delta,n)})^2=(${value})^2*(${square(n)})`,`(${value})>=0`);break;
++    }
++    case 'vertexAngle':case 'lineAngle':case 'linePlaneAngle':{
++     const x=c.kind==='vertexAngle'?difference(point(r[0][0]),point(r[1][0])):a,y=c.kind==='vertexAngle'?difference(point(r[2][0]),point(r[1][0])):b;
++     const k=owner&&angleConstant(owner,c.kind==='linePlaneAngle');if(k===undefined){unsupported.push(owner?.source??c.kind);break;}nonzero(x);nonzero(y);
++     sources.push(`(${productSum(x,y)})^2=(${k})^2*(${square(x)})*(${square(y)})`);
++     if(c.kind==='vertexAngle')sources.push(`(${productSum(x,y)})*(${k})>=0`);break;
++    }
++    case 'regularPolygon':{
++     const names=r[0],n=names.length,ratios:Record<number,string[]>={3:['0','1'],4:['0','1','2'],5:['0','1','(3+sqrt(5))/2'],6:['0','1','3','4'],8:['0','1','2+sqrt(2)','3+2*sqrt(2)','4+2*sqrt(2)']},factors=ratios[n];
++     if(!factors){unsupported.push(owner?.source??'正多边形');break;}const side=square(difference(point(names[1]),point(names[0])));sources.push(`${side}>0`);nonzero(normal(names));
++     for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){const k=Math.min(j-i,n-j+i);sources.push(`${square(difference(point(names[j]),point(names[i])))}=(${factors[k]})*(${side})`);}break;
++    }
++    case 'dihedral':{
++     const axis=v(r[0]),x=difference(point(r[1][0]),point(r[0][0])),y=difference(point(r[2][0]),point(r[0][0])),aa=square(axis),u=x.map((v,i)=>`(${aa})*(${v})-(${productSum(x,axis)})*(${axis[i]})`),w=y.map((v,i)=>`(${aa})*(${v})-(${productSum(y,axis)})*(${axis[i]})`),k=owner&&angleConstant(owner);
++     if(k===undefined){unsupported.push(owner?.source??'二面角');break;}nonzero(axis);nonzero(u);nonzero(w);sources.push(`(${productSum(u,w)})^2=(${k})^2*(${square(u)})*(${square(w)})`,`(${productSum(u,w)})*(${k})>=0`);break;
++    }
++    case 'scalarEquation':{const parsed=scalarRelation(owner!.source,problem.points);if(parsed.measures.some(m=>m.angle)){unsupported.push(owner!.source);break;}const replacements=Object.fromEntries(parsed.measures.map(m=>[m.name,`sqrt(${square(difference(point(m.points[1]),point(m.points[0])))})`]));sources.push(substituteNames(parsed.prepared,replacements));break;}
++    case 'volume':{
++     const names=r[0];if(c.solid==='pyramid'||c.solid==='prism'){
++      const base=c.solid==='pyramid'?names.slice(1):names.slice(0,names.length/2),top=c.solid==='pyramid'?names[0]:names[names.length/2];
++      const areaVector=[0,1,2].map(axis=>sum(base.slice(1,-1).map((_,i)=>crossSource(difference(point(base[i+1]),point(base[0])),difference(point(base[i+2]),point(base[0])))[axis])));
++      const triple=productSum(areaVector,difference(point(top),point(base[0])));sources.push(`abs(${triple})=${c.solid==='pyramid'?6:2}*(${value})`,`(${value})>0`);if(base.length>3)unsupported.push(owner?.source??'多边形体积');
++     }else if(['cylinder','cone','coneFrustum'].includes(c.solid!)){
++      const [o,t,a,b]=names,radius=square(difference(point(a),point(o))),height=`sqrt(${square(difference(point(t),point(o)))})`,top=b?square(difference(point(b),point(t))):radius;
++      sources.push(`pi*(${c.solid==='cone'?`(${radius})/3`:c.solid==='coneFrustum'?`((${radius})+sqrt((${radius})*(${top}))+(${top}))/3`:radius})*(${height})=${value}`,`(${value})>0`);
++     }else unsupported.push(owner?.source??'曲面体积');break;
++    }
++    case 'area':{
++     if(r[0].length===3){const n=normal(r[0]);sources.push(`${square(n)}=4*(${value})^2`,`(${value})>0`);}else unsupported.push(owner?.source??'多边形面积');break;
++    }
++    case 'similar':{
++     const [x,y]=r,u=square(difference(point(x[1]),point(x[0]))),w=square(difference(point(y[1]),point(y[0])));sources.push(`${u}>0`,`${w}>0`);
++     for(let i=0;i<x.length;i++)for(let j=i+1;j<x.length;j++)sources.push(`(${square(difference(point(x[j]),point(x[i])))})*(${w})=(${square(difference(point(y[j]),point(y[i])))})*(${u})`);break;
++    }
++    case 'homothety':{
++     const [base,top]=r,x=difference(point(base[1]),point(base[0])),y=difference(point(top[1]),point(top[0])),ratio=`(${productSum(x,y)})/(${square(x)})`;nonzero(x);
++     for(let i=1;i<base.length;i++)zero(difference(difference(point(top[i]),point(top[0])),difference(point(base[i]),point(base[0])).map(v=>`(${ratio})*(${v})`)));break;
++    }
++    case 'onCurve':case 'curveDefinition':{
++     const curve=problem.curves?.find(k=>k.id===c.curve);if(!curve){unsupported.push('曲线定义缺失');break;}
++     if(curve.type!=='circle'||curve.method==='threePoint'){unsupported.push(`曲线 ${curve.name}`);break;}
++     const center=point(curve.points[0]),radius=curve.method==='centerRadius'?`(${curve.valueSource??curve.value})^2`:square(difference(point(curve.points[1]),center));sources.push(`${radius}>0`);
++     const names=c.kind==='onCurve'?[r[0][0]]:curve.points.slice(1);
++     for(const name of names)sources.push(`${square(difference(point(name),center))}=${radius}`);
++     if(curve.plane){const n=normal(curve.plane);nonzero(n);for(const name of [...names,...curve.points])sources.push(`${productSum(difference(point(name),point(curve.plane[0])),n)}=0`);}break;
++    }
++    case 'circumradius':{
++     const p=r[0],u=difference(point(p[1]),point(p[0])),w=difference(point(p[2]),point(p[0])),n=crossSource(u,w);nonzero(n);
++     sources.push(`(${square(u)})*(${square(w)})*(${square(difference(point(p[2]),point(p[1])))})=4*(${value})^2*(${square(n)})`,`(${value})>0`);break;
++    }
++    case 'concyclic':{
++     const p=r[0],origin=point(p[0]),u=difference(point(p[1]),origin),w=difference(point(p[2]),origin),uu=square(u),ww=square(w),uw=productSum(u,w),det=`(${uu})*(${ww})-(${uw})^2`,alpha=`(${ww})*((${uu})-(${uw}))/(2*(${det}))`,beta=`(${uu})*((${ww})-(${uw}))/(2*(${det}))`,delta=u.map((x,i)=>`(${alpha})*(${x})+(${beta})*(${w[i]})`),radius=square(delta);
++     sources.push(`${det}>0`);for(const name of p){const d=difference(point(name),origin);sources.push(`${productSum(d,crossSource(u,w))}=0`,`${square(difference(d,delta))}=${radius}`);}if(c.value!==undefined)sources.push(`${radius}=(${value})^2`,`(${value})>0`);break;
++    }
++    case 'sphere':nonzero(difference(point(r[0][1]),point(r[0][0])));break;
++    case 'cylinder':case 'cone':case 'coneFrustum':nonzero(difference(point(r[0][1]),point(r[0][0])));nonzero(difference(point(r[0][2]),point(r[0][0])));unsupported.push(owner?.source??c.kind);break;
++    default:unsupported.push(owner?.source??c.kind);
++   }
++  }catch{unsupported.push(owner?.source??c.kind);}
++ }
++ // Original polygon validity (including self-intersection) is also checked by
++ // the geometry evaluator. Until encoded here it prevents a coverage claim.
++ for(const c of problem.conditions.filter(c=>c.enabled)){
++  if(['parallelogram','rectangle','rhombus','square','cube'].includes(c.kind)){const p=c.refs[0];nonzero(normal([p[0],p[1],p[3]]));if(c.kind==='cube')sources.push(`(${productSum(normal([p[0],p[1],p[3]]),difference(point(p[4]),point(p[0])))})!=0`);}
++  else if(['prism','pyramid','frustum'].includes(c.kind)){const p=c.refs[0],base=c.kind==='pyramid'?p.slice(1):p.slice(0,p.length/2),top=c.kind==='pyramid'?p[0]:p[p.length/2];nonzero(normal(base));sources.push(`(${productSum(normal(base),difference(point(top),point(base[0])))})!=0`);if(base.length>3||c.kind==='frustum')unsupported.push(`${c.source}: 多边形有效性仍需回代`);}
++  else if(['congruent','similar'].includes(c.kind))for(const polygon of c.refs){nonzero(normal(polygon));if(polygon.length>3)unsupported.push(`${c.source}: 多边形有效性仍需回代`);}
++ }
++ return {sources,unsupported:[...new Set(unsupported)],complete:!unsupported.length};
++}
+diff --git a/apps/mindmap-notes/src/drawing/constraints/spatialExact.ts b/apps/mindmap-notes/src/drawing/constraints/spatialExact.ts
+new file mode 100644
+--- /dev/null
++++ b/apps/mindmap-notes/src/drawing/constraints/spatialExact.ts
+@@ -0,0 +1,11 @@
++import type {ConstraintProblem,Positions} from './types';
++import {symbolicGeometry} from './symbolicGeometry';
++export function symbolicSpatialEquations(problem:ConstraintProblem,gauge=true){
++ const tokens=problem.points.flatMap((_,i)=>[0,1,2].map(k=>`q_${i*3+k}`)),point=(name:string)=>{const i=problem.points.indexOf(name);if(i<0)throw Error('未知点');return tokens.slice(i*3,i*3+3);};
++ const compiled=symbolicGeometry(problem,point),[a,b,c]=problem.points;
++ if(gauge&&a)compiled.sources.push(...point(a).map(v=>`${v}=0`));
++ if(gauge&&b)compiled.sources.push(`${point(b)[1]}=0`,`${point(b)[2]}=0`,`${point(b)[0]}>=0`);
++ if(gauge&&c)compiled.sources.push(`${point(c)[2]}=0`,`${point(c)[1]}>=0`);
++ return {...compiled,tokens,point};
++}
++export function spatialExactValues(problem:ConstraintProblem,p:Positions){return problem.points.flatMap(n=>p[n]);}
+diff --git a/apps/mindmap-notes/src/drawing/constraints/exactDisplay.ts b/apps/mindmap-notes/src/drawing/constraints/exactDisplay.ts
+new file mode 100644
+--- /dev/null
++++ b/apps/mindmap-notes/src/drawing/constraints/exactDisplay.ts
+@@ -0,0 +1,12 @@
++import type {ConstraintProblem,SolutionBranch} from './types';
++import {substituteNames} from '../parameters';
++export function exactCoordinateSource(branch:SolutionBranch,id:string,problem?:ConstraintProblem):string|undefined{
++ const known=branch.exactValues?.[id]?.expression;if(known)return known;
++ if(!problem||!branch.exactCertificate)return;
++ const originals=new Set(problem.planar?.document.objects.filter(o=>o.kind==='point').map(o=>o.symbol??o.name)??[]);
++ const ids=[...(problem.planar?.unknowns.map(u=>u.id)??[]),...problem.points.filter(n=>!originals.has(n)).flatMap(n=>[0,1].map(k=>`point.${n}.${k}`))];
++ const index=ids.indexOf(id);if(index<0)return;
++ const c=branch.exactCertificate,token=c.variables[index],expression=c.assignments[token];
++ if(!expression)return;
++ return substituteNames(expression,Object.fromEntries(Object.entries(c.roots).map(([name,r],i)=>[name,r.expression?`(${r.expression})`:`t_${i+1}`])));
++}
+diff --git a/apps/mindmap-notes/src/drawing/constraints/exactGeometry.test.ts b/apps/mindmap-notes/src/drawing/constraints/exactGeometry.test.ts
+new file mode 100644
+--- /dev/null
++++ b/apps/mindmap-notes/src/drawing/constraints/exactGeometry.test.ts
+@@ -0,0 +1,24 @@
++import {describe,it,expect} from 'vitest';
++import {solveConstraints} from './solver';
++import {parseCondition} from './input';
++import {evaluator,flatten} from './compile';
++import {symbolicSpatialEquations} from './spatialExact';
++import {solveExactSystem,validateExactCertificate} from './exactSystem';
++import {solutionSetObject,validateSolutionSet} from './document';
++import type {ConstraintProblem} from './types';
++function problem(names:string,conditions:string[],mode:'plane'|'spatial'='spatial'):ConstraintProblem{const points=names.split(' ');return {mode,points,segments:[],conditions:conditions.map(s=>parseCondition(s,points))};}
++describe('exact geometric compilation',()=>{
++ it('certifies a spatial triangle with written radical lengths',()=>{const p=problem('A B C',['AB=sqrt(2)','AC=2','BC=sqrt(2)']),r=solveConstraints({id:1,problem:p,budget:2000});expect(r.status).toBe('solved');expect(r.exactAnalysis?.certified,r.exactAnalysis?.reason).toBe(true);expect(r.branches[0].exactCertificate).toBeDefined();validateSolutionSet(solutionSetObject(p,r));});
++ it('preserves numeric operands inside function calls',()=>{const p=problem('A B C',['distance(A,B,sqrt(2))','distance(A,C,2)','distance(B,C,sqrt(2))']),s=symbolicSpatialEquations(p);expect(s.sources.join(' ')).toContain('sqrt(2)');const r=solveExactSystem(s.sources,s.tokens,{deadline:Date.now()+5000});expect(r.complete,r.reason).toBe(true);expect(r.candidates).toHaveLength(1);});
++ it('retains exact fractional vector coefficients in the common compiler',()=>{const p=problem('A B P',['AB=3','vectorRelation(vec(AP)=vec(AB)/3)']),s=symbolicSpatialEquations(p),r=solveExactSystem(s.sources,s.tokens,{deadline:Date.now()+5000});expect(s.complete).toBe(true);expect(r.complete,r.reason).toBe(true);expect(r.candidates[0].values[6]).toBe(1);});
++ it('certifies line, segment-range and zero-distance incidence without changing the original checks',()=>{const p=problem('A B P',['AB=2','AP=0.5','onSegment(P,A,B)']),r=solveConstraints({id:1,problem:p,budget:2000});expect(r.complete).toBe(true);expect(r.branches).toHaveLength(1);expect(evaluator(p).verify(flatten(p.points,r.branches[0].positions)).valid).toBe(true);validateSolutionSet(solutionSetObject(p,r));});
++ it('represents square and triangle conditions through the same polynomial layer',()=>{const p=problem('A B C D',['square(A,B,C,D)','AB=2'],'plane'),r=solveConstraints({id:1,problem:p,budget:2000});expect(r.exactAnalysis?.certified,r.exactAnalysis?.reason).toBe(true);expect(r.branches).toHaveLength(2);validateSolutionSet(solutionSetObject(p,r));});
++ it('validates a spatial motion certificate against intrinsic conditions without imposing a new coordinate frame',()=>{const p=problem('A B C P',['AB=3','AC=4','BC=5','AP=2','coplanar(A,B,C,P)']),s=symbolicSpatialEquations(p,false),add=['q_0=0','q_1=0','q_2=0','q_3=3','q_4=0','q_5=0','q_6=0','q_7=4','q_8=0','q_9=1'],r=solveExactSystem([...s.sources,...add],s.tokens,{deadline:Date.now()+5000});expect(r.complete,r.reason).toBe(true);expect(r.candidates).toHaveLength(2);for(const c of r.candidates)validateExactCertificate(c.certificate,c.values,s.sources,s.tokens);});
++ it('tracks the requested side when exact spatial motion has two algebraic candidates',()=>{
++  const p=problem('A B C P',['AB=3','AC=4','BC=5','AP=2','coplanar(A,B,C,P)']),previous=solveConstraints({id:1,problem:p,budget:2000});
++  previous.branches[0].positions={A:[0,0,0],B:[3,0,0],C:[0,4,0],P:[2,0,0]};previous.branches[0].reference=['A','B','C'];
++  const r=solveConstraints({id:2,problem:p,previous,budget:1500,move:{point:'P',target:[1,Math.sqrt(3),0],branch:0}});
++  expect(r.branches[0].positions.P[1]).toBeGreaterThan(0);expect(r.branches[0].exactCertificate).toBeDefined();validateSolutionSet(solutionSetObject(p,r));
++ });
++ it('handles prescribed external radius without converting its radical source to a decimal',()=>{const p=problem('A B C',['AB=2','AC=2','circumradius(ABC)=sqrt(2)']),s=symbolicSpatialEquations(p);expect(s.complete).toBe(true);const r=solveExactSystem(s.sources,s.tokens,{deadline:Date.now()+5000});expect(r.kind,r.reason).toBe('finite');expect(r.candidates.length).toBeGreaterThan(0);for(const c of r.candidates)validateExactCertificate(c.certificate,c.values,s.sources,s.tokens);});
++});
+diff --git a/docs/解析求解优化进度.md b/docs/解析求解优化进度.md
+new file mode 100644
+--- /dev/null
++++ b/docs/解析求解优化进度.md
+@@ -0,0 +1,104 @@
++# MathDraw 解析求解优化进度
++
++## 2026-10-24：第一批结果一致性修复
++
++优化前已将当前绘图模块与相关脚本、文档备份到 `DrChuan/Mathdraw` 的 main，提交 `c941d07050dc530de835f42d0302dac59be8829e`。本地绘图模块位于 `枝间/src/drawing`，在远端对应 `apps/mindmap-notes/src/drawing`；本轮不涉及笔记功能代码。
++
++本批修改仍保留在本地，未发布安装包。
++
++### 已完成
++
++- 切换二维固定参照时，保留未改变坐标所对应的 exactValues；不修改传入的旧结果。
++- 二维数值拖动及参数联动后清除解集完整性声明；受影响分支不再携带旧代数根，其他分支仍保留原信息。
++- 对带精确根的候选，除原有坐标与参数比较外，还比较多项式和隔离区间，防止不同根因绘图容差被合并。这是当前单轮确定性隔离结果的保守去重，并非跨多项式、跨精度的通用代数数相等判定。
++- 二元消元候选仍照常输出，但在配对尚依赖浮点回代期间不宣称解集穷尽。浮点二次曲线求交也采用相同原则。
++- 拖动请求拒绝不存在的点，避免进入模型求值过程。
++
++### 验证
++
++新增六项针对性测试：换参照保留代数根、近邻根不合并、调参后完整性失效、拖动后完整性失效、二元候选保留、二次曲线交点保留。
++
++绘图目录下 24 个测试文件、413 项测试全部通过；TypeScript 类型检查与前端生产构建通过。未做桌面安装包和人工 UI 检查。测试通过不能证明所有几何输入均保持兼容。
++
++### 下一批重点
++
++1. 二元代数点配对的精确认证，以及分母非零、严格不等式等筛选的可靠判定。
++2. 一元候选经过浮点原条件过滤后的完整性依据；补充未认证、预算耗尽和无法翻译条件等结构化状态。
++3. 保存恢复时的精确根证书校验。
++4. 精确常量、表达式和有理隔离端点贯通，再进行线性降维与统一约束编译。
++
++本批收紧完整性标记是过渡措施，后续认证后端完成后，应依据证明恢复相应的穷尽声明，而不是永久降低求解能力。
++
++## 2026-10-24：第二批，共用精确计算与作图接入
++
++本批在第一批基础上扩展计算能力，不更改原有输入文件版本，不发布安装包。相关源码仍在本地；第一批备份提交仍为 `c941d07050dc530de835f42d0302dac59be8829e`。
++
++### 与十项优先事项的对应
++
++| 原优先事项 | 本次实现 | 范围说明 |
++| --- | --- | --- |
++| 1. 精度、完整性与无解判定 | 增加 exactAnalysis，区分有限代数解、连续族、未完成，以及认证状态；数值更新使证书失效；导入时检查精度依据 | 旧几何构造的 complete 仍描述其有限候选枚举，不等同新后端的认证；界面区分精确认证与回代后的代数表示 |
++| 2. 配对、筛选与去重 | 以共同代数生成元和坐标有理式配对；用精确符号判定处理分母和不等式；近邻代数根不按绘图容差合并 | 旧消元回退仍可提供候选，但不再承担精确穷尽结论 |
++| 3. 精确表示贯通 | AST 保留数字字面量及命名常数；BigInt 有理数、整数多项式、有理隔离端点；根式与向量系数源码进入精确编译 | 历史数据已经只剩浮点数的内容不能恢复其原始精确意图；真正含 π 的系数不能擅自转为有理数 |
++| 4. 统一约束编译 | 二维和空间共用 symbolicGeometry，输出等式、非零及符号条件；保留平方和清分母的定义域；角度多值在分流前枚举 | 未覆盖的图形或定义明确记录 translation 原因，继续原构造或数值路径 |
++| 5. 线性降维 | 精确行消元、代入、再次消元；从多项式基中继续提取线性关系 | 一元、二元限制不再按原始变量数触发；线性从属变量可先大幅消去 |
++| 6. 常用构造精确化 | 有理二次曲线、距离、圆、直线、部分正多边形、矩形/正方形、部分圆球交点及半径条件进入精确后端 | 原特殊构造和浮点求交保留；超出覆盖或预算时不丢弃原有功能 |
++| 7. 耦合块求解 | 变量—条件分块；小规模 Gröbner 消元；分离生成元；Sturm 实根隔离；原条件的代数回代 | 包括不等式引起的块间关联，避免把相关代数数当作独立近似数比较 |
++| 8. 连续族与退化 | 线性参数关系与有效域、非线性隐式关系显式保存；用精确截面生成认证样本；半正定二次方程配方处理相切/极值锁定 | 保存隐式族不等于已完成全局连通分支分解；显示的样本不是全部解 |
++| 9. 自由度与交互 | 二维采用高阶局部检查，只扣除变量实际允许的欧氏运动；有限认证解锁定形状自由度；平面/空间移动与调参先尝试精确求解 | 双候选时优先匹配鼠标目标侧，再保持连续性；不能认证时明确回退 |
++| 10. 性能与续算 | 根式公共子表达式复用、常量根式平方化简、分式约分、再次分块；有界结果缓存和可恢复的消元基任务 | 数学枚举与 12 个构型的展示上限分开；缓存和续算在当前 Worker 生命周期内有效 |
++
++### 新计算核心
++
++新增模块位于 `枝间/src/drawing/constraints/`，远端对应 `apps/mindmap-notes/src/drawing/constraints/`：
++
++- `exactArithmetic.ts`：约分有理数、多项式运算、Sturm 序列、精确隔离区间、根与符号校验。很小的非零根按相对精度细化；大分数转换到显示小数时避免 Infinity/Infinity。
++- `exactSystem.ts`：受预算保护的表达式编译、根式辅助变量、精确线性降维、半正定二次式实零集化简、耦合分块、Gröbner 基、共同生成元、参数/隐式族、证书与缓存。
++- `symbolicGeometry.ts`：二维/空间共用几何编译。支持的主干包括长度、比例、分点、向量、点积、共线共面、线段范围、平行垂直、特殊角/给定三角值、二面角、部分面积体积、外接半径与共圆等。
++- `spatialExact.ts`：空间坐标规范与空间编译入口；拖动验证使用内在条件，不强加新的初始坐标框架。
++- `exactDisplay.ts`：优先展示保存的精确表达，不从小数猜测根式作为证明。
++
++`planarSymbolic.ts` 扩大原定义翻译，保留分散定义的依赖，补充命名线段/射线范围和曲线显式范围。固定特殊角旋转、内切圆等有了精确表达入口；复杂展开仍受预算保护。
++
++`expression.ts` 的改动仅增加字面量/常数信息及内部生成表达式的受控解析限额，默认数值求值行为和用户输入限额不变。MathDraw 使用这份共享解析器；未改笔记应用的业务功能。
++
++### 结果和证书
++
++分支可保存 `exactCertificate`：原始编译条件、变量次序、生成元的整数多项式及有理隔离区间、各变量关于生成元的有理表达式。根式主值和非零条件同时进入校验。
++
++保存/恢复会检查根隔离是否唯一、根式显示是否与该根一致、坐标是否对应证书、证书是否对应当前条件并严格满足编译关系。带认证完整性声明的结果还会重新核对有限解枚举。单独的“小数回代通过”不会被升级为这种认证。
++
++拖动或调参产生的新证书可以包含原条件之外的驱动条件，原条件必须保持为证书条件的前缀。固定参照未改变坐标时保留证书；数值校正后不沿用旧证书和完整性声明。
++
++### 新增验证情形
++
++- 十进制精度超过二进制整数范围，以及 400 位小数产生的大分数。
++- 重根、没有简单根式的实根、非常小的非零根、近邻根与耦合根。
++- 分母消去增根、嵌套除零、很小的非零分母、严格不等式边界。
++- 独立块之间数值相近但精确相等的边界，如 `2√2−√8=0`。
++- 多于两个原始变量的线性降维，独立块的全部组合、相切及四交点二次曲线。
++- 根式主值、绝对值、写明的特殊三角常数、合法的 π 公共因子消去。
++- 半正定二次式的单点零集，避免一阶 Jacobian 虚报自由度。
++- 连续圆的隐式族及认证截面，不要求人为设置搜索框。
++- 16 个数学解全部保存，但仅显示 12 个构型。
++- 换参照、参数改变、平面和空间拖动、候选侧别、保存恢复及损坏证书拒绝。
++- 以函数形式输入的根式长度、精确向量分数、空间三角形和外接半径。
++
++### 尚不能承诺的范围
++
++本批处理了优先事项中的计算架构和已确认缺陷，但不能称为“所有输入均已完成解析求解”。以下仍是明确的能力边界：
++
++1. 一般三角/指数/对数方程、不能合法消去的超越系数，没有通用的解析穷尽后端；保留原有数值求解。
++2. 并非所有几何类型、任意派生对象或任意旋转参数都已完成精确翻译。例如一般共球条件、任意多边形自交有效性及部分曲线特征条件仍可触发回退。
++3. 非线性耦合块当前限制六个变量；空间精确尝试限制十二个点；精确组合默认上限 256。次数、系数位数、项数和时间也有保护。触发限制是未完成，不是无解。
++4. 连续族已能保留精确参数或隐式关系，但未实现任意半代数集的全局连通分量分解和所有退化层的统一参数化。
++5. 数值回退与旧构造仍按原有容差校验；这些路径没有被包装成通用符号证明。尚未在桌面安装包中做人工交互验证。
++
++因此，后续扩展应继续增加精确翻译、退化分支分解和解集认证覆盖，不能只删除数值回退或放宽 complete 标记。
++
++### 本批最终验证与交付
++
++- 全工程 34 个测试文件、486 项测试通过，包括绘图和共享解析器的回归；类型检查与前端生产构建通过。
++- 额外覆盖了非负偶次项的实零集化简，如 `x²+y⁴=0`，不把该孤立实解当作自由曲线。
++- 完整补丁 `解析求解优化完整补丁.patch` 以优化前备份 `c941d07` 为基准，包含第一批和本批改动，方便审查、应用或回退。
++- 当前修改未推送、未发布安装包；未做桌面人工 UI 验证。测试通过不意味着已证明任意输入均不受影响，也不意味着上述能力边界已经消失。

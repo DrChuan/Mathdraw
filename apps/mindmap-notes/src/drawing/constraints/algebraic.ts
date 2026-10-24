@@ -1,11 +1,12 @@
 import { parseExpression } from '../expression';
 import type { AlgebraicValue } from './types';
+import {num} from './exactArithmetic';
 type Q={n:bigint;d:bigint};type P=Q[];
 const gcd=(a:bigint,b:bigint):bigint=>b?gcd(b,a%b):a<0n?-a:a;
 const q=(n:bigint,d=1n):Q=>{if(!d)throw Error('除数为零');const g=gcd(n,d);return {n:(d<0n?-n:n)/g,d:(d<0n?-d:d)/g};};
 const zero=q(0n),one=q(1n),plus=(a:Q,b:Q)=>q(a.n*b.d+b.n*a.d,a.d*b.d),neg=(a:Q)=>q(-a.n,a.d),times=(a:Q,b:Q)=>q(a.n*b.n,a.d*b.d),div=(a:Q,b:Q)=>q(a.n*b.d,a.d*b.n);
-const number=(x:Q)=>Number(x.n)/Number(x.d),text=(x:Q)=>x.d===1n?String(x.n):`(${x.n}/${x.d})`;
-function decimal(v:number):Q {const [mantissa,exponent='0']=String(v).toLowerCase().split('e'),digits=mantissa.split('.'),scale=(digits[1]?.length??0)-Number(exponent),n=BigInt(digits.join(''));return scale>=0?q(n,10n**BigInt(scale)):q(n*10n**BigInt(-scale));}
+const number=(x:Q)=>num(x),text=(x:Q)=>x.d===1n?String(x.n):`(${x.n}/${x.d})`;
+function decimal(v:number|string):Q {const [mantissa,exponent='0']=String(v).toLowerCase().split('e'),digits=mantissa.split('.'),scale=(digits[1]?.length??0)-Number(exponent),n=BigInt(digits.join(''));return scale>=0?q(n,10n**BigInt(scale)):q(n*10n**BigInt(-scale));}
 const clean=(p:P)=>{while(p.length>1&&!p.at(-1)!.n)p.pop();return p;};
 const add=(a:P,b:P)=>clean(Array.from({length:Math.max(a.length,b.length)},(_,i)=>plus(a[i]??zero,b[i]??zero)));
 const mul=(a:P,b:P)=>{if(a.length+b.length>20)throw Error('精确多项式次数超限');const p=Array(a.length+b.length-1).fill(zero) as P;a.forEach((v,i)=>b.forEach((w,j)=>p[i+j]=plus(p[i+j],times(v,w))));return clean(p);};
@@ -21,7 +22,8 @@ export function algebraicRoots(source:string,variable:string,constants:Record<st
     const parts=source.split('=');if(parts.length!==2||/[<>]/.test(source))return;
     type R={n:P;d:P};
     const walk=(a:ReturnType<typeof parseExpression>):R=>{
-      if(a.type==='number')return {n:[decimal(a.value)],d:[one]};
+      if(a.type==='number'&&a.constant)throw Error('非代数常数');
+      if(a.type==='number')return {n:[decimal(a.literal??a.value)],d:[one]};
       if(a.type==='variable'){if(a.name===variable)return {n:[zero,one],d:[one]};if(a.name in constants)return {n:[decimal(constants[a.name])],d:[one]};throw Error('未知符号');}
       if(a.type==='call')throw Error('非有理函数');
       if(a.type==='unary'){const r=walk(a.value);return {n:r.n.map(v=>times(v,q(BigInt(a.sign)))),d:r.d};}
@@ -54,7 +56,7 @@ export function algebraicRoots(source:string,variable:string,constants:Record<st
       if(n===1&&b-a<1e-12*Math.max(1,Math.abs(a),Math.abs(b))&&!(a<=0&&b>=0&&p[0].n)){const x=(a+b)/2;
         let expression:string|undefined;if(p.length===2)expression=text(neg(div(p[0],p[1])));
         if(p.length===3){const discriminant=plus(times(p[1],p[1]),neg(times(q(4n),times(p[2],p[0])))),a2=times(q(2n),p[2]),s=Math.sqrt(number(discriminant)),sign=Math.abs(number(div(plus(neg(p[1]),decimal(s)),a2))-x)<Math.abs(number(div(plus(neg(p[1]),decimal(-s)),a2))-x)?'+':'-';expression=`(-(${text(p[1])})${sign}sqrt(${text(discriminant)}))/(${text(a2)})`;}
-        roots.push({polynomial:coefficients,interval:[a,b],approximate:x,expression});continue;}
+        roots.push({polynomial:coefficients,interval:[a,b],rationalInterval:[text(lo),text(hi)],approximate:x,expression});continue;}
       const mid=div(plus(lo,hi),q(2n)),leftCount=variations(lo)-variations(mid);queue.push([mid,hi,n-leftCount],[lo,mid,leftCount]);
     }
     const rational=new Map<AlgebraicValue,Q>();
@@ -79,7 +81,8 @@ export function algebraicSystem(sources:string[],variables:[string,string],const
   const sum=(a:B,b:B,sign=1)=>{const p=new Map(a);for(const [k,v]of b)p.set(k,plus(p.get(k)??zero,sign===1?v:neg(v)));return tidy(p);};
   const product=(a:B,b:B)=>{const p:B=new Map();for(const [ka,x]of a)for(const [kb,y]of b){const i=ka.split(',').map(Number),j=kb.split(',').map(Number),u=i[0]+j[0],v=i[1]+j[1];if(u+v>12||Date.now()>deadline)throw Error('消元预算耗尽');const k=`${u},${v}`;p.set(k,plus(p.get(k)??zero,times(x,y)));}return tidy(p);};
   const walk=(a:ReturnType<typeof parseExpression>):R=>{
-    if(a.type==='number')return {n:constant(decimal(a.value)),d:constant(one)};
+    if(a.type==='number'&&a.constant)throw Error('非代数常数');
+      if(a.type==='number')return {n:constant(decimal(a.literal??a.value)),d:constant(one)};
     if(a.type==='variable'){const i=variables.indexOf(a.name);if(i>=0)return{n:new Map([[i===0?'1,0':'0,1',one]]),d:constant(one)};if(a.name in constants)return {n:constant(decimal(constants[a.name])),d:constant(one)};throw Error('未知符号');}
     if(a.type==='call')throw Error('非有理表达式');
     if(a.type==='unary'){const r=walk(a.value);return {n:new Map([...r.n].map(([k,v])=>[k,times(v,q(BigInt(a.sign)))])),d:r.d};}

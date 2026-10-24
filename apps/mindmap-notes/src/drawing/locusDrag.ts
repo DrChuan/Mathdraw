@@ -1,5 +1,5 @@
 import type { DrawingCurve, DrawingDocument, DrawingPoint, Vec2, Vec3 } from "./types";
-import { fromPlane, project, resolveGeometry, toPlane } from "./geometry";
+import { fromPlane, project, resolveLocusGeometry, toPlane } from "./geometry";
 import { exactLocus, locusDocument, naturalLocusParameter } from "./locus";
 import { conicPath } from "./conics";
 import { equation, evaluate, parseExpression } from "./expression";
@@ -26,7 +26,7 @@ export interface LocusDrag {
  * Numeric traces use the same driver construction and dependency evaluator. */
 export function createLocusDrag(doc:DrawingDocument,locus:DrawingCurve,size:Vec2):LocusDrag {
   const trace=locus.derived;if(trace?.type!=="locus")throw new Error("该对象不是轨迹");
-  const base=locusDocument(doc,trace.driver,trace.follower),geometry=resolveGeometry(base);
+  const base=locusDocument(doc,trace.driver,trace.follower),geometry=resolveLocusGeometry(base);
   const original=base.objects.find(o=>o.id===trace.driver) as DrawingPoint;
   const current=geometry.points.get(trace.driver)?.p;
   if(!original||!current)throw new Error("轨迹主动点当前无效");
@@ -77,7 +77,7 @@ export function createLocusDrag(doc:DrawingDocument,locus:DrawingCurve,size:Vec2
   };
   const changed=(s:number):DrawingPoint=>({...original,construction:construction(s)});
   const actual=(point:DrawingPoint)=>{
-    const g=resolveGeometry({...base,objects:base.objects.map(o=>o.id===original.id?point:o)});
+    const g=resolveLocusGeometry({...base,objects:base.objects.map(o=>o.id===original.id?point:o)});
     const p=g.points.get(trace.follower)?.p,driver=g.points.get(trace.driver)?.p;
     if(!p||!driver||![...p,...driver].every(v=>Number.isFinite(v)&&Math.abs(v)<=1e9))return;
     return screen(p);

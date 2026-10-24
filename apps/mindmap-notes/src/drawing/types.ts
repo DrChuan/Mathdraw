@@ -121,6 +121,7 @@ export interface DrawingCurve extends ObjectBase {
   derived?:
     | { type: "reflection"; source: string; axis: string }
     | { type: "tangent"; curve: string; point: string; branch: number }
+    | { type: "perpendicularTangent"; curve:string; reference:string; branch:number }
     | { type: "conicFeature"; curve: string; feature: "directrix"|"asymptote"; index: number }
     | { type: "locus"; driver: string; follower: string; min: number; max: number; natural?:boolean };
   /** Computed samples only; never written by construction commands. */

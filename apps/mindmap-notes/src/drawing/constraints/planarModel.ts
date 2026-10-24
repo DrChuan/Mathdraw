@@ -131,6 +131,7 @@ export function installPlanarSolution(doc:DrawingDocument,set:DrawingSolutionSet
   }
   const absorbed=new Set(problem.planar?.absorbedSets??[]);
   const objects=[...doc.objects.filter(o=>o.id!==set.id&&!memberIds.has(o.id)&&!absorbed.has(o.id)&&!(o.kind==='spatialLocus'&&absorbed.has(o.set))),...d.objects,set];
+  for(const l of branch.loci)if(l.kind!=='plane'&&l.kind!=='sphere'&&!objects.some(o=>o.kind==='spatialLocus'&&o.set===set.id&&o.point===l.point))objects.push({id:crypto.randomUUID(),kind:'spatialLocus',set:set.id,point:l.point,name:`${l.point} 的条件轨迹`,style:{...defaultStyle(),color:'#5475a6'}});
   const byId=new Map(objects.map(o=>[o.id,o]));
   return {...doc,schemaVersion:4 as const,dimension:'2d' as const,objects:[...byId.values()],planes:[...new Map([...doc.planes,...d.planes].map(p=>[p.id,p])).values()],view:{...doc.view,mode:'plane' as const,axes:problem.mode==='coordinate'},coordinateFrame:problem.mode==='coordinate'?d.coordinateFrame:doc.coordinateFrame};
 }

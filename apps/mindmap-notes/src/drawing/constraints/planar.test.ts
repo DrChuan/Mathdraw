@@ -35,3 +35,84 @@ describe('planar conditional geometry',()=>{
  it('rebinds references to absorbed virtual vertices and keeps a hidden source group hidden',()=>{const {d,problem}=setup(['B=(3,4)'],[]),set=solutionSetObject(problem,solve(problem));set.hidden=true;const doc=installSolutionSet(d,set),b=d.objects.find(o=>o.kind==='point'&&o.symbol==='B')!;if(b.kind!=='point')throw Error();const alias={...b,id:crypto.randomUUID(),name:'Q',symbol:'Q',construction:{type:'alias' as const,point:`${set.id}:v:1`}};doc.objects.push(alias);const context=planarContext(doc),q=context.document.objects.find(o=>o.id===alias.id);expect(q?.kind==='point'&&q.construction.type==='alias'&&q.construction.point).toBe(b.id);expect(context.document.objects.find(o=>o.id===b.id)?.hidden).toBe(true);expect(resolveGeometry(context.document).errors.size).toBe(0);});
  it('retains presentation locks and slider settings during a constrained update',()=>{const {d,problem}=setup(['m=1','D=(m,2)'],[],[['m','value',-5,5]]),r=solve(problem),set=solutionSetObject(problem,r),doc=installSolutionSet(d,set),m=doc.objects.find(o=>o.symbol==='m'),point=doc.objects.find(o=>o.symbol==='D');if(m?.kind!=='number'||!point)throw Error();m.slider.min=-20;point.locked=true;point.name='Label';const next=installSolutionSet(doc,{...set,result:r});expect(next.objects.find(o=>o.id===point.id)?.locked).toBe(true);expect(next.objects.find(o=>o.id===point.id)?.name).toBe('Label');const n=next.objects.find(o=>o.id===m.id);expect(n?.kind==='number'&&n.slider.min).toBe(-20);});
 });
+
+
+describe('planar solver result integrity',()=>{
+ it('retains isolated algebraic roots when changing only the reference',()=>{
+  const {problem}=setup(['m=1','A=(0,0)'],['m^2=2'],[['m','value']]),previous=solve(problem),before=structuredClone(previous);
+  const next=solveConstraints({id:2,problem,previous,reference:{branch:0,points:['A']}});
+  expect(next.branches[0].exactValues).toEqual(before.branches[0].exactValues);
+  expect(next.precision).toBe('algebraic');expect(next.complete).toBe(previous.complete);expect(previous).toEqual(before);
+ });
+ it('does not merge distinct algebraic roots within drawing tolerance',()=>{
+  const {problem}=setup(['m=0'],['m*(m-0.0000005)=0'],[['m','value']]),r=solve(problem);
+  expect(r.branches).toHaveLength(2);
+  const roots=r.branches.map(b=>Object.values(b.exactValues!)[0]);
+  expect(roots[0].interval[1]).toBeLessThanOrEqual(roots[1].interval[0]);expect(roots[0].approximate).toBe(0);expect(roots[1].interval[0]).toBeLessThanOrEqual(0.0000005);expect(roots[1].interval[1]).toBeGreaterThanOrEqual(0.0000005);
+ });
+ it('replaces the certificate and invalidates enumeration after algebraic parameter updates',()=>{
+  const {problem}=setup(['m=1'],['m^2=4'],[['m','value']]),previous=solve(problem);expect(previous.complete).toBe(true);
+  const variable=problem.planar!.unknowns[0].id,next=solveConstraints({id:2,problem,previous,parameter:{branch:0,variable,target:2}});
+  expect(next.complete).toBe(false);expect(next.precision).toBe('algebraic');expect(next.branches[0].exactValues![variable].approximate).toBe(2);validateSolutionSet(solutionSetObject(problem,next));
+  expect(previous.branches[0].exactValues).toBeDefined();expect(previous.complete).toBe(true);
+ });
+ it('does not preserve an enumeration claim after numerical point motion',()=>{
+  const {problem}=setup(['A=(0,0)'],[],[['A','x',-5,5]]),previous=solve(problem);previous.complete=true;
+  const next=solveConstraints({id:2,problem,previous,move:{branch:0,point:'A',target:[2,0,0]}});
+  expect(next.branches[0].positions.A[0]).toBeCloseTo(2,5);expect(next.complete).toBe(false);expect(next.precision).toBe('algebraic');validateSolutionSet(solutionSetObject(problem,next));expect(previous.complete).toBe(true);
+ });
+ it('certifies bivariate candidates after exact linear elimination',()=>{
+  const {problem}=setup(['m=1','n=1'],['m^2=2','n=m'],[['m','value'],['n','value']]),r=solve(problem);
+  expect(r.branches).toHaveLength(2);expect(r.precision).toBe('algebraic');expect(r.complete).toBe(true);expect(r.exactAnalysis?.certified).toBe(true);expect(r.branches.every(b=>!!b.exactCertificate)).toBe(true);
+ });
+ it('retains conic intersections without claiming certified enumeration',()=>{
+  const {problem}=setup(['c: x^2+y^2=pi','d: y=0'],['intersection(P,c,d)']);problem.points.push('P');
+  const r=solve(problem);expect(r.branches).toHaveLength(2);expect(r.complete).toBe(false);expect(r.branches.every(b=>Math.abs(b.positions.P[0])>1)).toBe(true);
+ });
+});
+
+
+describe('exact solver integration',()=>{
+ it('solves a coupled parameter graph beyond two variables without search bounds',()=>{
+  const {problem}=setup(['m=0','n=0','k=0','D=(m,n)'],['n=2*m','k=n+1','m^2=2','m>0'],[['m','value'],['n','value'],['k','value']]),r=solve(problem);
+  expect(r.complete).toBe(true);expect(r.exactAnalysis?.reducedVariables).toBe(1);expect(r.branches[0].exactCertificate).toBeDefined();validateSolutionSet(solutionSetObject(problem,r));
+ });
+ it('preserves both allowed sine-angle branches in coordinate-free planar geometry',()=>{
+  const points=['A','B','C'],problem:ConstraintProblem={mode:'plane',points,segments:[],conditions:['AB=2','BC=3','sin(vertexAngle(A,B,C))=1/2'].map(s=>parseCondition(s,points))},r=solve(problem);
+  const lengths=r.branches.map(b=>Math.hypot(...b.positions.A.map((v,i)=>v-b.positions.C[i])));expect(Math.min(...lengths)).toBeLessThan(2);expect(Math.max(...lengths)).toBeGreaterThan(4);
+  validateSolutionSet(solutionSetObject(problem,r));
+ });
+ it('computes all exact solutions independently of the twelve-branch display limit',()=>{
+  const {problem}=setup(['a=0','b=0','c=0','d=0'],['a^2=2','b^2=3','c^2=5','d^2=7'],[['a','value'],['b','value'],['c','value'],['d','value']]),r=solve(problem);
+  expect(r.branches).toHaveLength(12);expect(r.exactAnalysis?.totalSolutions).toBe(16);expect(r.exactAnalysis?.solutions).toHaveLength(16);expect(r.complete).toBe(false);validateSolutionSet(solutionSetObject(problem,r));
+ });
+ it('retains an implicit exact circle family and obtains a certified sample without a search box',()=>{
+  const {problem}=setup(['c: x^2+y^2=4'],['onCurve(P,c)']);problem.points.push('P');const r=solve(problem);
+  expect(r.exactAnalysis?.state).toBe('family');expect(r.exactAnalysis?.family?.conditions.length).toBeGreaterThan(0);expect(r.branches[0].exactCertificate).toBeDefined();expect(r.branches[0].dof).toBe(1);validateSolutionSet(solutionSetObject(problem,r));
+ });
+ it('rejects corrupted exact root metadata and source certificates on save',()=>{
+  const {problem}=setup(['m=1'],['m^2=2','m>0'],[['m','value']]),r=solve(problem),bad=structuredClone(r),id=problem.planar!.unknowns[0].id;
+  bad.branches[0].exactValues![id].polynomial=['-7','0','1'];expect(()=>validateSolutionSet(solutionSetObject(problem,bad))).toThrow();
+  const forged=structuredClone(r);forged.branches[0].exactCertificate!.assignments.q_0='7';expect(()=>validateSolutionSet(solutionSetObject(problem,forged))).toThrow();
+ });
+ it('uses numerical fallback honestly when transcendental parameter motion cannot be certified',()=>{
+  const {problem}=setup(['m=0','n=1'],['n=sin(m)'],[['m','value',-5,5],['n','value',-2,2]]),previous=solve(problem),variable=problem.planar!.unknowns[0].id;
+  const next=solveConstraints({id:2,problem,previous,parameter:{branch:0,variable,target:0.5},budget:1000});expect(next.precision).toBe('approximate');expect(next.complete).toBe(false);expect(next.branches[0].exactCertificate).toBeUndefined();validateSolutionSet(solutionSetObject(problem,next));
+ });
+});
+
+
+describe('planar shape mobility with imported definitions',()=>{
+ it('does not subtract rigid motions already removed by definitions',()=>{
+  const {problem}=setup(['m=1','A=(0,0)','B=(m,0)'],['m>0'],[['m','value']]);problem.mode='plane';const r=solve(problem);expect(r.branches[0].dof).toBe(1);
+ });
+ it('rejects an algebraic precision label with no evidence',()=>{
+  const {problem}=setup(['A=(1,2)'],[]),r=solve(problem);r.precision='algebraic';expect(()=>validateSolutionSet(solutionSetObject(problem,r))).toThrow(/精确信息/);
+ });
+});
+
+
+it('tracks the pointer side when planar exact motion has two algebraic candidates',()=>{
+ const {problem}=setup(['c: x^2+y^2=4'],['onCurve(P,c)']);problem.points.push('P');const previous=solve(problem),next=solveConstraints({id:2,problem,previous,budget:1000,move:{branch:0,point:'P',target:[1,Math.sqrt(3),0]}});
+ expect(next.branches[0].positions.P[1]).toBeGreaterThan(0);expect(next.branches[0].exactCertificate).toBeDefined();validateSolutionSet(solutionSetObject(problem,next));
+});

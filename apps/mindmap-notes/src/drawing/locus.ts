@@ -1,5 +1,5 @@
 import type { DrawingDocument, DrawingPoint, Vec2, Vec3 } from "./types";
-import { resolveGeometry, toPlane, fromPlane, dependencies,coordinateAxis } from "./geometry";
+import { resolveGeometry, toPlane, fromPlane, dependencies,coordinateAxis, resolveLocusGeometry } from "./geometry";
 import { equation, parseExpression, evaluate } from "./expression";
 import { expressionText } from "./advanced";
 import { circleCenter, conicPath } from "./conics";
@@ -22,12 +22,7 @@ const vectorProduct=(a:Coordinates,b:Coordinates):Coordinates=>[0,1,2].map(i=>si
 /** Exclude unrelated scene objects from a tracing job. A tangent branch or
  * complex solid outside this dependency closure cannot break/delay the locus. */
 export function locusDocument(doc:DrawingDocument,driver:string,follower:string):DrawingDocument {
-  const objects=new Map(doc.objects.map(o=>[o.id,o])),needed=new Set<string>();
-  const visit=(id:string)=>{
-    const key=id.split(":")[0];if(needed.has(key))return;needed.add(key);
-    const o=objects.get(key);if(o)dependencies(o).forEach(visit);
-  };
-  visit(driver);visit(follower);
+  const needed=new Set([...ancestors(doc,driver),...ancestors(doc,follower)]);
   return {...doc,objects:doc.objects.filter(o=>needed.has(o.id))};
 }
 export function locusDomain(doc:DrawingDocument,id:string):[number,number] {
@@ -38,7 +33,7 @@ export function locusDomain(doc:DrawingDocument,id:string):[number,number] {
     const g=resolveGeometry(doc),path=g.curves.get(c.path);
     if(path?.parametric) return [path.parametric.tMin,path.parametric.tMax];
     if(path) {
-      const conic=conicPath(path,c.seed??toPlane(doc.planes.find(p=>p.id===path.planeId)!,g.points.get(id)!.p));
+      const conic=conicPath(path,c.seed??(g.points.has(id)?toPlane(path.frame??doc.planes.find(p=>p.id===path.planeId)!,g.points.get(id)!.p):[c.parameter,0]));
       if(conic)return [conic.tMin,conic.tMax];
       const parsed=equation(path.equation);
       if(parsed.type!=="implicit") return parsed.type==="y" ? [path.limits?.xMin??path.range[0],path.limits?.xMax??path.range[1]] : [path.limits?.yMin??path.range[2],path.limits?.yMax??path.range[3]];
@@ -75,10 +70,39 @@ export function naturalLocusParameter(doc:DrawingDocument,driver:string,xy:[stri
   const exact=compactLocusParameter(xy);if(!exact)return;
   return {xy:exact,min:ray?0:-Math.PI/2,max:Math.PI/2};
 }
+/** References can name generated vertices/edges; preserve full IDs until lookup. */
+function referenceOwner(doc:DrawingDocument,id:string):string {
+  if(doc.objects.some(o=>o.id===id))return id;
+  return id.replace(/:(?:e|v|f):\d+$/, "");
+}
+const ancestorCache=new WeakMap<DrawingDocument,Map<string,Set<string>>>();
+function ancestors(doc:DrawingDocument,id:string):Set<string> {
+  let cache=ancestorCache.get(doc);if(!cache){cache=new Map();ancestorCache.set(doc,cache);}
+  const cached=cache.get(id);if(cached)return cached;
+  const objects=new Map(doc.objects.map(o=>[o.id,o])),result=new Set<string>(),queue=[id];
+  while(queue.length) {
+    const ref=queue.pop()!;if(result.has(ref))continue;result.add(ref);
+    const owner=referenceOwner(doc,ref);if(owner!==ref)queue.push(owner);
+    const o=objects.get(ref);if(o)queue.push(...dependencies(o));
+  }
+  cache.set(id,result);return result;
+}
 export function dependsOn(doc:DrawingDocument,follower:string,driver:string):boolean {
-  const seen=new Set<string>();
-  const visit=(id:string):boolean=>{if(id===driver)return true;if(seen.has(id))return false;seen.add(id);const o=doc.objects.find(o=>o.id===id.split(":")[0]);return !!o&&dependencies(o).some(visit);};
-  return follower!==driver&&visit(follower);
+  return follower!==driver&&ancestors(doc,follower).has(driver);
+}
+/** A derived selected point can be driven by its unique shared path ancestor.
+ * Independent path parameters stay at their current values. Ambiguity is explicit. */
+export function locusDriver(doc:DrawingDocument,selected:string,follower:string):string {
+  if(selected===follower)throw new Error("轨迹需要不同的主动点和从动点");
+  const pathPoint=(id:string)=>{const o=doc.objects.find(o=>o.id===id);return o?.kind==="point"&&["onAxis","onPath","curveCoordinate"].includes(o.construction.type);};
+  if(pathPoint(selected)&&dependsOn(doc,follower,selected))return selected;
+  const candidates=[...ancestors(doc,selected)].filter(id=>pathPoint(id)&&dependsOn(doc,follower,id));
+  // Prefer the closest path point over ancestors defining that point's path.
+  const nearest=candidates.filter(id=>!candidates.some(other=>other!==id&&dependsOn(doc,other,id)));
+  if(nearest.length===1)return nearest[0];
+  if(nearest.length>1)throw new Error("这两个点关联多个独立动点，请直接选择要扫描的路径点作为主动点");
+  if(!dependsOn(doc,follower,selected))throw new Error("从动点与主动点没有可计算的构造依赖；仅位置重合不会建立依赖关系");
+  throw new Error("关联构造中没有可扫描的路径点，请先在线、圆或曲线上创建动点");
 }
 /** Exact coordinate composition; unsupported relations fall back to numerical tracing, never curve fitting. */
 const exactCache=new Map<string,[string,string]|null>();
@@ -90,7 +114,7 @@ export function exactLocus(doc:DrawingDocument,driver:string,follower:string,pla
   return value;
 }
 function composeExactLocus(doc:DrawingDocument,driver:string,follower:string,planeId:string):[string,string]|null {
-  const g=resolveGeometry(doc),active=new Set<string>(),pointMemo=new Map<string,Coordinates>(),lineMemo=new Map<string,[Coordinates,Coordinates]>(),lineActive=new Set<string>();
+  const g=resolveLocusGeometry(doc),active=new Set<string>(),pointMemo=new Map<string,Coordinates>(),lineMemo=new Map<string,[Coordinates,Coordinates]>(),lineActive=new Set<string>();
   const local=(p:Coordinates,planeId:string):[string,string]=>{const pl=doc.planes.find(p=>p.id===planeId)!;return [pl.u,pl.v].map(v=>scalarProduct(minus(p,num(pl.origin)),num(v))) as [string,string];};
   const fromLocal=(x:string,y:string,planeId:string):Coordinates=>{const p=doc.planes.find(p=>p.id===planeId)!;return p.origin.map((v,i)=>`(${v}+${p.u[i]}*(${x})+${p.v[i]}*(${y}))`) as Coordinates;};
   const pathPoint=(p:DrawingPoint):Coordinates=>{
@@ -98,7 +122,7 @@ function composeExactLocus(doc:DrawingDocument,driver:string,follower:string,pla
     if(c.type==="onAxis") {const axis=coordinateAxis(doc,c.axis,c.planeId);return plus(num(axis.origin),scaled(num(axis.direction),"t"));}
     if(c.type!=="onPath"&&c.type!=="curveCoordinate")throw Error();
     const path=g.curves.get(c.type==="onPath"?c.path:c.curve);
-    if(!path){if(c.type!=="onPath")throw Error();const edge=g.edges.find(e=>e.id===c.path);if(!edge)throw Error();return mix(num(g.points.get(edge.a)!.p),num(g.points.get(edge.b)!.p),"t");}
+    if(!path){if(c.type!=="onPath")throw Error();const edge=g.edges.find(e=>e.id===c.path);if(!edge)throw Error();const ends=line(c.path);return mix(ends[0],ends[1],"t");}
     if(path.limits&&Object.values(path.limits).some(v=>v!==undefined))throw Error();
     if(path.parametric){if(c.type!=="onPath")throw Error();return fromLocal(path.parametric.x,path.parametric.y,path.planeId);}
     if(c.type==="curveCoordinate") {
@@ -111,7 +135,7 @@ function composeExactLocus(doc:DrawingDocument,driver:string,follower:string,pla
         return fromLocal(c.axis==="x"?"t":other,c.axis==="x"?other:"t",path.planeId);
       }
     }
-    if(c.type==="onPath"){const conic=conicPath(path,c.seed??toPlane(doc.planes.find(p=>p.id===path.planeId)!,g.points.get(driver)!.p));if(conic)return fromLocal(conic.x,conic.y,path.planeId);}
+    if(c.type==="onPath"){const conic=conicPath(path,c.seed??(g.points.has(driver)?toPlane(path.frame??doc.planes.find(p=>p.id===path.planeId)!,g.points.get(driver)!.p):[c.parameter,0]));if(conic)return fromLocal(conic.x,conic.y,path.planeId);}
     const parsed=equation(path.equation),center=c.type==="onPath"?circleCenter(path.equation):null;
     if(center){const fn=curveFunction(path),a=fn(center[0]+1,center[1])-fn(...center),r=Math.sqrt(-fn(...center)/a);return fromLocal(`(${center[0]}+${r}*cos(t))`,`(${center[1]}+${r}*sin(t))`,path.planeId);}
     if(parsed.type==="implicit")throw Error();
@@ -139,6 +163,8 @@ function composeExactLocus(doc:DrawingDocument,driver:string,follower:string,pla
             result=[a,plus(a,d)];
           }
         }
+      } else if(!o&&g.edges.some(e=>e.id===id)) {
+        const edge=g.edges.find(e=>e.id===id)!;result=[pos(edge.a),pos(edge.b)];
       } else if(o?.kind==="curve"&&o.derived?.type==="tangent") {
         const c=o.derived,point=doc.objects.find(o=>o.id===c.point),curve=g.curves.get(c.curve);
         if(!curve||c.branch>1||dependsOn(doc,c.curve,driver)||point?.kind!=="point"||
@@ -151,19 +177,29 @@ function composeExactLocus(doc:DrawingDocument,driver:string,follower:string,pla
       lineMemo.set(id,result);return result;
     }finally{lineActive.delete(id);}
   };
-  const substitute=(source:string,point:DrawingPoint):string=>{
-    const parameters=point.parameters!;
-    let result=source.replace(/\b([xyz])\(\s*([A-Za-z][A-Za-z0-9_]*)\s*\)/g,(_m,a,n)=>`(${pos(parameters.references[n])[a==="x"?0:a==="y"?1:2]})`);
+  const numberMemo=new Map<string,string>(),numberActive=new Set<string>();
+  const numeric=(id:string):string=>{
+    const cached=numberMemo.get(id);if(cached)return cached;
+    if(numberActive.has(id))throw Error();numberActive.add(id);
+    try {
+      const o=doc.objects.find(o=>o.id===id);if(o?.kind!=="number")throw Error();
+      const value=dependsOn(doc,id,driver)?substitute(o.expression,o):String(g.numbers.get(id));
+      numberMemo.set(id,value);return value;
+    }finally{numberActive.delete(id);}
+  };
+  const substitute=(source:string,object:DrawingDocument["objects"][number]):string=>{
+    const refs=object.kind==="number"?object.references:object.parameters?.references??{};
+    let result=source.replace(/\b([xyz])\(\s*([A-Za-z][A-Za-z0-9_]*)\s*\)/g,(_m,a,n)=>`(${pos(refs[n])[a==="x"?0:a==="y"?1:2]})`);
     const constants:Record<string,string>={};
-    for(const [name,id] of Object.entries(parameters.references))if(g.numbers.has(id)) {
-      if(dependsOn(doc,id,driver))throw Error();constants[name]=String(g.numbers.get(id));
-    }
+    for(const [name,id] of Object.entries(refs))if(doc.objects.find(o=>o.id===id)?.kind==="number")constants[name]=`(${numeric(id)})`;
     result=expressionText(parseExpression(result,["t",...Object.keys(constants)]),constants);
     return simple(result);
   };
   const pos=(id:string):Coordinates=>{
     const cached=pointMemo.get(id);if(cached)return cached;
-    const p=compute(id).map(simple) as Coordinates;pointMemo.set(id,p);return p;
+    const p=compute(id).map(simple) as Coordinates;
+    if(p.some(s=>s.length>1900))throw Error();
+    pointMemo.set(id,p);return p;
   };
   const compute=(id:string):Coordinates=>{
     if(id===driver)return pathPoint(doc.objects.find(o=>o.id===id) as DrawingPoint);
@@ -172,8 +208,22 @@ function composeExactLocus(doc:DrawingDocument,driver:string,follower:string,pla
       if(!dependsOn(doc,id,driver))return num(g.points.get(id)!.p);
       const o=doc.objects.find(o=>o.id===id);if(o?.kind!=="point")throw Error();const c=o.construction;
       if(c.type==="alias")return pos(c.point);
+      if(c.type==="onPath"&&!g.curves.has(c.path)) {
+        const source=doc.objects.find(o=>o.id===c.path);if(source&&(source.kind==="line"||source.kind==="segment"||source.kind==="vector")&&source.relation)throw Error();
+        const [a,b]=line(c.path),field=o.parameters?.fields["construction.parameter"];
+        let t=typeof field==="string"?substitute(field,o):String(c.parameter);
+        const ref=g.objects.get(c.path);
+        if(ref?.kind!=="line") {if(typeof field==="string")throw Error();t=String(Math.max(0,Math.min(1,c.parameter)));}
+        else if(ref.ray) {if(typeof field==="string")throw Error();t=String(Math.max(0,c.parameter));}
+        return mix(a,b,t);
+      }
       if(c.type==="division")return plus(pos(c.a),scaled(minus(pos(c.b),pos(c.a)),typeof o.parameters?.fields["construction.t"]==="string"?substitute(o.parameters.fields["construction.t"],o):String(c.t)));
       if(c.type==="intersection") {
+        // A line identity does not enforce moving segment/ray bounds.
+        for(const id of [c.first,c.second]) {
+          const ref=g.objects.get(id);
+          if(!ref||ref.kind==="segment"||ref.kind==="vector"||ref.kind==="line"&&ref.ray)throw Error();
+        }
         const [a,b]=line(c.first),[p,q]=line(c.second),u=minus(b,a),v=minus(q,p),w=minus(p,a),n=vectorProduct(u,v),square=scalarProduct(n,n);
         const t=simple(`(${scalarProduct(vectorProduct(w,v),n)})/(${square})`),s=simple(`(${scalarProduct(vectorProduct(w,u),n)})/(${square})`);
         const first=plus(a,scaled(u,t)),second=plus(p,scaled(v,s));
@@ -209,7 +259,7 @@ export function sampleLocus(doc:DrawingDocument,driver:string,follower:string,pl
   const plane=doc.planes.find(p=>p.id===planeId)!,paths:Vec2[][]=[],start=performance.now();let current:Vec2[]=[];
   let base=locusDocument(doc,driver,follower);
   const original=base.objects.find(o=>o.id===driver) as DrawingPoint;
-  const initial=resolveGeometry(base),c=original.construction,path=c.type==="onPath"?initial.curves.get(c.path):undefined,center=path?circleCenter(path.equation):null,conic=path&&!path.parametric?conicPath(path,c.type==="onPath"?c.seed??toPlane(plane,initial.points.get(driver)!.p):[0,0]):null;
+  const initial=resolveLocusGeometry(base),c=original.construction,path=c.type==="onPath"?initial.curves.get(c.path):undefined,center=path?circleCenter(path.equation):null,conic=path&&!path.parametric?conicPath(path,c.type==="onPath"?c.seed??(initial.points.has(driver)?toPlane(path.frame??doc.planes.find(p=>p.id===path.planeId)!,initial.points.get(driver)!.p):[c.parameter,0]):[0,0]):null;
   const conicAst=conic?{x:parseExpression(conic.x,["t"]),y:parseExpression(conic.y,["t"])}:undefined;
   if(!base.objects.some(o=>o.kind==="curve"&&o.derived?.type==="locus"))base={...base,objects:base.objects.map(o=>o.kind==="point"&&o.id!==driver&&!dependsOn(base,o.id,driver)&&initial.points.has(o.id)
     ?{...o,construction:{type:"free" as const,position:initial.points.get(o.id)!.p},parameters:undefined}:o)};
@@ -226,7 +276,7 @@ export function sampleLocus(doc:DrawingDocument,driver:string,follower:string,pl
     }
     else if(construction.type==="onPath"&&center&&path){const fn=curveFunction(path),r=Math.sqrt(-fn(...center)/(fn(center[0]+1,center[1])-fn(...center)));construction={...construction,seed:[center[0]+r*Math.cos(t),center[1]+r*Math.sin(t)]};}
     try {
-      const g=resolveGeometry({...base,objects:base.objects.map(o=>o.id===driver?{...original,construction,parameters:undefined}:o)}),p=g.points.get(follower)?.p;
+      const g=resolveLocusGeometry({...base,objects:base.objects.map(o=>o.id===driver?{...original,construction,parameters:undefined}:o)}),p=g.points.get(follower)?.p;
       if(!p) {flush();continue;} const q=toPlane(plane,p);
       if(!q.every(Number.isFinite)||Math.max(...q.map(Math.abs))>1e6){flush();continue;}
       if(current.length>1){const previous=current[current.length-1],before=current[current.length-2],step=Math.hypot(q[0]-previous[0],q[1]-previous[1]),old=Math.hypot(previous[0]-before[0],previous[1]-before[1]);if(step>Math.max(2,old*15))flush();}

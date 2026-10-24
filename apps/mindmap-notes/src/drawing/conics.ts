@@ -179,3 +179,15 @@ export function conicVertices(source:string):Vec2[] {
  const pair=(axis:number)=>{if(!(r[axis]>0))throw Error('圆锥曲线没有实顶点');const delta=Math.sqrt(r[axis]);return [world(u-(axis===0?delta:0),v-(axis===1?delta:0)),world(u+(axis===0?delta:0),v+(axis===1?delta:0))].sort((a,b)=>Math.abs(a[0]-b[0])>1e-8?a[0]-b[0]:a[1]-b[1]);};
  const axis=det>0?(r[0]>=r[1]?0:1):(r[0]>0?0:1);return det>0?[...pair(axis),...pair(1-axis)]:pair(axis);
 }
+
+/** Finite real tangents perpendicular to a reference direction, without slopes. */
+export function perpendicularConicTangents(source:string,direction:Vec2):string[] {
+ const q=conicCoefficients(source);if(!q)throw Error('目前垂直切线支持圆和圆锥曲线');const length=Math.hypot(...direction);if(length<1e-12)throw Error('参考直线退化');
+ const [nx,ny]=direction.map(v=>v/length),tx=-ny,ty=nx,[A,B,C,D,E,F]=q;
+ const a=A*tx*tx+B*tx*ty+C*ty*ty,b1=2*A*nx*tx+B*(nx*ty+ny*tx)+2*C*ny*ty,b0=D*tx+E*ty,c2=A*nx*nx+B*nx*ny+C*ny*ny,c1=D*nx+E*ny;
+ if(Math.abs(a)<1e-12)return []; // A linear intersection is not a finite tangency.
+ const coefficients=[b0*b0-4*a*F,2*b1*b0-4*a*c1,b1*b1-4*a*c2];
+ const [c,b,z]=coefficients,scale=Math.max(...coefficients.map(Math.abs));if(!scale)return [];
+ let roots:number[]=[];if(Math.abs(z)<1e-12*scale){if(Math.abs(b)>1e-12*scale)roots=[-c/b];}else{const discriminant=b*b-4*z*c;if(discriminant>=-1e-12*(b*b+Math.abs(4*z*c))){const r=Math.sqrt(Math.max(0,discriminant));roots=r===0?[-b/(2*z)]:[(-b-r)/(2*z),(-b+r)/(2*z)].sort((x,y)=>x-y);}}
+ return roots.map(h=>`(${nx})*x+(${ny})*y=(${h})`);
+}

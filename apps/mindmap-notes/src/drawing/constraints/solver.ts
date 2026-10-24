@@ -1,3 +1,6 @@
+import {solveExactSystem} from './exactSystem';
+import {symbolicSpatialEquations} from './spatialExact';
+import {substituteNames} from '../parameters';
 import {localMobility} from './mobility';
 import {shapeMobility} from './shapeMobility';
 import type { Vec3 } from "../types";
@@ -203,9 +206,8 @@ export function refreshSpatialMobility(problem:ConstraintProblem,branch:Solution
   return {...branch,dof:shape.dof,motionDof,loci:motionDof?branch.loci:[],mobility:{version:2,linear:shape.linear,removed:shape.removed,checked:shape.checked&&mobility.checked}};
 }
 export function solveConstraints(request:SolveRequest):ConstraintResult {
-  if(request.problem.mode==='plane'||request.problem.mode==='coordinate')return solvePlanar(request);
-  const started=Date.now(),problem=request.problem;validateProblem(problem);
-  if(request.refreshMobility&&request.previous){const result=structuredClone(request.previous);result.branches=result.branches.map(b=>refreshSpatialMobility(problem,b));result.elapsed=Date.now()-started;return result;}
+  const started=Date.now(),problem=request.problem,planar=problem.mode==='plane'||problem.mode==='coordinate';validateProblem(problem);
+  if(!planar&&request.refreshMobility&&request.previous){const result=structuredClone(request.previous);result.branches=result.branches.map(b=>refreshSpatialMobility(problem,b));result.elapsed=Date.now()-started;return result;}
   const alternatives=problem.conditions.filter(c=>c.enabled&&c.alternateValue!==undefined);
   if(alternatives.length) {
     const issues=contradictions(problem);if(issues.length)return {branches:[],status:"contradiction",complete:true,attempts:0,elapsed:Date.now()-started,diagnostics:issues};
@@ -225,13 +227,15 @@ export function solveConstraints(request:SolveRequest):ConstraintResult {
       const conditions=problem.conditions.map(c=>{const i=alternatives.indexOf(c);return {...c,value:i>=0&&i<6&&(mask>>i&1)?c.alternateValue:c.value,alternateValue:undefined};}),part={...problem,conditions},check=evaluator(part);
       const previous=request.previous?{...request.previous,branches:request.previous.branches.filter(b=>check.verify(flatten(problem.points,b.positions)).valid)}:undefined;
       const result=solveConstraints({...request,problem:part,previous,budget:Math.max(30,(budget-(Date.now()-started))/(count-mask))});results.push(result);
-      for(const b of result.branches)if(!branches.some(a=>branchEquivalent(a,b,scale)))branches.push(b);
+      for(const b of result.branches)if(!branches.some(a=>planar?(a.exactCertificate&&b.exactCertificate?JSON.stringify([a.exactCertificate.roots,a.exactCertificate.assignments])===JSON.stringify([b.exactCertificate.roots,b.exactCertificate.assignments]):problem.points.every(n=>norm(sub(a.positions[n],b.positions[n]))<scale*1e-8)&&JSON.stringify(a.values)===JSON.stringify(b.values)):branchEquivalent(a,b,scale)))branches.push(b);
     }
     return {branches:branches.slice(0,12),status:branches.length?"solved":"notFound",complete:count===2**alternatives.length&&branches.length<=12&&results.every(r=>r.complete),
+      precision:results.every(r=>r.precision==='algebraic')?'algebraic':results.some(r=>r.precision==='approximate')?'approximate':undefined,
       attempts:results.reduce((n,r)=>n+r.attempts,0),elapsed:Date.now()-started,method:results.every(r=>r.method==="construction")?"construction":"hybrid",
       approximationReason:[...new Set(results.flatMap(r=>r.approximationReason?[r.approximationReason]:[]))].join("；")||undefined,
       constructionSteps:[...new Set(results.flatMap(r=>r.constructionSteps??[]))],diagnostics:["三角函数条件先枚举允许的角度分支，再分别解析构造并回代校验。",...new Set(results.flatMap(r=>r.diagnostics))]};
   }
+  if(planar)return solvePlanar(request);
   const budget=Math.max(30,Math.min(10000,request.budget??2000)),deadline=started+budget,e=evaluator(problem),issues=contradictions(problem);
   if(issues.length)return {branches:[],status:"contradiction",complete:true,attempts:0,elapsed:Date.now()-started,diagnostics:issues};
   let state=(request.seed??(request.previous?.attempts??0)+3127351)>>>0;
@@ -242,7 +246,7 @@ export function solveConstraints(request:SolveRequest):ConstraintResult {
     // reduce its freedoms; it never relaxes a condition or changes coordinates.
     if(!branch||!Array.isArray(reference)||!reference.length||new Set(reference).size!==reference.length||reference.some(n=>!problem.points.includes(n)))throw new Error("请选择至少一个有效且不重复的固定点");
     const flat=flatten(problem.points,branch.positions);if(!e.verify(flat).valid)throw new Error("当前构型已失效，请重新求解条件");
-    result.branches[request.reference.branch]=analyze(problem,flat,deadline,random,{...branch,reference:[...reference]});
+    result.branches[request.reference.branch]={...analyze(problem,flat,deadline,random,{...branch,reference:[...reference]}),exactValues:branch.exactValues,exactCertificate:branch.exactCertificate,values:branch.values};
     result.elapsed=Date.now()-started;
     return result;
   }
@@ -250,15 +254,34 @@ export function solveConstraints(request:SolveRequest):ConstraintResult {
     const result=structuredClone(request.previous),branch=result.branches[request.move.branch];
     if(!branch||!problem.points.includes(request.move.point))throw new Error("动点或构型已失效");
     if(branch.reference.includes(request.move.point))throw new Error("此点属于参照结构，请先切换参照结构或选择其他动点");
+    const invalidateExact=()=>{delete branch.exactCertificate;delete branch.exactValues;delete branch.values;delete result.exactAnalysis;result.complete=false;result.precision='approximate';};
     const refreshed=refreshSpatialMobility(problem,branch);Object.assign(branch,refreshed);
     if(branch.dof===0)throw Error(branch.mobility?.removed?'当前构型在极值或相切处被条件锁定，没有可连续拖动的自由度':'当前形状已固定，整体平移和旋转不计构型自由度');
     if(branch.motionDof===0)throw Error('当前参照下没有可连续拖动的自由度，请减少固定点');
     const fixed=fixedCoordinates(problem.points,branch.positions,branch.reference),index=problem.points.indexOf(request.move.point)*3;
     const locus=branch.loci.find(l=>l.point===request.move!.point),target=locus?nearestLocus(locus,request.move.target):request.move.target;
+    const symbolic=symbolicSpatialEquations(problem,false);
+    if(symbolic.complete){
+      const additions:string[]=[],rootExpressions=Object.fromEntries(Object.entries(branch.exactCertificate?.roots??{}).filter(([,r])=>r.expression).map(([name,r])=>[name,`(${r.expression})`]));
+      for(const name of branch.reference)for(let axis=0;axis<3;axis++){
+        const token=symbolic.point(name)[axis],id=`point.${name}.${axis}`,source=branch.exactValues?.[id]?.expression??branch.exactCertificate?.assignments[token];
+        const exact=source?substituteNames(source,rootExpressions):String(branch.positions[name][axis]);
+        additions.push(`${token}=${/root_\d+/.test(exact)?branch.positions[name][axis]:exact}`);
+      }
+      const axis=[0,1,2].sort((a,b)=>Math.abs(target[b]-branch.positions[request.move!.point][b])-Math.abs(target[a]-branch.positions[request.move!.point][a]))[0];
+      additions.push(`${symbolic.point(request.move.point)[axis]}=${target[axis]}`);
+      const exact=solveExactSystem([...symbolic.sources,...additions],symbolic.tokens,{deadline:Math.min(deadline,Date.now()+Math.max(15,budget*.3)),initial:flatten(problem.points,branch.positions)});
+      const candidates=exact.kind==='finite'&&exact.complete?exact.candidates.filter(c=>e.verify(c.values).valid):[];
+      const prior=flatten(problem.points,branch.positions);candidates.sort((a,b)=>{const targetDistance=(v:number[])=>target.reduce((sum,n,k)=>sum+(v[index+k]-n)**2,0),delta=targetDistance(a.values)-targetDistance(b.values);if(Math.abs(delta)>1e-12*e.scale*e.scale)return delta;const cost=(v:number[])=>v.reduce((sum,n,i)=>sum+(n-prior[i])**2,0);return cost(a.values)-cost(b.values);});
+      if(candidates.length){
+        const candidate=candidates[0],ids=problem.points.flatMap(n=>[0,1,2].map(k=>`point.${n}.${k}`));branch.positions=positions(problem.points,candidate.values);branch.values=Object.fromEntries(ids.map((id,i)=>[id,candidate.values[i]]));branch.exactValues=Object.fromEntries(Object.entries(candidate.exactValues).map(([token,value])=>[ids[symbolic.tokens.indexOf(token)],value]));branch.exactCertificate=candidate.certificate;branch.residual=e.verify(candidate.values).max;
+        delete result.exactAnalysis;result.complete=false;result.precision=result.branches.every(b=>b.exactCertificate)?'algebraic':'approximate';result.method='construction';delete result.approximationReason;result.elapsed=Date.now()-started;return result;
+      }
+    }
     const transported=rigidMotion(branch.positions,branch.reference,request.move.point,target,e.scale);
     if(transported) {
       const check=e.verify(flatten(problem.points,transported));
-      if(check.valid){branch.positions=transported;branch.residual=check.max;result.elapsed=Date.now()-started;return result;}
+      if(check.valid){invalidateExact();branch.positions=transported;branch.residual=check.max;result.elapsed=Date.now()-started;return result;}
     }
     // A point on an explicit locus, and followers constructible from it, do not
     // need an optimizer for each pointer movement. Preserve the reference frame
@@ -271,7 +294,7 @@ export function solveConstraints(request:SolveRequest):ConstraintResult {
       plan.solutions.sort((a,b)=>cost(a)-cost(b));if(plan.solutions.length)direct=plan.solutions[0];
     }
     const directCheck=e.verify(flatten(problem.points,direct));
-    if(directCheck.valid){branch.positions=direct;branch.residual=directCheck.max;result.elapsed=Date.now()-started;return result;}
+    if(directCheck.valid){invalidateExact();branch.positions=direct;branch.residual=directCheck.max;result.elapsed=Date.now()-started;return result;}
     const moveScale=locus&&["circle","sphere","segment"].includes(locus.kind)?locus.radius:e.scale;
     const extra=(x:number[])=>target.map((v,k)=>(x[index+k]-v)/moveScale);
     let x=minimize(e.values,flatten(problem.points,branch.positions),deadline,fixed,extra);
@@ -282,10 +305,24 @@ export function solveConstraints(request:SolveRequest):ConstraintResult {
       x=minimize(e.values,x,deadline,fixed);
     }
     if(!e.verify(x).valid)throw new Error("该位置不满足全部条件，已保留上一个可行位置");
-    branch.positions=positions(problem.points,x);branch.residual=e.verify(x).max;result.elapsed=Date.now()-started;
+    branch.positions=positions(problem.points,x);branch.residual=e.verify(x).max;delete branch.exactCertificate;delete branch.exactValues;delete branch.values;result.complete=false;result.precision='approximate';delete result.exactAnalysis;result.elapsed=Date.now()-started;
     result.method=result.method==="construction"?"hybrid":result.method??"numerical";
     result.approximationReason="当前拖动位置不能直接由现有构造满足全部条件，采用数值联动并回代校验。";
     return result;
+  }
+  let exactAnalysis:ConstraintResult['exactAnalysis'];
+  if(problem.points.length<=12&&problem.conditions.some(c=>c.enabled)){
+    const compiled=symbolicSpatialEquations(problem),exact=solveExactSystem(compiled.sources,compiled.tokens,{deadline:Math.min(deadline,Date.now()+Math.max(15,budget*.25))});
+    const exactBranches:SolutionBranch[]=[];
+    for(const candidate of exact.candidates){
+      if(exact.kind!=='finite')break;
+      const p=positions(problem.points,candidate.values);if(!e.verify(candidate.values).valid)continue;
+      const ids=problem.points.flatMap(n=>[0,1,2].map(k=>`point.${n}.${k}`));
+      exactBranches.push({positions:p,rigid:[problem.points],reference:[...problem.points],dof:0,motionDof:0,loci:[],residual:e.verify(candidate.values).max,rigidityPending:false,values:Object.fromEntries(ids.map((id,i)=>[id,candidate.values[i]])),exactValues:Object.fromEntries(Object.entries(candidate.exactValues).map(([token,value])=>[ids[compiled.tokens.indexOf(token)],value])),exactCertificate:candidate.certificate});
+    }
+    exactAnalysis={state:exact.kind,certified:exact.complete&&compiled.complete&&exactBranches.length===exact.candidates.length,totalSolutions:exact.candidates.length,reducedVariables:exact.reducedVariables,reason:exact.reason??compiled.unsupported.join('；'),reasonCode:exact.reasonCode??(compiled.complete?undefined:'translation'),family:exact.family,solutions:exact.complete?exact.candidates.map(c=>c.certificate):undefined};
+    if(exactBranches.length&&compiled.complete&&!request.previous?.branches.length)return {branches:exactBranches.slice(0,12),status:'solved',method:'construction',precision:'algebraic',complete:exactAnalysis.certified&&exactBranches.length<=12,attempts:exact.candidates.length,elapsed:Date.now()-started,exactAnalysis,constructionSteps:['空间几何条件编译为等式、符号及非退化条件；精确降维后求解耦合块。'],diagnostics:[`精确代数表示得到 ${exactBranches.length} 个构型，已回代原始几何条件。`]};
+    if(compiled.complete&&exact.kind==='finite'&&exact.complete&&!exact.candidates.length)return {branches:[],status:'contradiction',method:'construction',complete:true,attempts:0,elapsed:Date.now()-started,exactAnalysis,diagnostics:['精确代数条件无可行实解。']};
   }
   const construction=constructRightPrism(problem);
   if(construction) {
@@ -296,7 +333,7 @@ export function solveConstraints(request:SolveRequest):ConstraintResult {
       if(!branches.some(b=>branchEquivalent(b,branch,e.scale)))branches.push(branch);
     }
     const complete=branches.length<=12,shown=branches.slice(0,12);
-    return {branches:shown,status:"solved",method:"construction",complete,attempts:construction.candidates,elapsed:Date.now()-started,
+    return {exactAnalysis,branches:shown,status:"solved",method:"construction",complete,attempts:construction.candidates,elapsed:Date.now()-started,
       constructionSteps:["由已知相邻边及夹角，用余弦定理计算对角线；无向线线角枚举两个顶角。","底面各点由两个已知距离对应的圆求交，枚举交点，排除交叉底面。","沿底面法向取正、负侧棱向量，平移生成顶面；回代全部原始条件。"],
       diagnostics:[`解析构造得到 ${shown.length} 个可行构型，均已回代全部条件。`,
         "用余弦定理和圆交点确定底面，再沿底面法向按侧棱长度平移生成顶面；无向线线角的两种顶角及镜像位置分别枚举。",
@@ -316,7 +353,7 @@ export function solveConstraints(request:SolveRequest):ConstraintResult {
       if(e.verify(flatten(problem.points,branch.positions)).valid)branches.push(branch);
       else complete=false;
     }
-    if(branches.length)return {branches,status:"solved",method:"construction",complete,attempts:plan.solutions.length,elapsed:Date.now()-started,constructionSteps:plan.steps,
+    if(branches.length)return {exactAnalysis,branches,status:"solved",method:"construction",complete,attempts:plan.solutions.length,elapsed:Date.now()-started,constructionSteps:plan.steps,
       diagnostics:[`优先通过几何构造与轨迹求交得到 ${branches.length} 个可行构型，均已回代全部条件。`,
         "辅助直线、平面、圆和球面只参与构造计算，不加入绘图区。",
         complete?"此构造的有限分支已枚举完成；整体平移和旋转视为同一构型。":"存在连续自由度或尚未完成全部分支枚举，不声明穷尽。"]};
@@ -356,7 +393,7 @@ export function solveConstraints(request:SolveRequest):ConstraintResult {
     if(branches.some(b=>b.dof>0))diagnostics.push("构型自由度只计形状变化，排除整图平移、旋转；轨迹上的移动会重新校验整组条件。");
     if(branches.some(b=>b.rigidityPending))diagnostics.push("本轮时间不足以完成全部刚性扰动验证，仅固定已确认的参照关系，可继续搜索。");
   }
-  return {branches,status:branches.length?"solved":"notFound",method:hybrid?"hybrid":"numerical",approximationReason,complete:false,attempts,elapsed:Date.now()-started,
+  return {exactAnalysis,branches,status:branches.length?"solved":"notFound",method:hybrid?"hybrid":"numerical",approximationReason,complete:false,attempts,elapsed:Date.now()-started,
     constructionSteps:hybrid?(plan.steps.length?plan.steps:request.previous?.constructionSteps):undefined,diagnostics};
 }
 export { align as alignPositions };

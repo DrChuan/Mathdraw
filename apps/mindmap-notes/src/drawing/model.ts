@@ -1,5 +1,5 @@
 import { definitionInput, annotationArgument } from "./input";
-import { locusDomain, dependsOn } from "./locus";
+import { locusDomain, locusDriver } from "./locus";
 import { tangentCandidates, pointConstrainedToCurve } from "./advanced";
 import {
   defaultStyle,
@@ -25,7 +25,7 @@ import { compactPresetEquation } from "./curves";
 import { finiteScalar, numericReferences, renderReferences, replaceCoordinates, expressionNames } from "./parameters";
 import { numericSource, numericFunctions, isVariableSymbol } from "./symbols";
 import { axisId, axisReference } from "./axes";
-import { conicFoci, circleCenter } from "./conics";
+import { conicFoci, circleCenter,perpendicularConicTangents } from "./conics";
 import { exactNumber } from "./exactNumber";
 import { groupClosedFaces } from "./polyhedra";
 import { displayableLocus } from "./constraints/loci";
@@ -286,7 +286,7 @@ export function definition(doc: DrawingDocument, obj: GeometryObject): string {
   else if (obj.kind === "curve") {
     if(obj.derived) {
       const c=obj.derived;
-      value=c.type === "conicFeature" ? `${c.feature==='directrix'?'Directrix':'Asymptote'}(${ref(c.curve)}, ${c.index+1})` : c.type === "reflection" ? `Reflect(${ref(c.source)}, ${ref(c.axis)})` : c.type === "tangent" ? `Tangent(${ref(c.curve)}, ${ref(c.point)}, ${c.branch+1})` : `Locus(${ref(c.driver)}, ${ref(c.follower)}${c.natural?"":`, ${fmt(c.min)}, ${fmt(c.max)}`})`;
+      value=c.type === "perpendicularTangent" ? `PerpendicularTangent(${ref(c.curve)}, ${ref(c.reference)}, ${c.branch+1})` : c.type === "conicFeature" ? `${c.feature==='directrix'?'Directrix':'Asymptote'}(${ref(c.curve)}, ${c.index+1})` : c.type === "reflection" ? `Reflect(${ref(c.source)}, ${ref(c.axis)})` : c.type === "tangent" ? `Tangent(${ref(c.curve)}, ${ref(c.point)}, ${c.branch+1})` : `Locus(${ref(c.driver)}, ${ref(c.follower)}${c.natural?"":`, ${fmt(c.min)}, ${fmt(c.max)}`})`;
     } else if(obj.parametric) value=`Parametric(${obj.parametric.x}, ${obj.parametric.y}, ${fmt(obj.parametric.tMin)}, ${fmt(obj.parametric.tMax)})`;
     else if (obj.circle) {
       const c = obj.circle;
@@ -322,6 +322,7 @@ export const commandCatalog = [
   ["Section", "几何体截面", "几何体，三点 / 两条直线 / 直线与点"],
   ["Reflect", "轴对称", "图形, 对称轴"],
   ["Tangent", "过点切线", "曲线, 点, 可选序号"],
+  ["PerpendicularTangent", "垂直切线", "曲线, 参考直线, 可选序号"],
   ["Locus", "轨迹", "主动点, 从动点, 可选起点, 可选终点"],
   ["Length", "长度", "线段 或 两个点"],
   ["Angle", "角度", "点, 顶点, 点"],
@@ -629,7 +630,14 @@ export function applyDefinition(
       objects=[{id:crypto.randomUUID(),kind:"polygon",name:"截面",points:[],section:{solid,plane:planeSource(args.slice(1))},style:{...defaultStyle(),color:"#bd6d3f"}}];
     } else if(name === "Locus") {
       if(args.length!==2&&args.length!==4)throw new Error("轨迹需要主动点、从动点，以及可选扫描起止值");
-      const driver=point(args[0]),follower=point(args[1]);
+      // A temporary degeneracy at the current pose must not prevent tracing
+      // valid poses elsewhere in the scan interval.
+      const tracePoint=(source:string)=>{
+        const id=ref(source);
+        if(!geometry.points.has(id)&&!doc.objects.some(o=>o.id===id&&o.kind==="point"))throw new Error(`“${source}”不是点`);
+        return id;
+      };
+      let driver=tracePoint(args[0]);const follower=tracePoint(args[1]);
       if(doc.dimension==='3d') {
         const a=constraintBinding(doc,doc.objects.find(o=>o.id===driver) as DrawingPoint),b=constraintBinding(doc,doc.objects.find(o=>o.id===follower) as DrawingPoint);
         if(a&&b&&a.set.id===b.set.id&&displayableLocus(b.set.result.branches[b.set.activeBranch].loci.find(l=>l.point===b.point))) {
@@ -639,10 +647,12 @@ export function applyDefinition(
         }
         throw Error('尚未得到满足全部条件的空间轨迹；请在按条件作图中计算轨迹。空间轨迹不会投影到当前工作平面来代替');
       }
-      if(!dependsOn(doc,follower,driver))throw new Error("从动点必须通过构造依赖主动点，不能是无关的自由点");
+      driver=locusDriver(doc,driver,follower);
       const range=locusDomain(doc,driver),min=args[2]?scalar(args[2]):range[0],max=args[3]?scalar(args[3]):range[1];
       if(min>=max)throw new Error("扫描起点必须小于终点");
       objects=[{...makeCurve(),name:"轨迹",autoFoci:false,derived:{type:"locus",driver,follower,min,max,natural:args.length===2},equation:"0",style:{...defaultStyle(),color:"#6955a5"}}];
+    } else if(name === "PerpendicularTangent") {
+      if(args.length!==2&&args.length!==3)throw Error('请选择圆锥曲线和参考直线');if(doc.dimension!=='2d')throw Error('垂直切线目前用于平面作图');const curve=ref(args[0]),reference=ref(args[1]),original=geometry.curves.get(curve);if(!original)throw Error('请选择曲线');const frame=original.frame??plane,r=geometry.straightReference(reference),a=toPlane(frame,r.a),b=toPlane(frame,r.b),candidates=perpendicularConicTangents(original.equation,[b[0]-a[0],b[1]-a[1]]);if(!candidates.length)throw Error('此方向没有有限实切线');objects=candidates.map((equation,branch)=>({...makeCurve(),name:'垂直切线',autoFoci:false,planeId:original.planeId,equation,derived:{type:'perpendicularTangent' as const,curve,reference,branch}}));if(args[2]){if(Object.keys(numericReferences(doc,args[2])).length)throw Error('序号需固定');objects=objects.filter((_,i)=>i===scalar(args[2])-1);if(!objects.length)throw Error('没有该序号的切线');}
     } else if(name === "Tangent") {
       if(args.length!==2&&args.length!==3)throw new Error("切线需要曲线、经过的点和可选序号");
       const curve=ref(args[0]),p=point(args[1]),original=geometry.curves.get(curve);

@@ -1,3 +1,4 @@
+import type {ExactCertificate,ExactFamily} from './exactSystem';
 import type { Vec3,DrawingDocument } from "../types";
 
 export type ConstraintMode="spatial"|"plane"|"coordinate";
@@ -15,7 +16,7 @@ export interface PlanarContext {
   searchScale?:number;
   searchBounds?:Record<string,{xMin?:number;xMax?:number;yMin?:number;yMax?:number}>;
 }
-export interface AlgebraicValue {polynomial:string[];interval:[number,number];approximate:number;expression?:string}
+export interface AlgebraicValue {polynomial:string[];interval:[number,number];rationalInterval?:[string,string];approximate:number;expression?:string}
 
 export const constraintKinds = ["pointLineDistance","pointPlaneDistance","distance","equal","ratio","lineAngle","vertexAngle","linePlaneAngle","dihedral",
   "parallel","perpendicular","collinear","onSegment","division","coplanar","parallelogram","rectangle","rhombus","square","prism","pyramid","frustum","regularPolygon","cube",
@@ -28,7 +29,7 @@ export interface ConstraintCurve {
   method:"centerPoint"|"centerRadius"|"threePoint"|"foci";
   points:string[]; plane?:string[]; value?:number; valueSource?:string;
 }
-export interface Condition { id: string; kind: ConstraintKind; refs: string[][]; value?: number; alternateValue?: number; coefficients?:number[]; solid?:VolumeShape; curve?:string; enabled: boolean; source: string }
+export interface Condition { id: string; kind: ConstraintKind; refs: string[][]; value?: number; alternateValue?: number; coefficients?:number[];coefficientSources?:string[]; solid?:VolumeShape; curve?:string; enabled: boolean; source: string }
 export interface ConstraintProblem { points: string[]; segments: [string,string][]; conditions: Condition[]; curves?:ConstraintCurve[];mode?:ConstraintMode;planar?:PlanarContext }
 export interface Pose { origin: Vec3; x: Vec3; y: Vec3; z: Vec3 }
 export const identityPose = (): Pose => ({origin:[0,0,0],x:[1,0,0],y:[0,1,0],z:[0,0,1]});
@@ -48,8 +49,10 @@ export interface SolutionBranch {
   mobility?:{version:1|2;linear:number;removed:number;checked:boolean};
   values?:Record<string,number>;
   exactValues?:Record<string,AlgebraicValue>;
+  exactCertificate?:ExactCertificate;
 }
 export interface ConstraintResult {
+  exactAnalysis?:{state:'finite'|'family'|'unresolved';certified:boolean;totalSolutions:number;reducedVariables:number;reason?:string;reasonCode?:string;family?:ExactFamily;solutions?:ExactCertificate[]};
   method?: "construction"|"hybrid"|"numerical";
   precision?:"construction"|"algebraic"|"approximate";
   constructionSteps?: string[];
@@ -62,6 +65,7 @@ export interface SolveRequest {
   move?: {point:string; target:Vec3; branch:number}; seed?: number;
   reference?: {branch:number; points:string[]};
   parameter?: {variable:string;target:number;branch:number};
+  trace?:{point:string;branch:number};
   refreshMobility?:boolean;
   /** Starting guesses only: never accepted without verifying the new problem. */
   seeds?:Positions[];

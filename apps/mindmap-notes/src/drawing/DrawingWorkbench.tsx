@@ -630,6 +630,10 @@ export default function DrawingWorkbench(props: Props) {
         const next=applyDefinition(combined(s),`Reflect(${rname(target)},${rname(s.references[0])})`);
         commitObjects(next.objects.filter(o=>!docRef.current.objects.some(p=>p.id===o.id)),s.staged);return;
       }
+      if(t === "perpendicularTangent") {
+        if(!s.references.length){if(hit?.kind!=='curve')throw Error('请先选择圆锥曲线');setToolState({...s,references:[hit.id]});setSelection([hit.id]);return;}
+        if(!hit||!['curve','edge'].includes(hit.kind))throw Error('请选择参考直线');const base=combined(s),next=applyDefinition(base,`PerpendicularTangent(${rname(s.references[0],base)},${rname(hit.id,base)})`);commitObjects(next.objects.filter(o=>!docRef.current.objects.some(p=>p.id===o.id)),s.staged);return;
+      }
       if(t === "tangent" && !s.references.length) {
         if(hit?.kind!=="curve")throw new Error("请先选择曲线");
         setToolState({...s,references:[hit.id]});setSelection([hit.id]);return;

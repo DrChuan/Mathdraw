@@ -21,7 +21,7 @@ export function scalarRelation(source:string,names:string[]) {
   prepared=prepared.replace(/\b(sin|cos|tan)\s*\(\s*(measure_\d+)\s*\)/g,'$1($2*pi/180)');
   const parts=prepared.split('=');if(parts.length!==2||parts.some(s=>!s.trim())||!measures.length)throw Error('请输入长度或角的等式');
   const ast=parts.map(s=>parseExpression(s,measures.map(m=>m.name))),refs=[...new Set(measures.flatMap(m=>m.points))].map(n=>[n]);
-  return {refs,residual:(positions:Positions)=>{
+  return {refs,prepared,measures,residual:(positions:Positions)=>{
     const scope=Object.fromEntries(measures.map(m=>{
       const ps=m.points.map(n=>positions[n]);if(ps.some(p=>!p))throw Error('条件引用的点不存在');
       if(!m.angle)return [m.name,norm(sub(ps[1],ps[0]))];

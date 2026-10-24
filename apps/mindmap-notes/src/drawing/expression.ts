@@ -1,7 +1,7 @@
 import { latexToExpression } from "./latex";
 import { numericSource } from "./symbols";
 type Ast =
-  | { type: "number"; value: number }
+  | { type: "number"; value: number; literal?: string; constant?: "pi" | "e" }
   | { type: "variable"; name: string }
   | { type: "unary"; sign: number; value: Ast }
   | { type: "binary"; op: string; left: Ast; right: Ast }
@@ -34,8 +34,9 @@ const functions: Record<string, (...args: number[]) => number> = {
 export function parseExpression(
   source: string,
   variables: string[] = ["x", "y", "u", "v"],
+  limits: {length?:number;nodes?:number;depth?:number} = {},
 ): Ast {
-  if (source.length > 2048) throw new Error("表达式不能超过 2048 个字符");
+  if (source.length > (limits.length??2048)) throw new Error("表达式不能超过 2048 个字符");
   const text = numericSource(latexToExpression(source),variables)
     .replace(/π/g, "pi")
     .replace(/−/g, "-")
@@ -72,11 +73,11 @@ export function parseExpression(
     );
   };
   const expression = (minimum = 0): Ast => {
-    if (++depth > 64 || ++nodes > 512) fail("表达式过于复杂");
+    if (++depth > (limits.depth??64) || ++nodes > (limits.nodes??512)) fail("表达式过于复杂");
     const token = tokens[cursor++];
     let left!: Ast;
     if (token.type === "number")
-      left = { type: "number", value: Number(token.text) };
+      left = { type: "number", value: Number(token.text), literal: token.text };
     else if (token.text === "+" || token.text === "-")
       left = {
         type: "unary",
@@ -94,6 +95,7 @@ export function parseExpression(
         left = {
           type: "number",
           value: name === "pi" ? Math.PI : Math.E,
+          constant: name as "pi" | "e",
         };
       else if (functions[name]) {
         if (tokens[cursor].text !== "(") fail("函数后需要括号");

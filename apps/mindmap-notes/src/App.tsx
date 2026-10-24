@@ -1,3 +1,5 @@
+import { invoke } from "@tauri-apps/api/core";
+import { check } from "@tauri-apps/plugin-updater";
 import { pasteImage, finishImagePastes } from "./pasteImage";
 import {
   useCallback,
@@ -373,6 +375,22 @@ function savedWidth(key: string, fallback: number) {
 }
 
 export default function App() {
+  useEffect(() => {
+    let cancelled = false;
+    const checkUpdates = async () => {
+      try {
+        const update = await check({ timeout: 8000 });
+        if (update && !cancelled && window.confirm(`枝间 ${update.version} 已发布，是否打开下载页面？请保存笔记后安装。`)) {
+          await invoke("open_external", { url: "https://github.com/DrChuan/Mindgrove/releases/latest" });
+        }
+        await update?.close();
+      } catch { /* Offline startup must remain usable. */ }
+    };
+    void checkUpdates();
+    const timer = window.setInterval(checkUpdates, 4 * 60 * 60 * 1000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, []);
+
   const [boot, setBoot] = useState<Bootstrap | null>(null),
     [entries, setEntries] = useState<VaultEntry[]>([]),
     [note, setNote] = useState<NoteRecord | null>(null),

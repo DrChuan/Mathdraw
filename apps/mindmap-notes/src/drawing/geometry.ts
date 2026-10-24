@@ -1,4 +1,4 @@
-import { conicFeatureEquation,conicVertices } from './conics';
+import { conicFeatureEquation,conicVertices,perpendicularConicTangents } from './conics';
 import { reframeCurve,reflectedCurve, tangentCandidates, withinDerivedCurve, pointConstrainedToCurve } from "./advanced";
 import { angleMark, defaultAngleRadius } from "./angleMark";
 import { exactLocus, cartesianLocus,locusDocument,naturalLocusParameter } from "./locus";
@@ -376,7 +376,11 @@ export function resolveGeometry(doc: DrawingDocument) {
   if (!result) { result = computeGeometry(doc); resolvedCache.set(doc,result); }
   return result;
 }
-function computeGeometry(doc: DrawingDocument) {
+/** Tracing needs construction values, not the quadratic display-incidence pass. */
+export function resolveLocusGeometry(doc: DrawingDocument) {
+  return computeGeometry(doc, false);
+}
+function computeGeometry(doc: DrawingDocument, includeIncidence = true) {
   const numeric = materializeNumbers(doc,id=>resolve(id).p);
   const objects = numeric.objects,
     points = new Map<string, ResolvedPoint>(),
@@ -448,7 +452,8 @@ function computeGeometry(doc: DrawingDocument) {
       }
       if(source.derived) {
         const c=source.derived,plane=doc.planes.find(p=>p.id===source.planeId)!;
-        if(c.type === "conicFeature") {const original=getCurve(c.curve);result={...source,planeId:original.planeId,frame:original.frame,equation:conicFeatureEquation(original.equation,c.feature,c.index)};}
+        if(c.type === "perpendicularTangent") {const curve=getCurve(c.curve),frame=curve.frame??doc.planes.find(p=>p.id===curve.planeId)!,ref=straightReference(c.reference),a=toPlane(frame,ref.a),b=toPlane(frame,ref.b),equation=perpendicularConicTangents(curve.equation,[b[0]-a[0],b[1]-a[1]])[c.branch];if(!equation)throw Error('此方向没有对应的有限实切线');result={...source,frame,equation};}
+        else if(c.type === "conicFeature") {const original=getCurve(c.curve);result={...source,planeId:original.planeId,frame:original.frame,equation:conicFeatureEquation(original.equation,c.feature,c.index)};}
         else if(c.type === "reflection") {
           const ref=straightReference(c.axis); if(!ref.a||!ref.b) throw new Error("对称轴必须是直线或边");
           const original=getCurve(c.source),frame=original.frame??doc.planes.find(p=>p.id===original.planeId)!;
@@ -1071,64 +1076,66 @@ function computeGeometry(doc: DrawingDocument) {
       }),
     );
   const connected = new Set<string>();
-  // Appearance follows current incidence too: a free point can later lie on a line
-  // or curve without changing its construction or introducing a dependency.
-  const visibleEdges = edges.filter(edge => {
-    const owner = objects.get(edge.owner);
-    return owner && !owner.hidden && !errors.has(owner.id) &&
-      (doc.edgeStyles[edge.id] ?? owner.style.line) !== "hidden";
-  });
-  const visibleCurves = [...curves.values()].filter(c => !c.hidden && !constraintHidden(objects,c) && c.style.line !== "hidden" && !errors.has(c.id))
-    .flatMap(curve => {
-      try { return [{ curve, parsed: equation(curve.equation), plane:curve.frame?? doc.planes.find(p => p.id === curve.planeId)! }]; }
-      catch { return []; }
+  if (includeIncidence) {
+    // Appearance follows current incidence too: a free point can later lie on a line
+    // or curve without changing its construction or introducing a dependency.
+    const visibleEdges = edges.filter(edge => {
+      const owner = objects.get(edge.owner);
+      return owner && !owner.hidden && !errors.has(owner.id) &&
+        (doc.edgeStyles[edge.id] ?? owner.style.line) !== "hidden";
     });
-  for (const point of points.values()) {
-    if (!point.object || point.object.hidden) continue;
-    let incidence = 0, endpoint = false;
-    const p = point.p;
-    const tolerance = 1e-7 + 32 * Number.EPSILON * Math.max(1, ...p.map(Math.abs));
-    for (const edge of visibleEdges) {
-      const onEdge = (() => {
-      const a = points.get(edge.a)?.p, b = points.get(edge.b)?.p;
-      if (!a || !b) return false;
-      const d = sub(b, a), length = norm(d);
-      if (length < 1e-10) return false;
-      const t = dot(sub(p, a), d) / (length * length);
-      if (axisReference(edge.owner) && doc.dimension === "3d" && t < 0) return false;
-      if ((objects.get(edge.owner)?.kind !== "line" || (objects.get(edge.owner) as DrawingSegment)?.ray) && (t < -tolerance / length || (objects.get(edge.owner)?.kind !== "line" && t > 1 + tolerance / length))) return false;
-      return norm(sub(p, add(a, mul(d, t)))) <= tolerance;
-      })();
-      if (onEdge) {
-        incidence++;
-        const owner=objects.get(edge.owner),a=points.get(edge.a)?.p,b=points.get(edge.b)?.p;
-        if (owner?.kind !== "line" || owner.ray) {
-          if(a && norm(sub(p,a))<=tolerance)endpoint=true;
-          if(owner?.kind !== "line" && b && norm(sub(p,b))<=tolerance)endpoint=true;
+    const visibleCurves = [...curves.values()].filter(c => !c.hidden && !constraintHidden(objects,c) && c.style.line !== "hidden" && !errors.has(c.id))
+      .flatMap(curve => {
+        try { return [{ curve, parsed: equation(curve.equation), plane:curve.frame?? doc.planes.find(p => p.id === curve.planeId)! }]; }
+        catch { return []; }
+      });
+    for (const point of points.values()) {
+      if (!point.object || point.object.hidden) continue;
+      let incidence = 0, endpoint = false;
+      const p = point.p;
+      const tolerance = 1e-7 + 32 * Number.EPSILON * Math.max(1, ...p.map(Math.abs));
+      for (const edge of visibleEdges) {
+        const onEdge = (() => {
+        const a = points.get(edge.a)?.p, b = points.get(edge.b)?.p;
+        if (!a || !b) return false;
+        const d = sub(b, a), length = norm(d);
+        if (length < 1e-10) return false;
+        const t = dot(sub(p, a), d) / (length * length);
+        if (axisReference(edge.owner) && doc.dimension === "3d" && t < 0) return false;
+        if ((objects.get(edge.owner)?.kind !== "line" || (objects.get(edge.owner) as DrawingSegment)?.ray) && (t < -tolerance / length || (objects.get(edge.owner)?.kind !== "line" && t > 1 + tolerance / length))) return false;
+        return norm(sub(p, add(a, mul(d, t)))) <= tolerance;
+        })();
+        if (onEdge) {
+          incidence++;
+          const owner=objects.get(edge.owner),a=points.get(edge.a)?.p,b=points.get(edge.b)?.p;
+          if (owner?.kind !== "line" || owner.ray) {
+            if(a && norm(sub(p,a))<=tolerance)endpoint=true;
+            if(owner?.kind !== "line" && b && norm(sub(p,b))<=tolerance)endpoint=true;
+          }
         }
       }
+      for (const { curve, parsed, plane } of visibleCurves) {
+        const onCurve = (() => {
+        if (Math.abs(dot(sub(p, plane.origin), unit(cross(plane.u, plane.v)))) > tolerance) return false;
+        const [x, y] = toPlane(plane, p);
+        if(!withinDerivedCurve(curve,[x,y])) return false;
+        if(curve.parametric) { try {const q=pointAt(curve,nearestParameter(curve,[x,y]));return Math.hypot(q[0]-x,q[1]-y)<=tolerance;}catch{return false;} }
+        if (curve.followView === false && (x < curve.range[0] - tolerance || x > curve.range[1] + tolerance ||
+          y < curve.range[2] - tolerance || y > curve.range[3] + tolerance)) return false;
+        const value = (x: number, y: number) => evaluate(parsed.ast, { x, y, u: x, v: y });
+        const f = value(x, y);
+        if (!Number.isFinite(f)) return false;
+        if (parsed.type === "y") return Math.abs(y - f) <= tolerance;
+        if (parsed.type === "x") return Math.abs(x - f) <= tolerance;
+        const h = 1e-5 * Math.max(1, Math.sqrt(Math.max(Math.abs(x), Math.abs(y))));
+        const gradient = Math.hypot((value(x + h, y) - value(x - h, y)) / (2 * h),
+          (value(x, y + h) - value(x, y - h)) / (2 * h));
+        return Number.isFinite(gradient) && gradient > 1e-12 && Math.abs(f) / gradient <= tolerance;
+        })();
+        if (onCurve) incidence++;
+      }
+      if (incidence >= 2 || endpoint) connected.add(point.id);
     }
-    for (const { curve, parsed, plane } of visibleCurves) {
-      const onCurve = (() => {
-      if (Math.abs(dot(sub(p, plane.origin), unit(cross(plane.u, plane.v)))) > tolerance) return false;
-      const [x, y] = toPlane(plane, p);
-      if(!withinDerivedCurve(curve,[x,y])) return false;
-      if(curve.parametric) { try {const q=pointAt(curve,nearestParameter(curve,[x,y]));return Math.hypot(q[0]-x,q[1]-y)<=tolerance;}catch{return false;} }
-      if (curve.followView === false && (x < curve.range[0] - tolerance || x > curve.range[1] + tolerance ||
-        y < curve.range[2] - tolerance || y > curve.range[3] + tolerance)) return false;
-      const value = (x: number, y: number) => evaluate(parsed.ast, { x, y, u: x, v: y });
-      const f = value(x, y);
-      if (!Number.isFinite(f)) return false;
-      if (parsed.type === "y") return Math.abs(y - f) <= tolerance;
-      if (parsed.type === "x") return Math.abs(x - f) <= tolerance;
-      const h = 1e-5 * Math.max(1, Math.sqrt(Math.max(Math.abs(x), Math.abs(y))));
-      const gradient = Math.hypot((value(x + h, y) - value(x - h, y)) / (2 * h),
-        (value(x, y + h) - value(x, y - h)) / (2 * h));
-      return Number.isFinite(gradient) && gradient > 1e-12 && Math.abs(f) / gradient <= tolerance;
-      })();
-      if (onCurve) incidence++;
-    }
-    if (incidence >= 2 || endpoint) connected.add(point.id);
   }
   return { points, edges, meshes, errors, connected, curves, numbers: numeric.numbers, objects, intersections: intersect, plane:getPlane, straightReference };
 }
@@ -1181,7 +1188,7 @@ function geometryDependencies(obj: GeometryObject): string[] {
   }
   if(obj.kind === "label" && obj.measurement) return obj.measurement.references;
   if(obj.kind === "curve" && obj.derived) {
-    const c=obj.derived;return c.type === "conicFeature" ? [c.curve] : c.type === "reflection" ? [c.source,c.axis] : c.type === "tangent" ? [c.curve,c.point] : [c.driver,c.follower];
+    const c=obj.derived;return c.type === "perpendicularTangent" ? [c.curve,c.reference] : c.type === "conicFeature" ? [c.curve] : c.type === "reflection" ? [c.source,c.axis] : c.type === "tangent" ? [c.curve,c.point] : [c.driver,c.follower];
   }
   if (obj.kind === "curve" && obj.declaration)return obj.declaration.points;
   if (obj.kind === "curve" && obj.circle) return obj.circle.points;
@@ -1437,8 +1444,9 @@ export function validateDrawing(input: unknown): DrawingDocument {
         equation(replaceCoordinates(d,o.equation,o.parameters?.references ?? {},()=>[1,1,1]), Object.keys(o.parameters?.references ?? {}));
         if(o.derived) {
           const c=o.derived;
+          if(c.type==="perpendicularTangent"&&(!Number.isInteger(c.branch)||c.branch<0||c.branch>1))throw Error("切线序号无效");
           if(c.type==="conicFeature"&&(!["directrix","asymptote"].includes(c.feature)||![0,1].includes(c.index)))throw Error("准线或渐近线参数无效");
-          if(!["reflection","tangent","locus","conicFeature"].includes(c.type) || (c.type === "tangent" && (!Number.isInteger(c.branch)||c.branch<0||c.branch>32)) || (c.type === "locus" && (!finite(c.min)||!finite(c.max)||c.min>=c.max||c.natural!==undefined&&typeof c.natural!=="boolean")))throw new Error("派生曲线参数无效");
+          if(!["reflection","tangent","locus","conicFeature","perpendicularTangent"].includes(c.type) || (c.type === "tangent" && (!Number.isInteger(c.branch)||c.branch<0||c.branch>32)) || (c.type === "locus" && (!finite(c.min)||!finite(c.max)||c.min>=c.max||c.natural!==undefined&&typeof c.natural!=="boolean")))throw new Error("派生曲线参数无效");
         }
         if(o.parametric) {
           if(typeof o.parametric.x!=="string" || typeof o.parametric.y!=="string" || !finite(o.parametric.tMin) || !finite(o.parametric.tMax) || o.parametric.tMin>=o.parametric.tMax)
@@ -1670,6 +1678,7 @@ export function validateDrawing(input: unknown): DrawingDocument {
       const set=objects.get(o.constraintSet!);if(set?.kind!=="solutionSet"||!set.problem.curves?.some(c=>c.id===o.declaration!.id))throw new Error("声明曲线的来源无效");refs=o.declaration.points;
     } else if(o.kind === "curve" && o.derived) {
       const c=o.derived;
+      if(c.type === "perpendicularTangent"&&(objects.get(c.curve)?.kind!=="curve"||!lineRef(c.reference)))throw Error("垂直切线引用无效");
       if(c.type === "conicFeature"&&objects.get(c.curve)?.kind!=="curve")throw Error("圆锥曲线引用无效");
       if(c.type === "reflection" && (objects.get(c.source)?.kind!=="curve"||!lineRef(c.axis)))throw new Error("对称曲线引用无效");
       if(c.type === "tangent" && (objects.get(c.curve)?.kind!=="curve"||!pointRef(c.point)))throw new Error("切线引用无效");

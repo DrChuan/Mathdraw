@@ -14,6 +14,7 @@ const basics: Entry[] = [
 ];
 const relations: Entry[] = [
   ["reflect", "轴对称", "先选择对称轴，再选择图形"],
+  ["perpendicularTangent", "垂直切线", "选择圆锥曲线，再选择参考直线，创建与它垂直的全部实切线"],
   ["tangent", "切线", "选择曲线和一个点，包含曲线外的点"],
   ["locus", "轨迹", "先选择主动点，再选择依赖它的从动点"],
   ["angleBisector", "角平分射线", "依次选择点、顶点、点"],
@@ -78,7 +79,7 @@ export function ToolBar({ tool, choose, dimension, preset, parametric }: {
     else if (tool !== "select") setCategory("basic");
   }, [tool]);
   const activate = (t: Tool) => { choose(t); setOpen(""); };
-  const buttons = (items: Entry[]) => items.map(([id,label,hint]) =>
+  const buttons = (items: Entry[]) => items.filter(([id])=>dimension==='2d'||id!=='perpendicularTangent').map(([id,label,hint]) =>
     <button key={id} className={id === tool ? "active" : ""} aria-pressed={id === tool}
       title={dimension==="3d"&&id==="perpendicular"?"线外点：作到参考线的垂线；选平面：作平面法线；在线上时需先选包含参考线的工作平面":dimension==="3d"&&id==="parallel"?"选直线：作平行线；选平面：创建过点的平行平面":hint} onClick={() => activate(id)}>{dimension==="3d"&&id==="bisector"?"垂直平分线（工作平面）":dimension==="3d"&&id==="locus"?"条件空间轨迹":dimension==="3d"&&id==="parallel"?"平行线 / 平面":dimension==="3d"&&id==="perpendicular"?"垂线 / 平面法线":label}</button>);
   const dropdown = (id: string, label: string, children: ReactNode) => <div className="drawing-tool-group">

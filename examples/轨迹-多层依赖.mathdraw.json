@@ -1,0 +1,316 @@
+{
+  "schemaVersion": 4,
+  "type": "mindgrove-mathdraw",
+  "id": "9652b06f-e73a-4676-b5cb-25b708f5b24a",
+  "title": "多层依赖轨迹演示",
+  "dimension": "2d",
+  "objects": [
+    {
+      "id": "07c1546d-606c-4dc5-8233-6a9cc1ed5c80",
+      "name": "O",
+      "symbol": "O",
+      "kind": "point",
+      "construction": {
+        "type": "origin"
+      },
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "showName": true,
+      "dot": "auto",
+      "coordinates": "none",
+      "labelOffset": [
+        -17,
+        19
+      ]
+    },
+    {
+      "id": "cd85081b-0139-4f69-9c4d-484178bb2f12",
+      "kind": "curve",
+      "name": "曲线",
+      "planeId": "xy",
+      "equation": "x^2+y^2=4",
+      "autoFoci": true,
+      "range": [
+        -5,
+        5,
+        -5,
+        5
+      ],
+      "followView": true,
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "c"
+    },
+    {
+      "id": "cd85081b-0139-4f69-9c4d-484178bb2f12-center",
+      "name": "C",
+      "kind": "point",
+      "construction": {
+        "type": "curveCenter",
+        "curve": "cd85081b-0139-4f69-9c4d-484178bb2f12"
+      },
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "showName": true,
+      "coordinates": "none",
+      "labelOffset": [
+        9,
+        -10
+      ],
+      "symbol": "C"
+    },
+    {
+      "id": "206f2de4-f13a-4fb8-a971-6a1a7f06474a",
+      "name": "P",
+      "kind": "point",
+      "construction": {
+        "type": "onPath",
+        "path": "cd85081b-0139-4f69-9c4d-484178bb2f12",
+        "parameter": 2,
+        "seed": [
+          2,
+          0
+        ]
+      },
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "showName": true,
+      "coordinates": "none",
+      "labelOffset": [
+        9,
+        -10
+      ],
+      "symbol": "P"
+    },
+    {
+      "id": "f402381f-1939-41e2-b2d8-384a1724a1ae",
+      "name": "A",
+      "kind": "point",
+      "construction": {
+        "type": "free",
+        "position": [
+          0,
+          0,
+          0
+        ]
+      },
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "showName": true,
+      "coordinates": "none",
+      "labelOffset": [
+        9,
+        -10
+      ],
+      "symbol": "A"
+    },
+    {
+      "id": "b51452ae-fb4e-41bf-8a65-5b816d4f6c92",
+      "name": "M",
+      "kind": "point",
+      "construction": {
+        "type": "division",
+        "a": "f402381f-1939-41e2-b2d8-384a1724a1ae",
+        "b": "206f2de4-f13a-4fb8-a971-6a1a7f06474a",
+        "t": 0.5
+      },
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "showName": true,
+      "coordinates": "none",
+      "labelOffset": [
+        9,
+        -10
+      ],
+      "symbol": "M"
+    },
+    {
+      "id": "cc6b2178-f79e-40c7-8898-a7129c2edeb2",
+      "kind": "number",
+      "name": "k",
+      "expression": "x(M)+1",
+      "references": {
+        "M": "b51452ae-fb4e-41bf-8a65-5b816d4f6c92"
+      },
+      "value": 2,
+      "slider": {
+        "min": -5,
+        "max": 5,
+        "step": 0.1
+      },
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "k"
+    },
+    {
+      "id": "308e9e8d-984c-4f9c-b621-ab7aaebde8ae",
+      "kind": "number",
+      "name": "n",
+      "expression": "k^2",
+      "references": {
+        "k": "cc6b2178-f79e-40c7-8898-a7129c2edeb2"
+      },
+      "value": 4,
+      "slider": {
+        "min": -5,
+        "max": 5,
+        "step": 0.1
+      },
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "n"
+    },
+    {
+      "id": "c436aea2-775e-469e-9543-dfe8a8103e8d",
+      "name": "Q",
+      "kind": "point",
+      "construction": {
+        "type": "free",
+        "position": [
+          4,
+          4,
+          0
+        ]
+      },
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "showName": true,
+      "coordinates": "none",
+      "labelOffset": [
+        9,
+        -10
+      ],
+      "parameters": {
+        "source": "(n,y(M)+n)",
+        "references": {
+          "n": "308e9e8d-984c-4f9c-b621-ab7aaebde8ae",
+          "M": "b51452ae-fb4e-41bf-8a65-5b816d4f6c92"
+        },
+        "fields": {
+          "construction.position": {
+            "coordinates": [
+              "n",
+              "y(M)+n"
+            ],
+            "planeId": "xy",
+            "direction": false
+          }
+        }
+      },
+      "symbol": "Q"
+    },
+    {
+      "id": "a94201fd-0f4f-4d27-bad2-b069bedcd86f",
+      "kind": "curve",
+      "name": "轨迹",
+      "planeId": "xy",
+      "equation": "0",
+      "autoFoci": false,
+      "range": [
+        -5,
+        5,
+        -5,
+        5
+      ],
+      "followView": true,
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true,
+        "color": "#6955a5"
+      },
+      "derived": {
+        "type": "locus",
+        "driver": "206f2de4-f13a-4fb8-a971-6a1a7f06474a",
+        "follower": "c436aea2-775e-469e-9543-dfe8a8103e8d",
+        "min": 0,
+        "max": 6.283185307179586,
+        "natural": true
+      },
+      "symbol": "c1"
+    }
+  ],
+  "planes": [
+    {
+      "id": "xy",
+      "name": "z=0",
+      "origin": [
+        0,
+        0,
+        0
+      ],
+      "u": [
+        1,
+        0,
+        0
+      ],
+      "v": [
+        0,
+        1,
+        0
+      ]
+    }
+  ],
+  "edgeStyles": {},
+  "view": {
+    "mode": "plane",
+    "planeId": "xy",
+    "angle": 0,
+    "projection": "orthographic",
+    "scale": 48,
+    "center": [
+      0,
+      0
+    ],
+    "axes": true,
+    "grid": false
+  },
+  "output": {
+    "width": 1600,
+    "background": "transparent",
+    "crop": "content",
+    "bounds": [
+      -5,
+      5,
+      -4,
+      4
+    ]
+  }
+}

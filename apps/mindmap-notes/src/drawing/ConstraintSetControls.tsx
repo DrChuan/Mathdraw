@@ -72,6 +72,7 @@ export default function ConstraintSetControls({set,docRef,change,edit,mirror}:{s
     <small>{set.result.complete?"解集完整":"已验证现有构型，尚未证明穷尽"}</small>
     {!coordinate&&<button disabled={referenceSolver.busy||motion.busy} title="反转 xOy 平面内的顶点绕行方向，保持高度；再次点击恢复" onClick={()=>{finish();setParameters(null);motion.begin();if(mirror)mirror();else change(installSolutionSet(docRef.current,mirrorSolutionSet(set)));}}>切换手性</button>}
     <button disabled={referenceSolver.busy} onClick={edit}>编辑条件 / 继续搜索</button>
+    {coordinate&&driver&&<button disabled={referenceSolver.busy||motion.busy} onClick={async()=>{setError('');try{const result=await referenceSolver.solve({problem:set.problem,previous:set.result,budget:7000,trace:{point:driver,branch:set.activeBranch}});change(installSolutionSet(docRef.current,{...set,result}));}catch(e){setError((e as Error).message);}}}>计算 {driver} 的条件轨迹</button>}
     {locus&&<>
       <label>轨迹动点<select disabled={referenceSolver.busy} aria-label="选择轨迹动点" value={name} onChange={e=>{finish();setParameters(null);setPoint(e.target.value);}}>{branch.loci.map(l=><option key={l.point} value={l.point}>{l.point} · {locusLabels[l.kind]}</option>)}</select></label>
       <small>{locus.complete?"解析轨迹":"局部/候选轨迹，移动时验证全部条件"}{motion.busy?" · 计算中…":""}</small>

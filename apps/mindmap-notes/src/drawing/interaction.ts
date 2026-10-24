@@ -37,7 +37,7 @@ import { axisId, axisReference } from "./axes";
 import { nearestParameter } from "./parametric";
 export type Tool =
   | "normal" | "fold" | "section3" | "sectionLines" | "sectionLinePoint"
-  | "reflect" | "tangent" | "locus" | "length" | "angle" | "area" | "perimeter" | "angleBisector" | "angleBisectorLine"
+  | "reflect" | "tangent" | "perpendicularTangent" | "locus" | "length" | "angle" | "area" | "perimeter" | "angleBisector" | "angleBisectorLine"
   | "select"
   | "point"
   | "segment"
@@ -91,6 +91,7 @@ export function toolStep(state: ToolState): string {
   if(t==="fold")return state.base?"请选择旋转轴（直线、坐标轴或多边形边）；默认创建 90° 滑块":"请选择需要翻折的多边形或三角形";
   if(t.startsWith("section"))return !state.base?"请选择要截取的几何体":t==="section3"?`请选择截平面的第 ${n+1} 个点（共三个）`:t==="sectionLines"?`请选择第 ${state.references.length+1} 条共面直线或边`:!state.references.length?"请选择截平面上的直线或边":"请选择直线外的一个点";
   if(t === "reflect")return state.references.length ? "请选择需要对称的点、线或图形" : "请选择对称轴（直线、坐标轴或直边）";
+  if(t === "perpendicularTangent")return state.references.length?"请选择参考直线，创建与它垂直的切线（可能有两条）":"请选择圆或圆锥曲线";
   if(t === "tangent")return state.references.length ? "请选择切线经过的点，可在曲线上或曲线外" : "请选择曲线，再选择切线经过的点";
   if(t === "locus")return n ? "请选择依赖主动点的从动点" : "请选择沿线或曲线运动的主动点";
   if(t === "area"||t === "perimeter")return "请选择三角形、多边形或圆";
@@ -176,6 +177,7 @@ export interface Hit {
 export function toolHits(state:ToolState,hits:Hit[]):Hit[] {
   if((state.tool==="parallel"||state.tool==="perpendicular")&&!state.references.length&&state.points.length)return hits.filter(h=>h.kind==="edge"||h.kind==="curve"||h.kind==="face");
   if((state.tool==="parallel"||state.tool==="perpendicular")&&state.references.length)return hits.filter(h=>h.kind==="point"||h.kind==="edge"||h.kind==="curve");
+  if(state.tool==='perpendicularTangent')return hits.filter(h=>state.references.length?h.kind==='edge'||h.kind==='curve':h.kind==='curve');
   if(state.tool==='intersect')return hits.filter(h=>h.kind==='edge'||h.kind==='curve');
   if(state.tool==='area'||state.tool==='perimeter')return hits.filter(h=>h.kind==='face'||h.kind==='curve');
   if(state.tool==='tangent'&&!state.references.length)return hits.filter(h=>h.kind==='curve');
@@ -723,6 +725,7 @@ export function toolTarget(s:ToolState):string {
  if(t==="fold")return s.base?"旋转轴":"需要翻折的多边形";
  if(t==="normal")return "平面面";
  if(t.startsWith("section"))return !s.base?"要截取的几何体":t==="section3"?`截平面的第 ${n+1} 个点`:t==="sectionLines"?`第 ${s.references.length+1} 条直线或边`:s.references.length?"直线外的点":"直线或边";
+ if(t==="perpendicularTangent")return s.references.length?"参考直线":"圆锥曲线";
  if(t==="tangent")return s.references.length?"切线经过的点":"曲线";
  if(t==="reflect")return s.references.length?"需要对称的图形":"对称轴";
  if(t==="locus")return n?"从动点（依赖主动点）":"主动点（路径上的点）";

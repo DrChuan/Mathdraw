@@ -4,11 +4,11 @@ import type { Condition, ConstraintProblem, Positions } from "./types";
 import { add, sub, mul, dot, cross, norm, unit } from "./math";
 import { polygonArea,solidVolume,circleThrough,sphereThrough,curveGeometry } from "./measures";
 
-export interface Primitive { owner:string; kind:Condition["kind"]|"vectorSum"|"homothety"|"curveDefinition"; refs:string[][]; value?:number;alternateValue?:number;coefficients?:number[];solid?:Condition["solid"];curve?:string }
+export interface Primitive { owner:string; kind:Condition["kind"]|"vectorSum"|"homothety"|"curveDefinition"; refs:string[][]; value?:number;alternateValue?:number;coefficients?:number[];coefficientSources?:string[];solid?:Condition["solid"];curve?:string }
 export function expandConditions(problem:ConstraintProblem):Primitive[] {
   const out:Primitive[]=[];
   for(const c of problem.conditions.filter(c=>c.enabled)) {
-    const put=(kind:Primitive["kind"],refs:string[][],value?:number)=>out.push({owner:c.id,kind,refs,value,alternateValue:kind===c.kind?c.alternateValue:undefined,coefficients:kind===c.kind?c.coefficients:undefined,solid:c.solid,curve:c.curve});
+    const put=(kind:Primitive["kind"],refs:string[][],value?:number)=>out.push({owner:c.id,kind,refs,value,alternateValue:kind===c.kind?c.alternateValue:undefined,coefficients:kind===c.kind?c.coefficients:undefined,coefficientSources:kind===c.kind?c.coefficientSources:undefined,solid:c.solid,curve:c.curve});
     if(c.kind==="volume") {
       out.push(...expandConditions({...problem,curves:[],conditions:[{...c,kind:c.solid!,solid:undefined,value:undefined}]}));put("volume",c.refs,c.value);continue;
     }
