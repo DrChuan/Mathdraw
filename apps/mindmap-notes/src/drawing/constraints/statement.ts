@@ -20,6 +20,7 @@ export function conditionStatement(c:Condition):StatementPart[] {
     return mathPreview(rad?.[1]??(source||exactNumber(c.value??1).source));
   };
   if(c.kind==='scalarEquation')return [math(mathPreview(c.source))];
+  if(c.kind==="pointLineDistance"||c.kind==="pointPlaneDistance")return [text("点 "),math(r[0]),text(c.kind==="pointLineDistance"?" 到直线 ":" 到平面 "),math(r[1]),text(" 的距离为 "),math(rhs())];
   if(c.kind==="distance")return [math(`${r[0]}=${rhs()}`)];
   if(c.kind==="area")return [text("多边形 "),math(r[0]),text(" 的面积为 "),math(rhs())];
   if(c.kind==="volume")return [text(`${conditionLabels[c.solid!]} `),math(r[0]),text(" 的体积为 "),math(rhs())];

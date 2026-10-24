@@ -8,7 +8,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
 import { prepareCachedNsis, prepareCachedLlvm } from './release-tools.mjs';
 
-const projectRoot=resolve(import.meta.dirname,'..'),workspaceRoot=projectRoot,app=join(projectRoot,'apps/mindmap-notes');
+const projectRoot=resolve(import.meta.dirname,'..'),workspaceRoot=resolve(projectRoot,'..'),app=join(workspaceRoot,'枝间');
 const cache=join(projectRoot,'.build-cache'),repo='DrChuan/Mathdraw';
 const readJSON=p=>JSON.parse(readFileSync(p,'utf8'));
 const current=readJSON(join(app,'package.json')).version;
@@ -110,7 +110,7 @@ try {
     const targets=capture('rustup',['target','list','--installed']);
     for(const target of ['aarch64-apple-darwin','x86_64-apple-darwin','x86_64-pc-windows-msvc'])
       if(!targets.split('\n').includes(target))throw new Error(`缺少 Rust 目标 ${target}，请先运行 rustup target add ${target}`);
-    if(!existsSync(join(app,'node_modules/.bin/tauri')))throw new Error('请先在 apps/mindmap-notes 中安装前端依赖');
+    if(!existsSync(join(app,'node_modules/.bin/tauri')))throw new Error('请先在“枝间”项目中安装前端依赖');
     const key=env.TAURI_SIGNING_PRIVATE_KEY??join(cache,'signing/mathdraw.key');
     if(!existsSync(key))throw new Error(`找不到更新签名密钥文件：${key}。不能重新生成密钥替代，否则旧版无法更新。`);
     env.TAURI_SIGNING_PRIVATE_KEY=key;
@@ -122,7 +122,7 @@ try {
     if(remote&&!resume)throw new Error(`${tag} 已存在${remote.draft?'发布草稿，请选择继续上次发布':'，不能覆盖公开版本'}`);
     const greater=(a,b)=>{const x=a.split('.').map(Number),y=b.split('.').map(Number);for(let i=0;i<3;i++)if(x[i]!==y[i])return x[i]>y[i];return false;};
     if(releases.some(r=>!(resume&&r.tag_name===tag)&&!r.draft&&!r.prerelease&&/^v\d+\.\d+\.\d+$/.test(r.tag_name)&&!greater(version,r.tag_name.slice(1))))throw new Error('目标版本不高于 GitHub 上的公开版本，请先同步代码/版本');
-    dir=join(projectRoot,'artifacts/mathdraw/releases',version);
+    dir=join(projectRoot,'产物/releases',version);
     if(existsSync(dir)&&!resume)throw new Error(`本地已有 ${version} 的输出，请使用“继续上次发布”`);
     const summary=(await rl.question('更新说明（可留空）：')).trim()||`Mathdraw ${version} 更新。`;
     const answer=(await rl.question(`\n将${resume?'继续':'升级到'} ${version}，构建并公开发布到 GitHub 和 Gitee。确认？[y/N]：`)).trim().toLowerCase();
@@ -149,12 +149,12 @@ try {
       published=true;
       if(!alreadyPublic){
       // Update only generated local artifacts after the release is public.
-      const local=join(projectRoot,'artifacts/mathdraw/Mathdraw.app'),backup=join(projectRoot,`artifacts/mathdraw/previous/Mathdraw-before-${version}.app`);
+      const local=join(projectRoot,'产物/Mathdraw.app'),backup=join(projectRoot,`产物/previous/Mathdraw-before-${version}.app`);
       mkdirSync(resolve(backup,'..'),{recursive:true});
       if(existsSync(local)){if(!existsSync(backup))renameSync(local,backup);else rmSync(local,{recursive:true});}
       const bundle=join(app,'src-tauri/target/universal-apple-darwin/release/bundle/macos/Mathdraw.app');
       cpSync(bundle,local,{recursive:true,verbatimSymlinks:true});
-      copyFileSync(join(dir,`Mathdraw-${version}-macOS-universal.zip`),join(projectRoot,'artifacts/mathdraw/Mathdraw-macOS-universal.zip'));
+      copyFileSync(join(dir,`Mathdraw-${version}-macOS-universal.zip`),join(projectRoot,'产物/Mathdraw-macOS-universal.zip'));
       }
       console.log(`\n发布完成：${version}\nhttps://github.com/${repo}/releases/tag/${tag}\nhttps://gitee.com/liu_chuanning/mathdraw/releases/tag/${tag}\n安装包与日志：${dir}\n已有用户启动软件或检查更新即可升级。\n本流程完成构建和签名校验，不代替平台实际操作检查。`);
     }

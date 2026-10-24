@@ -23,8 +23,8 @@ export function planarEvaluator(problem:ConstraintProblem) {
   const decode=(v:number[])=>{
     const values=Object.fromEntries(variables.map((u,i)=>[u.id,v[i]])),p:Positions={};
     variables.forEach((u,i)=>{if(u.point){p[u.point]??=[0,0,0];p[u.point][u.axis!]=v[i];}});
-    const doc=materializePlanar(problem,values,p),positions=planarPositions(problem,doc);
-    const geometry=resolveGeometry(doc),plane=coordinatePlane(doc),depths=problem.points.map(n=>{const o=doc.objects.find(o=>o.kind==='point'&&objectSymbol(o)===n)!;return dot(sub(geometry.points.get(o.id)!.p,plane.origin),cross(plane.u,plane.v));});
+    const doc=materializePlanar(problem,values,p),positions=planarPositions(problem,doc,true);
+    const geometry=resolveGeometry(doc),plane=coordinatePlane(doc),depths=problem.points.map(n=>{const o=doc.objects.find(o=>o.kind==='point'&&objectSymbol(o)===n)!;const p=geometry.points.get(o.id)?.p;return p?dot(sub(p,plane.origin),cross(plane.u,plane.v)):0;});
     return {doc,positions,values,depths};
   };
   let cached:number[]|undefined,last:ReturnType<typeof decode>|undefined;
@@ -105,6 +105,10 @@ export function solvePlanar(request:SolveRequest):ConstraintResult {
     if(!branches.some(a=>p.points.every(n=>norm(sub(a.positions[n],b.positions[n]))<e.scale*1e-5)&&e.variables.every(u=>u.point||Math.abs((a.values?.[u.id]??0)-(b.values?.[u.id]??0))<1e-6)))branches.push(b);return true;
   };
   let analytic=false,complete=false;
+  if(!p.conditions.some(c=>c.enabled)&&!equations.some(c=>c.enabled)) {
+    const spread=Object.fromEntries(p.points.map((name,i)=>[name,[3*Math.cos(i*2*Math.PI/Math.max(3,p.points.length)),3*Math.sin(i*2*Math.PI/Math.max(3,p.points.length)),0] as Vec3]));
+    if(accept(e.encode(request.seeds?.[0]??spread,request.seedValues?.[0]))){analytic=true;steps.push('无附加条件：显示自由布局，未增加长度、角度或位置约束。');}
+  }
   if(e.variables.length===0&&!e.errors(e.initial).length){accept(e.initial);analytic=true;complete=true;steps.push('全部对象与数值均已知，直接验证已有定义和附加条件。');}
   // Exact rational elimination in a single independent parameter. The original
   // equations (including denominators and ranges) are always checked again.
@@ -130,21 +134,25 @@ export function solvePlanar(request:SolveRequest):ConstraintResult {
     steps.push(...plan.steps);complete=analytic&&plan.finite;
   }
   if(!analytic){
+    for(const [i,p] of (request.seeds??[]).entries()) {try{accept(e.encode(p,request.seedValues?.[i]));}catch{/* Incompatible old points are not constraints. */}}
     for(const b of request.previous?.branches??[])accept(e.encode(b.positions,b.values));
     // Bounds are required for *numerical parameter search*, never inferred from
     // the viewport. A polynomial/constructive answer needs no finite box.
     const missing=e.variables.filter(u=>!u.point&&(u.min===undefined||u.max===undefined));
-    if(missing.length)throw Error(`近似搜索需要给待求量设置上下界：${missing.map(u=>`${context!.document.objects.find(o=>o.id===u.object)?.name??u.object}.${u.field}`).join('、')}`);
+    if(missing.length&&!context?.automaticSearch)throw Error(`近似搜索需要给待求量设置上下界：${missing.map(u=>`${context!.document.objects.find(o=>o.id===u.object)?.name??u.object}.${u.field}`).join('、')}`);
     const scale=(context?.searchScale??20)*e.scale;
     const limits=e.variables.map((u):[number,number]=>{
-      if(!u.point)return [u.min!,u.max!];
+      if(!u.point)return [u.min??-scale,u.max??scale];
       const bounds=context?.searchBounds?.[u.point],lo=u.axis===0?bounds?.xMin:bounds?.yMin,hi=u.axis===0?bounds?.xMax:bounds?.yMax;
-      if(p.mode==='coordinate'&&(lo===undefined||hi===undefined))throw Error(`请在“近似搜索范围”设置 ${u.point} 的 ${u.axis===0?'x':'y'} 搜索上下界`);
+      if(p.mode==='coordinate'&&!context?.automaticSearch&&(lo===undefined||hi===undefined))throw Error(`请在“近似搜索范围”设置 ${u.point} 的 ${u.axis===0?'x':'y'} 搜索上下界`);
       return [lo??-scale,hi??scale];
     });
     for(let attempt=0;attempt<24&&Date.now()<deadline&&branches.length<cap;attempt++){
-      const start=attempt===0?e.initial.map((v,i)=>Math.max(limits[i][0],Math.min(limits[i][1],v))):limits.map(([lo,hi])=>lo+random()*(hi-lo));
-      const candidate=minimize(e.residual,start,Math.min(deadline,Date.now()+Math.max(50,(request.budget??2000)/5)),limits);accept(candidate);
+      const exploration=Math.pow(4,Math.floor(attempt/6));
+      const searchLimits=context?.automaticSearch?limits.map(([lo,hi],i):[number,number]=>[e.variables[i].min??lo*exploration,e.variables[i].max??hi*exploration]):limits;
+      const guess=request.seeds?.[0]?e.encode(request.seeds[0],request.seedValues?.[0]):e.initial;
+      const start=attempt===0?guess.map((v,i)=>Math.max(limits[i][0],Math.min(limits[i][1],v))):searchLimits.map(([lo,hi],i)=>{const radius=Math.min((hi-lo)/2,Math.max(2,Math.abs(e.initial[i])*2)*exploration);return Math.max(lo,Math.min(hi,e.initial[i]+(random()*2-1)*radius));});
+      const candidate=minimize(e.residual,start,Math.min(deadline,Date.now()+Math.max(50,(request.budget??2000)/5)),searchLimits);accept(candidate);
       if(branches.length&&branches[0].dof>0&&attempt>3)break;
     }
   }

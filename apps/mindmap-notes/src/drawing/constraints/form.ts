@@ -3,7 +3,7 @@ import { entity } from "./input";
 import { angleKinds,angleSource,type AngleMode } from "./angles";
 
 export const conditionGroups:{name:string;kinds:ConstraintKind[]}[]=[
-  {name:"长度",kinds:["distance","equal","ratio","scalarEquation","circumradius","concyclic","cospherical"]},
+  {name:"长度",kinds:["distance","pointLineDistance","pointPlaneDistance","equal","ratio","scalarEquation","circumradius","concyclic","cospherical"]},
   {name:"面积 / 体积",kinds:["area","volume"]},
   {name:"角度",kinds:["vertexAngle","lineAngle","linePlaneAngle","dihedral"]},
   {name:"位置关系",kinds:["parallel","perpendicular","collinear","coplanar","onSegment","division","onCurve"]},
@@ -13,6 +13,7 @@ export const conditionGroups:{name:string;kinds:ConstraintKind[]}[]=[
 ];
 export const conditionFields:Record<ConstraintKind,{label:string;placeholder:string}[]>={
   scalarEquation:[{label:"等式",placeholder:"AB+BC=2AC"}],
+  pointLineDistance:[{label:"点",placeholder:"P"},{label:"直线（两点或名称）",placeholder:"AB 或 l"}],pointPlaneDistance:[{label:"点",placeholder:"P"},{label:"平面（三个点）",placeholder:"ABC"}],
   distance:[{label:"线段",placeholder:"AB"}],equal:[{label:"第一条线段",placeholder:"AB"},{label:"第二条线段",placeholder:"CD"}],
   ratio:[{label:"分子线段",placeholder:"AB"},{label:"分母线段",placeholder:"CD"}],
   vertexAngle:[{label:"角（中间点为顶点）",placeholder:"ABC"}],
@@ -57,5 +58,5 @@ export function formConditionSource(kind:ConstraintKind,fields:string[],names:st
   const refs=kind==="vertexAngle"?groups[0].join(","):groups.map(g=>g.join(" ")).join(",");
   if(angleKinds.includes(kind))return angleSource(kind,refs,value,mode,range);
   if(kind==="vectorDot")return `dot(${refs}) = ${value}`;
-  return `${kind}(${refs}${["distance","ratio","division","area","circumradius"].includes(kind)||["concyclic","cospherical"].includes(kind)&&value.trim()?`, ${value}`:""})`;
+  return `${kind}(${refs}${["pointLineDistance","pointPlaneDistance","distance","ratio","division","area","circumradius"].includes(kind)||["concyclic","cospherical"].includes(kind)&&value.trim()?`, ${value}`:""})`;
 }

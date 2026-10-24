@@ -59,9 +59,11 @@ export function applyValues(context:PlanarContext,values:Record<string,number>={
 export function addPlanarDefinition(context:PlanarContext,source:string):PlanarContext {
   const next=structuredClone(context),before=new Set(next.document.objects.map(o=>o.id));
   const pending=source.includes('?'),clean=source.replace(/\?/g,'1');
-  next.document=applyDefinition(next.document,clean);
+  next.document=applyDefinition(next.document,clean,undefined,true);
+  const tuple=source.match(/=\s*\(([^,]+),([^,)]+)\)\s*$/);
   if(pending)for(const o of next.document.objects.filter(o=>!before.has(o.id)))for(const field of unknownFields(o)) {
-    const initial=unknownValue(next.document,o,field);next.unknowns.push({id:`${o.id}.${field}`,object:o.id,field,initial,min:o.kind==='number'?o.slider.min:undefined,max:o.kind==='number'?o.slider.max:undefined});
+    if(tuple&&['x','y'].includes(field)&&!tuple[field==='x'?1:2].includes('?'))continue;
+    const initial=unknownValue(next.document,o,field);next.unknowns.push({id:`${o.id}.${field}`,object:o.id,field,initial,min:undefined,max:undefined});
   }
   return next;
 }
@@ -84,14 +86,14 @@ export function materializePlanar(problem:ConstraintProblem,values:Record<string
   }
   return d;
 }
-export function planarPositions(problem:ConstraintProblem,doc:DrawingDocument):Positions {
+export function planarPositions(problem:ConstraintProblem,doc:DrawingDocument,allowInvalid=false):Positions {
   const resolved=resolveGeometry(doc),plane=coordinatePlane(doc);
-  return Object.fromEntries(problem.points.map(n=>{const o=doc.objects.find(o=>o.kind==='point'&&objectSymbol(o)===n),q=o&&resolved.points.get(o.id);if(!q)throw Error(`${n}：${o&&resolved.errors.get(o.id)||'点定义失效'}`);const p=toPlane(plane,q.p);return [n,[...p,0] as Vec3];}));
+  return Object.fromEntries(problem.points.map(n=>{const o=doc.objects.find(o=>o.kind==='point'&&objectSymbol(o)===n),q=o&&resolved.points.get(o.id);if(!q&&allowInvalid)return [n,[0,0,0] as Vec3];if(!q)throw Error(`${n}：${o&&resolved.errors.get(o.id)||'点定义失效'}`);const p=toPlane(plane,q.p);return [n,[...p,0] as Vec3];}));
 }
 let contextValidationDepth=0;
 export function validatePlanarContext(p:ConstraintProblem) {
   if(!planarMode(p))return;
-  const forbidden=new Set(['volume','linePlaneAngle','dihedral','coplanar','cospherical','prism','pyramid','frustum','cube','cylinder','cone','coneFrustum','sphere']);
+  const forbidden=new Set(['pointPlaneDistance','volume','linePlaneAngle','dihedral','coplanar','cospherical','prism','pyramid','frustum','cube','cylinder','cone','coneFrustum','sphere']);
   if(p.conditions.some(c=>forbidden.has(c.kind)||['parallel','perpendicular'].includes(c.kind)&&c.refs.some(r=>r.length!==2)))throw Error('平面模式不支持空间条件');
   if(p.mode==='plane'&&p.curves?.some(c=>c.type!=='circle'))throw Error('无坐标模式暂只支持圆');
   const c=p.planar;if(!c){if(p.mode==='coordinate')throw Error('缺少坐标对象定义');return;}
@@ -101,6 +103,7 @@ export function validatePlanarContext(p:ConstraintProblem) {
   if(c.document.dimension!=='2d'||c.document.objects.some(o=>o.kind==='solid')||!Array.isArray(c.unknowns)||c.unknowns.length>100||!Array.isArray(c.equations)||c.equations.length>200)throw Error('二维对象或未知量配置无效');
   const ids=new Set<string>();for(const u of c.unknowns){const o=c.document.objects.find(o=>o.id===u.object);if(!o||!unknownFields(o).includes(u.field)||u.id!==`${u.object}.${u.field}`||ids.has(u.id)||!Number.isFinite(u.initial)||[u.min,u.max].some(v=>v!==undefined&&(!Number.isFinite(v)||Math.abs(v)>1e9))||u.min!==undefined&&u.max!==undefined&&u.min>=u.max)throw Error('待求量或取值范围无效');ids.add(u.id);}
   for(const e of c.equations)if(!e||typeof e.id!=='string'||typeof e.enabled!=='boolean'||typeof e.source!=='string'||e.source.length>2048)throw Error('坐标条件无效');
+  if(c.automaticSearch!==undefined&&typeof c.automaticSearch!=='boolean')throw Error('自动搜索设置无效');
   if(c.searchScale!==undefined&&(!Number.isFinite(c.searchScale)||c.searchScale<=0||c.searchScale>1e6))throw Error('近似搜索尺度无效');
   for(const [name,b]of Object.entries(c.searchBounds??{})){
     if(!p.points.includes(name)||!b||Object.values(b).some(v=>!Number.isFinite(v)||Math.abs(v)>1e9)||b.xMin!==undefined&&b.xMax!==undefined&&b.xMin>=b.xMax||b.yMin!==undefined&&b.yMax!==undefined&&b.yMin>=b.yMax)throw Error('点的近似搜索范围无效');

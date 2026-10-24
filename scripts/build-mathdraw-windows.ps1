@@ -8,8 +8,8 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 if ($env:OS -ne 'Windows_NT') { throw 'Please run this script on Windows 10/11 x64.' }
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$workspaceRoot = $projectRoot
-$appRoot = Join-Path $workspaceRoot 'apps\mindmap-notes'
+$workspaceRoot = Split-Path -Parent $projectRoot
+$appRoot = Join-Path $workspaceRoot '枝间'
 $target = 'x86_64-pc-windows-msvc'
 $appVersion = (Get-Content (Join-Path $appRoot 'src-tauri\tauri.conf.json') -Raw | ConvertFrom-Json).version
 function Invoke-Checked {
@@ -52,7 +52,7 @@ try {
         $executable = Join-Path $release "$binary.exe"
         if ($installers.Count -eq 0 -or -not (Test-Path $executable)) { throw "Build output is incomplete for $product." }
         $outputRoot = if ($product -eq 'Mathdraw') { $projectRoot } else { $appRoot }
-        $output = Join-Path $outputRoot 'artifacts/mathdraw\windows'
+        $output = Join-Path $outputRoot '产物\windows'
         New-Item -ItemType Directory -Force -Path $output | Out-Null
         $signed = @()
         if ($product -eq 'Mathdraw' -and -not $UnsignedDevelopment) {
@@ -69,7 +69,7 @@ try {
         }
         Write-Host "Output: $output"
     }
-    $manifest = Join-Path $projectRoot 'artifacts/mathdraw\windows\build-info.json'
+    $manifest = Join-Path $projectRoot '产物\windows\build-info.json'
     [pscustomobject]@{ builtAt=(Get-Date).ToString('o'); target=$target; node=$nodeVersion.ToString(); files=$records } |
         ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifest -Encoding UTF8
     Write-Host 'Completed. Use the *-setup.exe installer for distribution. Updater signatures accompany release installers; Authenticode signing is not configured.'

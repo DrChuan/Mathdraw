@@ -4,8 +4,9 @@ import path from 'node:path';
 import {tmpdir} from 'node:os';
 import {drawingSourceHash,installLocalDrawing} from './local-drawing.mjs';
 const here=path.resolve(import.meta.dirname,'..');
-const projectRoot=here,appRoot=path.join(here,'apps/mindmap-notes');
-const outputRoot=path.join(projectRoot,'artifacts/mathdraw'),cache=path.join(projectRoot,'.build-cache');
+const workspace=existsSync(path.join(here,'枝间'))?here:path.resolve(here,'..');
+const projectRoot=path.join(workspace,'数学绘图'),appRoot=path.join(workspace,'枝间');
+const outputRoot=path.join(projectRoot,'产物'),cache=path.join(projectRoot,'.build-cache');
 const mac=process.platform==='darwin';
 async function run(args){await new Promise((resolve,reject)=>{const child=spawn(process.platform==='win32'?'npm.cmd':'npm',args,{cwd:appRoot,stdio:'inherit',shell:process.platform==='win32'});child.on('error',reject);child.on('exit',code=>code===0?resolve():reject(Error(`构建未完成，退出码 ${code}`)));});}
 let lock;

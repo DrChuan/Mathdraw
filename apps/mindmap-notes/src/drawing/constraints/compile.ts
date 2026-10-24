@@ -55,10 +55,10 @@ export function expandConditions(problem:ConstraintProblem):Primitive[] {
 export const flatten=(names:string[],p:Positions)=>names.flatMap(n=>p[n]);
 export const positions=(names:string[],x:number[]):Positions=>Object.fromEntries(names.map((n,i)=>[n,x.slice(i*3,i*3+3) as Vec3]));
 export function problemScale(p:ConstraintProblem) {
-  const lengths=p.conditions.filter(c=>c.enabled&&["distance","circumradius","concyclic","cospherical"].includes(c.kind)&&c.value!==undefined).map(c=>c.value!);
+  const lengths=p.conditions.filter(c=>c.enabled&&["pointLineDistance","pointPlaneDistance","distance","circumradius","concyclic","cospherical"].includes(c.kind)&&c.value!==undefined).map(c=>c.value!);
   lengths.push(...p.conditions.filter(c=>c.enabled&&["area","volume"].includes(c.kind)).map(c=>c.value!**(c.kind==="area"?.5:1/3)),...(p.curves??[]).filter(c=>c.value).map(c=>c.value!/(c.type==="ellipse"?2:1)));lengths.sort((a,b)=>a-b);
   const dots=p.conditions.filter(c=>c.enabled&&c.kind==="vectorDot"&&c.value).map(c=>Math.sqrt(Math.abs(c.value!)));
-  return lengths.length?lengths[Math.floor(lengths.length/2)]:dots[0]??1;
+  const positive=lengths.filter(n=>n>0);return positive.length?positive[Math.floor(positive.length/2)]:dots[0]??1;
 }
 export function evaluator(problem:ConstraintProblem) {
   const primitives=expandConditions(problem), scale=problemScale(problem), indices=new Map(problem.points.map((n,i)=>[n,i*3]));
@@ -104,6 +104,8 @@ export function evaluator(problem:ConstraintProblem) {
       case "coneFrustum": {
         const [o,t,a,b]=refs[0];return [Math.max(0,-dot(unit(sub(a,o)),unit(sub(b,t))))];
       }
+      case "pointLineDistance": {const [p]=refs[0],[a,b]=refs[1],d=sub(b,a),distance=norm(cross(sub(p,a),d))/Math.max(norm(d),scale*1e-12);return [(distance-c.value!)/Math.max(1,scale,c.value!)];}
+      case "pointPlaneDistance": {const [p]=refs[0],[a,b,d]=refs[1],n=cross(sub(b,a),sub(d,a)),distance=Math.abs(dot(sub(p,a),n))/Math.max(norm(n),scale*scale*1e-24);return [(distance-c.value!)/Math.max(1,scale,c.value!)];}
       case "distance":return [(norm(v(refs[0]))-c.value!)/Math.max(c.value!,scale*1e-12)];
       case "equal": {const a=norm(v(refs[0])),b=norm(v(refs[1]));return [(a-b)/Math.max(a,b,scale*1e-12)];}
       case "ratio": {const a=norm(v(refs[0])),b=c.value!*norm(v(refs[1]));return [(a-b)/Math.max(a,b,scale*1e-12)];}
@@ -183,6 +185,8 @@ export function evaluator(problem:ConstraintProblem) {
     const plane=(r:Vec3[])=>{line(r);const a=sub(r[1],r[0]),b=sub(r[2],r[0]);lengths.push(norm(cross(a,b))/Math.max(norm(a)*norm(b),scale*scale*1e-24));};
     if(["distance","equal","ratio","lineAngle","linePlaneAngle","parallel","perpendicular"].includes(c.kind))
       refs.forEach(r=>r.length===2?line(r):plane(r));
+    else if(c.kind==="pointLineDistance")line(refs[1]);
+    else if(c.kind==="pointPlaneDistance")plane(refs[1]);
     else if(c.kind==="vertexAngle"){line([refs[1][0],refs[0][0]]);line([refs[1][0],refs[2][0]]);}
     else if(c.kind==="dihedral"){plane([...refs[0],refs[1][0]]);plane([...refs[0],refs[2][0]]);}
     else if(c.kind==="onSegment"||c.kind==="division")line(refs[1]);

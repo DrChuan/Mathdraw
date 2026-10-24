@@ -11,7 +11,7 @@ export default function ConditionInput({points,segments='',angleEdges,curves=[],
   const [anglePage,setAnglePage]=useState(0);
   const angles=useMemo(()=>declaredAngleSuggestions(points,segments,angleEdges),[points,segments,angleEdges]);
   const pageCount=Math.ceil(angles.count/32),currentPage=Math.max(0,Math.min(anglePage,pageCount-1));
-  const forbidden=new Set(['volume','linePlaneAngle','dihedral','coplanar','cospherical','prism','pyramid','frustum','cube','cylinder','cone','coneFrustum','sphere']);
+  const forbidden=new Set(['pointPlaneDistance','volume','linePlaneAngle','dihedral','coplanar','cospherical','prism','pyramid','frustum','cube','cylinder','cone','coneFrustum','sphere']);
   const groups=mode==='spatial'?conditionGroups:conditionGroups.map(g=>({...g,name:g.name==='面积 / 体积'?'面积':g.name,kinds:g.kinds.filter(k=>!forbidden.has(k))})).filter(g=>g.kinds.length);
   const [category,setCategory]=useState(0),[kind,setKind]=useState<ConstraintKind>("distance"),[fields,setFields]=useState<string[]>([]),[value,setValue]=useState("3"),[shorthand,setShorthand]=useState("");
   const [angleMode,setAngleMode]=useState<AngleMode>("degrees"),[range,setRange]=useState<"both"|"acute"|"obtuse">("both");
@@ -21,8 +21,8 @@ export default function ConditionInput({points,segments='',angleEdges,curves=[],
   const submitShort=()=>{if(shorthand.trim()&&append([shorthand]))setShorthand("");};
   const submit=()=>{
     try{let source:string;try{source=formConditionSource(kind,fields,pointNames(points,mode==='coordinate'?2000:50),value,angleMode,range,solid,curves);}catch(e){
-      if(mode!=='coordinate'||!['parallel','perpendicular','distance','equal','ratio','lineAngle','vectorDot'].includes(kind))throw e;
-      source=`${kind}(${fields.join(',')}${['distance','ratio','lineAngle','vectorDot'].includes(kind)?`,${value}`:''})`;
+      if(mode!=='coordinate'||!['pointLineDistance','parallel','perpendicular','distance','equal','ratio','lineAngle','vectorDot'].includes(kind))throw e;
+      source=`${kind}(${fields.join(',')}${['pointLineDistance','distance','ratio','lineAngle','vectorDot'].includes(kind)?`,${value}`:''})`;
       if(kind==='lineAngle')source=['sin','cos','tan'].includes(angleMode)?`${angleMode}Angle(${fields.join(',')})=${value}`:`lineAngle(${fields.join(',')},${angleMode==='radians'||/\\pi|\bpi\b|π/.test(value)?`(${value})*180/pi`:value})`;
     }if(append([source]))setFields([]);}
     catch(e){onError((e as Error).message);}
@@ -32,7 +32,7 @@ export default function ConditionInput({points,segments='',angleEdges,curves=[],
     setShorthand(shorthand.slice(0,start)+symbol+shorthand.slice(end));
     requestAnimationFrame(()=>{field?.focus();field?.setSelectionRange(start+symbol.length-back,start+symbol.length-back);});
   };
-  const numeric=["distance","ratio","division","vectorDot","area","volume","circumradius","concyclic","cospherical",...angleKinds].includes(kind);
+  const numeric=["pointLineDistance","pointPlaneDistance","distance","ratio","division","vectorDot","area","volume","circumradius","concyclic","cospherical",...angleKinds].includes(kind);
   const inputs=kind==="volume"?conditionFields[solid]:conditionFields[kind];
   const bodies=conditions.filter(c=>c.enabled&&["prism","pyramid","frustum","cylinder","cone","coneFrustum","cube"].includes(c.kind));
   return <section className="constraint-input" aria-label="添加条件">
@@ -45,7 +45,7 @@ export default function ConditionInput({points,segments='',angleEdges,curves=[],
         {kind==="volume"&&<><label>几何体类型<select value={solid} onChange={e=>{setSolid(e.target.value as VolumeShape);setFields([]);}}>{(["prism","pyramid","frustum","cylinder","cone","coneFrustum"] as const).map(k=><option key={k} value={k}>{conditionLabels[k]}</option>)}</select></label>{bodies.length>0&&<label>填入已声明几何体<select value="" onChange={e=>{const body=bodies.find(c=>c.id===e.target.value);if(!body)return;setSolid(body.kind==="cube"?"prism":body.kind as VolumeShape);const p=body.refs[0],n=p.length/2;setFields(body.kind==="pyramid"?[p[0],p.slice(1).join(" ")]:["prism","frustum","cube"].includes(body.kind)?[p.slice(0,n).join(" "),p.slice(n).join(" ")]:p);}}><option value="">选择…</option>{bodies.map(c=><option key={c.id} value={c.id}>{conditionLabels[c.kind]} {c.refs.flat().join(" ")}</option>)}</select></label>}</>}
         {inputs.map((field,i)=><label key={`${kind}-${solid}-${i}`}>{field.label}{kind==="onCurve"&&i===1?<select value={fields[i]??""} onChange={e=>setFields(v=>[v[0]??"",e.target.value])}><option value="">选择曲线…</option>{curves.map(c=><option key={c.id} value={c.name}>{c.name} · {c.type==="circle"?"圆":"椭圆"}</option>)}</select>:<input aria-label={field.label} spellCheck={false} autoComplete="off" placeholder={field.placeholder} value={fields[i]??""} onChange={e=>setFields(previous=>{const next=[...previous];next[i]=e.target.value;return next;})}/>}</label>)}
         {angleKinds.includes(kind)&&<label>给定方式<select aria-label="角的给定方式" value={angleMode} onChange={e=>{setAngleMode(e.target.value as AngleMode);setValue(e.target.value==="degrees"?"60":e.target.value==="radians"?"pi/3":"1/2");}}><option value="degrees">角度（度）</option><option value="radians">角度（弧度）</option><option value="sin">正弦值 sin</option><option value="cos">余弦值 cos</option><option value="tan">正切值 tan</option></select></label>}
-        {numeric&&<label>{kind==="area"?"面积":kind==="volume"?"体积":kind==="circumradius"?"外接圆半径":["concyclic","cospherical"].includes(kind)?"半径（可留空）":kind==="distance"?"长度":kind==="vectorDot"?"数量积（可为负数或零）":kind==="division"?"AP / PB（1 为中点）":kind==="ratio"?"长度比":angleMode==="degrees"?"角度（度）":angleMode==="radians"?"角度（弧度）":"三角函数值"}<input aria-label="条件数值" value={value} onChange={e=>setValue(e.target.value)} placeholder="支持分数和根式"/></label>}
+        {numeric&&<label>{kind==="area"?"面积":kind==="volume"?"体积":kind==="circumradius"?"外接圆半径":["concyclic","cospherical"].includes(kind)?"半径（可留空）":["pointLineDistance","pointPlaneDistance"].includes(kind)?"距离":kind==="distance"?"长度":kind==="vectorDot"?"数量积（可为负数或零）":kind==="division"?"AP / PB（1 为中点）":kind==="ratio"?"长度比":angleMode==="degrees"?"角度（度）":angleMode==="radians"?"角度（弧度）":"三角函数值"}<input aria-label="条件数值" value={value} onChange={e=>setValue(e.target.value)} placeholder="支持分数和根式"/></label>}
         {angleMode==="sin"&&["vertexAngle","dihedral"].includes(kind)&&<label>角的范围<select aria-label="正弦角的范围" value={range} onChange={e=>setRange(e.target.value as typeof range)}><option value="both">保留两种可能</option><option value="acute">0°～90°</option><option value="obtuse">90°～180°</option></select></label>}
         <button className="primary constraint-add" type="submit" disabled={inputs.some((_,i)=>!fields[i]?.trim())}>加入条件</button>
       </form>

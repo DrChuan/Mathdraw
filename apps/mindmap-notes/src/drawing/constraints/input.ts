@@ -5,12 +5,12 @@ import { validatePlanarContext } from './planarModel';
 import { parseVectorRelation,vectorDotSource } from "./vectors";
 import { constraintKinds, type Condition, type ConstraintKind, type ConstraintProblem, type ConstraintCurve, type VolumeShape } from "./types";
 
-export const conditionLabels:Record<ConstraintKind,string>={distance:"长度",equal:"等长",ratio:"长度比",lineAngle:"线线角",vertexAngle:"三点角",
+export const conditionLabels:Record<ConstraintKind,string>={pointLineDistance:"点到直线距离",pointPlaneDistance:"点到平面距离",distance:"长度",equal:"等长",ratio:"长度比",lineAngle:"线线角",vertexAngle:"三点角",
   linePlaneAngle:"线面角",dihedral:"二面角",parallel:"平行",perpendicular:"垂直",collinear:"三点共线",onSegment:"点在线段上",division:"定比分点（默认中点）",
   coplanar:"四点共面",parallelogram:"平行四边形",rectangle:"矩形",rhombus:"菱形",square:"正方形",prism:"棱柱",pyramid:"棱锥",frustum:"棱台",regularPolygon:"正多边形",cube:"正方体",
   scalarEquation:"长度 / 角等式",vectorRelation:"向量线性关系",vectorDot:"向量数量积",convexPolygon:"凸多边形（按顺序）",congruent:"三角形 / 多边形全等",similar:"三角形 / 多边形相似",
   area:"多边形面积",volume:"几何体体积",circumradius:"三角形外接圆半径",concyclic:"若干点共圆",cospherical:"若干点共球",onCurve:"点在曲线上",cylinder:"圆柱",cone:"圆锥",coneFrustum:"圆台",sphere:"球"};
-export const conditionExamples:Record<ConstraintKind,string>={distance:"AB = 3",equal:"AB = CD",ratio:"AB / CD = 2",lineAngle:"angle(AB, CD) = 60",
+export const conditionExamples:Record<ConstraintKind,string>={pointLineDistance:"pointLineDistance(P,AB)=2",pointPlaneDistance:"pointPlaneDistance(P,ABC)=2",distance:"AB = 3",equal:"AB = CD",ratio:"AB / CD = 2",lineAngle:"angle(AB, CD) = 60",
   vertexAngle:"angle(A, B, C) = 120",linePlaneAngle:"angle(AB, CDE) = 30",dihedral:"dihedral(AB, C, D) = 120",
   parallel:"AB // CD",perpendicular:"AB ⟂ CDE",collinear:"collinear(A, B, C)",onSegment:"onSegment(P, A, B)",
   division:"division(M, AB, 1)",coplanar:"coplanar(A, B, C, D)",parallelogram:"parallelogram(A, B, C, D)",rectangle:"rectangle(A, B, C, D)",rhombus:"rhombus(A, B, C, D)",
@@ -51,7 +51,7 @@ export function validateCondition(c:Condition,names:string[],curves?:ConstraintC
   if(!constraintKinds.includes(c.kind)||typeof c.id!=="string"||!c.id||typeof c.source!=="string"||c.source.length>2048||typeof c.enabled!=="boolean"||
     !Array.isArray(c.refs)||c.refs.some(r=>!Array.isArray(r)||r.some(p=>!names.includes(p))||new Set(r).size!==r.length))throw new Error("条件数据或点引用无效");
   const sizes=c.refs.map(r=>r.length).join(",");
-  const expected:Partial<Record<ConstraintKind,string>>={distance:"2",equal:"2,2",ratio:"2,2",lineAngle:"2,2",vertexAngle:"1,1,1",linePlaneAngle:"2,3",dihedral:"2,1,1",collinear:"3",onSegment:"1,2",division:"1,2",coplanar:"4",parallelogram:"4",rectangle:"4",rhombus:"4",square:"4",cube:"8"};
+  const expected:Partial<Record<ConstraintKind,string>>={pointLineDistance:"1,2",pointPlaneDistance:"1,3",distance:"2",equal:"2,2",ratio:"2,2",lineAngle:"2,2",vertexAngle:"1,1,1",linePlaneAngle:"2,3",dihedral:"2,1,1",collinear:"3",onSegment:"1,2",division:"1,2",coplanar:"4",parallelogram:"4",rectangle:"4",rhombus:"4",square:"4",cube:"8"};
   if(c.kind==="volume") {
     if(!["prism","pyramid","frustum","cylinder","cone","coneFrustum"].includes(c.solid??""))throw new Error("体积仅支持棱柱、棱锥、棱台、圆柱、圆锥和圆台");
     validateCondition({...c,kind:c.solid!,solid:undefined,value:undefined},names,curves);
@@ -79,11 +79,12 @@ export function validateCondition(c:Condition,names:string[],curves?:ConstraintC
     if(c.refs.length!==1||c.refs[0].length<3||c.refs[0].length>49)throw new Error("多边形需要按顺序填写至少三个顶点");
   } else if(c.kind==="parallel"||c.kind==="perpendicular") {if(!["2,2","2,3","3,2","3,3"].includes(sizes))throw new Error("平行/垂直需要两条线、线与面或两个面");}
   else if(sizes!==expected[c.kind])throw new Error(`${conditionLabels[c.kind]}的点数或对象格式不正确`);
-  if(["distance","ratio","division","lineAngle","vertexAngle","linePlaneAngle","dihedral"].includes(c.kind)) {
+  if(["pointLineDistance","pointPlaneDistance","distance","ratio","division","lineAngle","vertexAngle","linePlaneAngle","dihedral"].includes(c.kind)) {
     if(typeof c.value!=="number"||!Number.isFinite(c.value)||Math.abs(c.value)>1e6)throw new Error("条件数值无效");
     if(["distance","ratio","division"].includes(c.kind)&&c.value<=0)throw new Error("长度和长度比必须大于零");
     const max=["lineAngle","linePlaneAngle"].includes(c.kind)?90:180;
-    if(!["distance","ratio","division"].includes(c.kind)&&(c.value<0||c.value>max))throw new Error(`角度必须在 0～${max}° 之间`);
+    if(["pointLineDistance","pointPlaneDistance"].includes(c.kind)&&c.value<0)throw Error("距离不能为负数");
+    if(!["pointLineDistance","pointPlaneDistance","distance","ratio","division"].includes(c.kind)&&(c.value<0||c.value>max))throw new Error(`角度必须在 0～${max}° 之间`);
   }
   if(c.alternateValue!==undefined&&(!["vertexAngle","dihedral"].includes(c.kind)||!Number.isFinite(c.alternateValue)||c.alternateValue<0||c.alternateValue>180))throw new Error("角的另一分支无效");
   if(["area","volume","circumradius"].includes(c.kind)||["concyclic","cospherical"].includes(c.kind)&&c.value!==undefined)
@@ -160,7 +161,7 @@ function parseGeometricCondition(source:string,names:string[],id:string,curves:C
     if(command==="angle") {refs=args.map(a=>entity(a,names));kind=refs.length===3?"vertexAngle":refs.some(r=>r.length===3)?"linePlaneAngle":"lineAngle";if(kind==="linePlaneAngle"&&refs[0].length===3)refs.reverse();value=angleDegrees(call[3]??"");}
     else {
       const known=command==="midpoint"?"division":constraintKinds.find(k=>k.toLowerCase()===command);if(!known)throw new Error(`未知条件：${call[1]}`);kind=known;
-      const numeric=["distance","ratio","division","lineAngle","vertexAngle","linePlaneAngle","dihedral","area","circumradius"].includes(kind);
+      const numeric=["pointLineDistance","pointPlaneDistance","distance","ratio","division","lineAngle","vertexAngle","linePlaneAngle","dihedral","area","circumradius"].includes(kind);
       if(command==="midpoint")value=1;
       else if(numeric)value=angleKinds.includes(kind)?angleDegrees(call[3]??args.pop()??""):scalar(kind==="division"&&args.length===2&&!call[3]?"1":call[3]??args.pop()??"");
       if(kind==="concyclic"||kind==="cospherical") {

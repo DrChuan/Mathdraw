@@ -17,8 +17,8 @@ export function parsePlanarInput(source:string,names:string[],curves:ConstraintC
   catch {
     if(!source.trim()||source.length>2048)throw Error('请输入有效条件（最多 2048 字符）');
     const normalized=source.replace(/＝/g,'=').replace(/\\(?:leq|le)\b|≤/g,'<=').replace(/\\(?:geq|ge)\b|≥/g,'>=');
-    const parts=normalized.split(/(?<![<>])=(?!=)/);
-    const sources=parts.length>2?parts.slice(0,-1).map((s,i)=>`${s}=${parts[i+1]}`):[normalized];
+    const parts=normalized.split(/(<=|>=|<|>|=)/);
+    const sources=parts.length>3?parts.filter((_,i)=>i%2===0).slice(0,-1).map((s,i)=>`${s}${parts[2*i+1]}${parts[2*i+2]}`):[normalized];
     return {conditions:[],equations:sources.map(source=>({id:crypto.randomUUID(),source:source.trim(),enabled:true}))};
   }
 }
@@ -74,8 +74,9 @@ export function equationEnvironment(doc:DrawingDocument) {
       };
       const values=parsed.map(s=>walk(parseExpression(s,names))).map(v=>typeof v==='number'?v===0?[0,0] as Vec2:undefined:v);if(!values[0]||!values[1])throw Error('向量等式不能与非零标量相等');return [values[0][0]-values[1][0],values[0][1]-values[1][1]];
     }
-    const call=source.match(/^(onCurve|onLine|intersection|tangent|parallel|perpendicular|center|focus|directrix|lineAngle|distance|equal|ratio|vectorDot)\s*\((.*)\)$/i);
+    const call=source.match(/^(pointLineDistance|onCurve|onLine|intersection|tangent|parallel|perpendicular|center|focus|directrix|lineAngle|distance|equal|ratio|vectorDot)\s*\((.*)\)$/i);
     if(call){const args=call[2].split(',').map(s=>s.trim()),name=call[1].toLowerCase();
+      if(name==='pointlinedistance'){const distance=numeric(args[2]);if(distance<0)throw Error('距离不能为负数');const l=line(args[1]),p=point(args[0]);return [(Math.abs(l[3]*p[0]+l[4]*p[1]+l[5])-distance)/Math.max(1,distance)];}
       if(name==='oncurve'||name==='online')return [at(point(args[0]),args[1]),...bounds(point(args[0]),args[1])];
       if(name==='intersection')return [at(point(args[0]),args[1]),...bounds(point(args[0]),args[1]),at(point(args[0]),args[2]),...bounds(point(args[0]),args[2])];
       if(name==='distance')return [(numeric(`length(${args[0]})`)-numeric(args[1]))/Math.max(1,Math.abs(numeric(args[1])))];

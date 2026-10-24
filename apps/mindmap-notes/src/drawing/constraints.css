@@ -62,3 +62,32 @@
 .planar-constraint-dialog .planar-search{margin:6px 0}.planar-constraint-dialog .constraint-condition-flow{gap:5px}.planar-constraint-dialog .constraint-condition-chip{padding:2px 5px;gap:4px}
 @media(max-width:760px){.planar-constraint-dialog .planar-declarations{display:block}.planar-constraint-dialog .planar-declarations .constraint-section-heading{margin-bottom:5px}.planar-file-actions{margin-right:3px}}
 .constraint-angle-suggestions{margin-top:8px;padding-top:6px;border-top:1px solid #e2e9e4}.constraint-angle-heading{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#5d7164;margin-bottom:4px}.constraint-angle-paging{display:inline-flex;gap:5px;align-items:center}.drawing-app .constraint-dialog .constraint-angle-paging button{min-height:20px;padding:0 6px}.constraint-angle-buttons{display:flex;gap:4px;flex-wrap:wrap;max-height:96px;overflow-y:auto}.drawing-app .constraint-dialog .constraint-angle-buttons>button{padding:2px 6px;min-height:24px;background:#f7faf7}.constraint-angle-buttons .expression-preview{padding:0;font-size:12px}.constraint-angle-buttons .markdown p{margin:0}.constraint-angle-suggestions small{display:inline;margin:0}
+.planar-object-form{margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #e1e7ef}.planar-object-form>.constraint-full-form{margin-top:8px}.planar-conic-features{flex-basis:100%;min-width:0;border:1px solid #e1e7ef;border-radius:6px;padding:8px 10px;margin:4px 0}.planar-conic-features>div{display:flex;align-items:center;gap:12px;min-height:32px;flex-wrap:wrap}.constraint-dialog .planar-conic-features label{display:flex;flex-direction:row;align-items:center;gap:6px}.planar-conic-features>div>label:first-child{min-width:160px}.constraint-dialog .planar-conic-features input[type=checkbox]{width:auto;height:auto}.constraint-dialog .planar-conic-features input:not([type=checkbox]){width:120px}.planar-object-form .constraint-full-form>label:has(input[aria-label="直线方程"]){flex:1 1 300px;max-width:none}
+/* Use the available width before adding another row. */
+.planar-conic-features{display:flex;flex-wrap:wrap;align-items:center;gap:5px 16px}.planar-conic-features>div{flex:0 1 auto;gap:6px;min-height:28px;flex-wrap:nowrap}.planar-conic-features>div>label:first-child{min-width:0;white-space:nowrap}.constraint-dialog .planar-conic-features input:not([type=checkbox]){width:86px;min-width:50px}.planar-conic-features>div>label{white-space:nowrap}
+.planar-object-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:6px;padding:6px}.planar-constraint-dialog .planar-object-list{max-height:300px}.planar-constraint-dialog .planar-object-row{min-width:0;margin:0;border:1px solid #e1e7ef;border-radius:5px;padding:5px 7px;align-content:start}.drawing-app .planar-object-row>button{min-width:100px;max-width:100%;overflow:auto}.planar-constraint-dialog .planar-object-list summary{padding:4px 8px}
+/* Each companion is one indivisible item. Override generic full-width input rules. */
+.drawing-app .constraint-dialog .planar-conic-features{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;box-sizing:border-box;max-width:100%}
+.drawing-app .constraint-dialog .planar-conic-features>div{display:flex;flex:0 0 auto;flex-wrap:nowrap;align-items:center;gap:7px;min-width:0;max-width:100%;box-sizing:border-box}
+.drawing-app .constraint-dialog .planar-conic-features>div>label{display:inline-flex;flex-direction:row;flex:0 0 auto;align-items:center;gap:6px;white-space:nowrap;min-width:0}
+.drawing-app .constraint-dialog .planar-conic-features>div>label>input:not([type=checkbox]){width:80px;min-width:50px;max-width:80px;flex:0 0 80px}
+.drawing-app .constraint-dialog .planar-conic-features>div>label>input[type=checkbox]{width:14px;height:14px;flex:0 0 14px}
+/* Always-on constraint preview: editing and solver results share one workspace. */
+.constraint-dialog{width:min(1500px,calc(100vw - 32px))}
+.constraint-content.live-workspace{display:grid;grid-template-columns:minmax(360px,1.1fr) minmax(320px,1fr);overflow:hidden;gap:0}
+.live-workspace>.constraint-editor{padding:12px;min-width:0;border-right:1px solid #e1e7ef}
+.constraint-live-preview{min-height:0;min-width:0;display:flex;flex-direction:column;overflow:auto}
+.constraint-live-preview>.constraint-visual{flex:1;min-height:240px}
+.constraint-live-preview .constraint-result-controls{border:0;padding:8px 12px;overflow:visible}
+.constraint-live-preview fieldset{border:0;padding:0;margin:0;min-width:0}
+.constraint-live-options{margin:0!important;padding:8px 12px;border-top:1px solid #e1e7ef}
+.constraint-live-status{padding:7px 12px;font-size:12px;background:#f4f7f5;color:#486655;overflow-wrap:anywhere}
+.constraint-live-status strong{display:block;margin-top:3px;font-weight:500}
+.constraint-live-status.invalid,.constraint-live-status.notFound,.constraint-live-status.contradiction{background:#fff4e7;color:#915528}
+.live-workspace .constraint-input-columns{grid-template-columns:1fr;gap:8px}
+.live-workspace .constraint-short-input{padding:8px 0 0;border-left:0;border-top:1px solid #e2e9e4}
+@media(max-width:760px){.constraint-content.live-workspace{grid-template-columns:minmax(280px,1fr) minmax(260px,1fr);overflow:auto}}
+.constraint-condition-chip.changed{border-color:#d2b36a;box-shadow:inset 3px 0 #d2b36a}
+.constraint-editor input[data-changed=true]{border-color:#c7aa62!important}
+.live-workspace>.constraint-editor{container-type:inline-size}
+@container(min-width:560px){.live-workspace .constraint-input-columns{grid-template-columns:minmax(0,3fr) minmax(0,2fr)}.live-workspace .constraint-short-input{border-top:0;border-left:1px solid #e2e9e4;padding:0 0 0 12px}}

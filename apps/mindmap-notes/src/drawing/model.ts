@@ -50,7 +50,7 @@ const reserved = new Set([
   "asin", "acos", "atan", "log10", "floor", "ceil", "sign", "min", "max",
 ]);
 export const validSymbol = (s: string) =>
-  /^[A-Za-z][A-Za-z0-9_]*$/.test(s) && !reserved.has(s.toLowerCase());
+  /^[A-Za-z][A-Za-z0-9_]*$/.test(s) && (s==='E'||!reserved.has(s.toLowerCase()));
 export function nextSymbol(
   doc: DrawingDocument,
   kind: GeometryObject["kind"],
@@ -243,6 +243,7 @@ export function definition(doc: DrawingDocument, obj: GeometryObject): string {
     else if(c.type==="planeOffset")value=`PlaneOffset(${planeArgs(c.plane)}, ${ref(c.anchor)}, (${c.offset.join(",")}))`;
     else if(c.type==="planeOrigin"||c.type==="planeNormal")value=`${c.type==="planeOrigin"?"PlaneOrigin":"NormalEndpoint"}(${planeArgs(c.plane)})`;
     else if(c.type === "constraint")value=`ConstraintPoint(${ref(c.set)}, ${JSON.stringify(c.point)})`;
+    else if (c.type === "vertex") value = `Vertex(${ref(c.curve)}, ${c.index + 1})`;
     else if (c.type === "focus") value = `Focus(${ref(c.curve)}, ${c.index + 1})`;
     else if (c.type === "curveCenter") value = `CircleCenter(${ref(c.curve)})`;
     else if (c.type === "onAxis") value = `AxisPoint("${c.axis}", ${fmt(c.parameter)}${c.planeId ? `, ${JSON.stringify(c.planeId)}` : ""})`;
@@ -285,7 +286,7 @@ export function definition(doc: DrawingDocument, obj: GeometryObject): string {
   else if (obj.kind === "curve") {
     if(obj.derived) {
       const c=obj.derived;
-      value=c.type === "reflection" ? `Reflect(${ref(c.source)}, ${ref(c.axis)})` : c.type === "tangent" ? `Tangent(${ref(c.curve)}, ${ref(c.point)}, ${c.branch+1})` : `Locus(${ref(c.driver)}, ${ref(c.follower)}${c.natural?"":`, ${fmt(c.min)}, ${fmt(c.max)}`})`;
+      value=c.type === "conicFeature" ? `${c.feature==='directrix'?'Directrix':'Asymptote'}(${ref(c.curve)}, ${c.index+1})` : c.type === "reflection" ? `Reflect(${ref(c.source)}, ${ref(c.axis)})` : c.type === "tangent" ? `Tangent(${ref(c.curve)}, ${ref(c.point)}, ${c.branch+1})` : `Locus(${ref(c.driver)}, ${ref(c.follower)}${c.natural?"":`, ${fmt(c.min)}, ${fmt(c.max)}`})`;
     } else if(obj.parametric) value=`Parametric(${obj.parametric.x}, ${obj.parametric.y}, ${fmt(obj.parametric.tMin)}, ${fmt(obj.parametric.tMax)})`;
     else if (obj.circle) {
       const c = obj.circle;
@@ -337,6 +338,9 @@ export const commandCatalog = [
   ["Parametric", "参数曲线", "x(t), y(t), t起点, t终点"],
   ["AxisPoint", "坐标轴上的点", '"x" 或 "y", 参数'],
   ["Focus", "焦点", "圆锥曲线, 序号"],
+  ["Vertex", "圆锥曲线顶点", "圆锥曲线, 序号"],
+  ["Directrix", "准线", "圆锥曲线, 序号"],
+  ["Asymptote", "渐近线", "双曲线, 序号"],
   ["Point", "引用点", "A"],
   ["Segment", "线段", "A, B"],
   ["Line", "直线", "A, B"],
@@ -434,6 +438,7 @@ export function applyDefinition(
   input: DrawingDocument,
   source: string,
   replaceId?: string,
+  allowUnresolved = false,
 ): DrawingDocument {
   const doc = normalizeDrawing(input),
     old = doc.objects.find((o) => o.id === replaceId);
@@ -486,7 +491,7 @@ export function applyDefinition(
     const refs = numericReferences(doc,s); bind(s);
     if (path && Object.keys(refs).length) fields[path] = s;
     return finiteScalar(replaceCoordinates(doc,s,refs,id=>{
-      const point=geometry.points.get(id); if(!point) throw new Error("引用的点暂时失效"); return point.p;
+      const point=geometry.points.get(id); if(!point&&!allowUnresolved) throw new Error("引用的点暂时失效"); return point?.p??[0,0,0];
     }), scope);
   };
   const ref = (s: string) => {
@@ -496,7 +501,7 @@ export function applyDefinition(
   },
     point = (s: string) => {
       const id = ref(s);
-      if (!geometry.points.has(id)) throw new Error(`“${s}”不是有效点`);
+      if (!geometry.points.has(id)&&!(allowUnresolved&&doc.objects.some(o=>o.id===id&&o.kind==='point'))) throw new Error(`“${s}”不是有效点`);
       return id;
     };
   const tuple = (s: string, path: string, direction = false): Vec3 => {
@@ -701,6 +706,12 @@ export function applyDefinition(
       objects = [makePoint({ type: "onAxis", axis: axis as "x"|"y"|"z", parameter: scalar(args[1],"construction.parameter"), planeId })];
     } else if (name === "CircleCenter") {
       count(1); objects = [makePoint({ type: "curveCenter", curve: ref(args[0]) })];
+    } else if (name === "Directrix" || name === "Asymptote") {
+      if(Object.keys(numericReferences(doc,args[1]??"" )).length)throw Error("序号需为固定整数");
+      count(2);const index=scalar(args[1])-1;if(![0,1].includes(index))throw Error("序号为1或2");
+      objects=[{...makeCurve(),style:{...defaultStyle(),line:"dashed"},autoFoci:false,derived:{type:"conicFeature",curve:ref(args[0]),feature:name==="Directrix"?"directrix":"asymptote",index},equation:"x=0"}];
+    } else if (name === "Vertex") {
+      count(2);if(Object.keys(numericReferences(doc,args[1])).length)throw Error("顶点序号需为固定整数");const index=scalar(args[1])-1;if(!Number.isInteger(index)||index<0||index>3)throw Error("顶点序号为1到4");objects=[makePoint({type:"vertex",curve:ref(args[0]),index})];
     } else if (name === "Focus") {
       if (Object.keys(numericReferences(doc,args[1] ?? "")).length) throw new Error("焦点序号需为固定整数");
       count(2); objects = [makePoint({ type: "focus", curve: ref(args[0]), index: scalar(args[1]) - 1 })];
@@ -955,7 +966,7 @@ export function applyDefinition(
     }
   } else {
     bind(text);
-    equation(replaceCoordinates(doc,text,references,id=>geometry.points.get(id)!.p), Object.keys(scope));
+    equation(replaceCoordinates(doc,text,references,id=>geometry.points.get(id)?.p??[0,0,0]), Object.keys(scope));
     if (Object.keys(numericReferences(doc,text)).length) fields.equation = text;
     objects = [{ ...makeCurve(), equation: text }];
   }
@@ -1036,7 +1047,7 @@ export function applyDefinition(
   });
   const resolved = resolveGeometry(next);
   for (const o of objects)
-    if (resolved.errors.has(o.id)) throw new Error(resolved.errors.get(o.id));
+    if (!allowUnresolved&&resolved.errors.has(o.id)) throw new Error(resolved.errors.get(o.id));
   return next;
 }
 export function sourceIds(doc: DrawingDocument, id: string) {

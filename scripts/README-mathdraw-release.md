@@ -10,7 +10,7 @@
 
 ## 失败后继续
 
-入口选择“继续上次未完成的发布”：沿用当前版本继续。已有完整安装包时先复用并重新验证签名与版本；安装包不完整才重新构建。GitHub 草稿通过发布 ID 校验，已匹配的附件跳过上传；如果 GitHub 已公开、只有 Gitee 镜像未完成，会校验并复用原签名包，只补传镜像，不重建或覆盖公开安装包。输出和日志保存在 `artifacts/mathdraw/releases/<版本号>/`。构建失败后保留已提升的版本，避免重试时又提升一次。
+入口选择“继续上次未完成的发布”：沿用当前版本继续。已有完整安装包时先复用并重新验证签名与版本；安装包不完整才重新构建。GitHub 草稿通过发布 ID 校验，已匹配的附件跳过上传；如果 GitHub 已公开、只有 Gitee 镜像未完成，会校验并复用原签名包，只补传镜像，不重建或覆盖公开安装包。输出和日志保存在 `产物/releases/<版本号>/`。构建失败后保留已提升的版本，避免重试时又提升一次。
 
 如果进程被强制终止、留下 `.build-cache/mathdraw-release.lock`，先确认没有发布脚本在运行，再删除该锁文件重试。
 
@@ -24,7 +24,7 @@ NSIS 如已安装到本项目 `.build-cache/nsis/makensis/<版本>/`，发布入
 
 更新签名密钥默认使用 `.build-cache/signing/mathdraw.key`，也可用 `TAURI_SIGNING_PRIVATE_KEY` 指定**密钥文件路径**，密码使用 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。迁移机器时须安全迁移原密钥，不能生成新密钥替代。密钥不进入 GitHub。
 
-发布前校验更新签名和版本，上传后核对 GitHub SHA-256，通过后才公开 Release。随后向 Gitee 上传同一组文件并匿名下载校验，全部通过后才更新 Gitee 的 latest.json。Windows artifacts/mathdraw在 Mac 上交叉编译；不代表 Windows 实际运行检查。此流程不自动运行测试，macOS 未公证，Windows 没有 Authenticode 证书。
+发布前校验更新签名和版本，上传后核对 GitHub SHA-256，通过后才公开 Release。随后向 Gitee 上传同一组文件并匿名下载校验，全部通过后才更新 Gitee 的 latest.json。Windows 产物在 Mac 上交叉编译；不代表 Windows 实际运行检查。此流程不自动运行测试，macOS 未公证，Windows 没有 Authenticode 证书。
 
 Windows 本机仅打包的入口仍是 `scripts/build-mathdraw-windows.ps1`。
 
@@ -39,5 +39,5 @@ Windows 本机仅打包的入口仍是 `scripts/build-mathdraw-windows.ps1`。
 仅将已有签名版本补传至 Gitee（不会修改 GitHub 或提升版本）：
 
 ```sh
-node scripts/publish-mathdraw.mjs artifacts/mathdraw/releases/0.3.2 --gitee-only
+node 数学绘图/scripts/publish-mathdraw.mjs 数学绘图/产物/releases/0.3.2 --gitee-only
 ```

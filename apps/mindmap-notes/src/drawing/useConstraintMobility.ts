@@ -9,7 +9,7 @@ export function useConstraintMobility(doc:DrawingDocument,docRef:RefObject<Drawi
   useEffect(()=>{failed.current.clear();return()=>{generation.current++;running.current=false;state.current.solver.cancel();};},[doc.id]);
   const pump=async()=>{
     if(running.current)return;
-    const before=docRef.current,set=before.objects.find(o=>o.kind==='solutionSet'&&o.problem.mode!=='plane'&&o.problem.mode!=='coordinate'&&o.result.branches.some(b=>b.mobility?.version!==1)&&!failed.current.has(o.id));
+    const before=docRef.current,set=before.objects.find(o=>o.kind==='solutionSet'&&o.problem.mode!=='plane'&&o.problem.mode!=='coordinate'&&o.result.branches.some(b=>b.mobility?.version!==2)&&!failed.current.has(o.id));
     if(set?.kind!=='solutionSet')return;
     running.current=true;const token=generation.current;
     try{

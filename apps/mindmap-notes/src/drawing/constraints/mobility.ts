@@ -1,6 +1,6 @@
 import {jacobian,rowBasis,offRowSpace} from './math';
 
-export interface LocalMobility {linear:number;dof:number;removed:number;checked:boolean}
+export interface LocalMobility {linear:number;dof:number;removed:number;checked:boolean;directions?:number[][]}
 const inner=(a:number[],b:number[])=>a.reduce((s,v,i)=>s+v*b[i],0);
 const length=(a:number[])=>Math.hypot(...a);
 /** Symmetric Jacobi eigensolver for the small tangent-space stress matrices. */
@@ -22,16 +22,19 @@ function eigen(matrix:number[][]){
  * every real motion, so its nonzero eigendirections can safely be removed.
  * Indefinite/higher-order cases remain conservative; failed continuation alone
  * is never used as proof that a configuration is rigid. */
-export function localMobility(f:(x:number[])=>number[],x:number[],scale:number|number[]=1,deadline=Infinity):LocalMobility {
-  if(!x.length)return {linear:0,dof:0,removed:0,checked:true};
+export function localMobility(f:(x:number[])=>number[],x:number[],scale:number|number[]=1,deadline=Infinity,includeDirections=false):LocalMobility {
+  if(!x.length)return {linear:0,dof:0,removed:0,checked:true,...(includeDirections?{directions:[]}: {})};
   const scales=x.map((_,i)=>Array.isArray(scale)?scale[i]:scale),zero=x.map(()=>0);
   const evaluate=(v:number[])=>f(x.map((n,i)=>n+v[i]*scales[i]));
   const base=evaluate(zero),j=jacobian(evaluate,zero,base),rows=rowBasis(j),linear=x.length-rows.length;
   const result:LocalMobility={linear,dof:linear,removed:0,checked:true};
-  if(!linear||!base.length)return result;
-  if(linear>12||Date.now()>deadline)return {...result,checked:false};
+  if(!linear)return {...result,...(includeDirections?{directions:[]}: {})};
+  if(!includeDirections&&(!base.length||linear>12||Date.now()>deadline))return {...result,checked:!base.length};
   const tangent:number[][]=[];
   for(let i=0;i<x.length;i++){const v=zero.map((_,k)=>i===k?1:0),p=offRowSpace(v,[...rows,...tangent]),n=length(p);if(n>1e-6)tangent.push(p.map(v=>v/n));}
+  if(includeDirections)result.directions=tangent;
+  if(!base.length)return result;
+  if(linear>12||Date.now()>deadline)return {...result,checked:false};
   const columns=rowBasis(x.map((_,i)=>j.map(row=>row[i])));
   if(columns.length===base.length)return result;
   const k=tangent.length,forms=base.map(()=>Array.from({length:k},()=>Array(k).fill(0)));
@@ -68,5 +71,5 @@ export function localMobility(f:(x:number[])=>number[],x:number[],scale:number|n
     for(const a of allowed){const v=offRowSpace(a,[...blocked,...next]),n=length(v);if(n>1e-5)next.push(v.map(n=>n/length(v)));}
     if(next.length===allowed.length)break;allowed=next;
   }
-  return {...result,dof:allowed.length,removed:linear-allowed.length};
+  return {...result,dof:allowed.length,removed:linear-allowed.length,...(includeDirections?{directions:allowed.map(a=>zero.map((_,i)=>a.reduce((sum,v,k)=>sum+v*tangent[k][i],0)))}:{})};
 }

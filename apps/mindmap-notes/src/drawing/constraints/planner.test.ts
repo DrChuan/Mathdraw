@@ -67,7 +67,7 @@ describe("construction-first planning",()=>{
       expect(norm(sub(moved.positions[driver],target))).toBeLessThan(1e-6);
       expect(evaluator(p).verify(flatten(p.points,moved.positions)).valid).toBe(true);
       const locked=solveConstraints({id:8,problem:p,previous:framed,budget:300,reference:{branch:0,points:[...p.points]}});
-      expect(locked.branches[0].dof).toBe(0);expect(driverChoices(locked.branches[0],p.points)).toEqual([]);
+      expect(locked.branches[0].dof).toBe(b.dof);expect(locked.branches[0].motionDof).toBe(0);expect(driverChoices(locked.branches[0],p.points)).toEqual([]);
       const unlocked=solveConstraints({id:9,problem:p,previous:locked,budget:300,reference:{branch:0,points:[anchors[0]]}});
       expect(unlocked.branches[0].dof).toBeGreaterThan(0);
       for(const points of [[],[anchors[0],anchors[0]],["missing"]])expect(()=>solveConstraints({id:10,problem:p,previous:initial,reference:{branch:0,points}})).toThrow(/固定点/);

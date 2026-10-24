@@ -45,6 +45,7 @@ export type PointConstruction =
   | { type: "constraint"; set: string; point: string }
   | { type: "origin" }
   | { type: "focus"; curve: string; index: number }
+  | { type: "vertex"; curve: string; index: number }
   | { type: "curveCenter"; curve: string }
   | { type: "onAxis"; axis: "x" | "y" | "z"; parameter: number; planeId?: string }
   | { type: "free"; position: Vec3 }
@@ -120,6 +121,7 @@ export interface DrawingCurve extends ObjectBase {
   derived?:
     | { type: "reflection"; source: string; axis: string }
     | { type: "tangent"; curve: string; point: string; branch: number }
+    | { type: "conicFeature"; curve: string; feature: "directrix"|"asymptote"; index: number }
     | { type: "locus"; driver: string; follower: string; min: number; max: number; natural?:boolean };
   /** Computed samples only; never written by construction commands. */
   reflectionInput?: { source: DrawingCurve; a: Vec2; b: Vec2 };

@@ -11,7 +11,7 @@
 
 ## 使用
 
-双击 `打包数学绘图Windows.cmd`，默认只构建独立的 Mathdraw。也可从 仓库根目录在 PowerShell 中运行：
+双击 `数学绘图/打包数学绘图Windows.cmd`，默认只构建独立的 Mathdraw。也可从 `数学绘图` 项目目录在 PowerShell 中运行：
 
 ```powershell
 .\scripts\build-mathdraw-windows.ps1
@@ -27,10 +27,10 @@
 
 ## 输出
 
-- `artifacts/mathdraw/windows/Mathdraw_…_x64-setup.exe`：安装程序。
-- `artifacts/mathdraw/windows/mathdraw.exe`：单独启动的程序文件，需要已安装 WebView2 Runtime。
-- `artifacts/mathdraw/windows/build-info.json`：本次成功输出的路径、构建时间、Node 版本与 SHA-256。
-- 加 `-IncludeNotes` 时，Mindgrove 对应输出在 `apps/mindmap-notes/artifacts/mathdraw/windows/`。
+- `数学绘图/产物/windows/Mathdraw_…_x64-setup.exe`：安装程序。
+- `数学绘图/产物/windows/mathdraw.exe`：单独启动的程序文件，需要已安装 WebView2 Runtime。
+- `数学绘图/产物/windows/build-info.json`：本次成功输出的路径、构建时间、Node 版本与 SHA-256。
+- 加 `-IncludeNotes` 时，Mindgrove 对应输出在 `枝间/产物/windows/`。
 
 脚本在命令失败或输出缺失时停止，不把旧文件报告成本轮成功构建。输出没有代码签名。
 
@@ -41,7 +41,7 @@
 交叉打包的核心调用如下，需要先准备对应工具并加入 PATH：
 
 ```sh
-XWIN_ARCH=x86_64 XWIN_CACHE_DIR="$PWD/.build-cache/xwin" npm --prefix apps/mindmap-notes run bundle:drawing -- --runner cargo-xwin --target x86_64-pc-windows-msvc --bundles nsis
+XWIN_ARCH=x86_64 XWIN_CACHE_DIR="$PWD/数学绘图/.build-cache/xwin" npm --prefix 枝间 run bundle:drawing -- --runner cargo-xwin --target x86_64-pc-windows-msvc --bundles nsis
 ```
 
 本次 NSIS 安装在项目缓存；通过启动包装脚本显式指定 NSISDIR，避免打包器覆盖它后读取错误的内置路径。Homebrew 当前配方名为 makensis。
@@ -50,14 +50,14 @@ XWIN_ARCH=x86_64 XWIN_CACHE_DIR="$PWD/.build-cache/xwin" npm --prefix apps/mindm
 
 正式打包先设置 `TAURI_SIGNING_PRIVATE_KEY` 为原更新私钥的文件路径，`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 为其密码（当前密钥无密码）。必须沿用同一密钥；更换密钥会导致已安装程序拒绝更新。私钥请离线备份，不得上传 GitHub 或放进源码压缩包。此机器的密钥位于项目 `.build-cache/signing/`，已从 Git 排除，文件仅当前用户可读。
 
-仅本机开发、不发布更新时，可以使用 `-UnsignedDevelopment` 跳过更新artifacts/mathdraw签名。此类构建不可作为正式更新发布。
+仅本机开发、不发布更新时，可以使用 `-UnsignedDevelopment` 跳过更新产物签名。此类构建不可作为正式更新发布。
 
-发布时将安装包、独立 EXE、Mac ZIP、Mac 更新 tar.gz 以及安装包和 tar.gz 对应的 `.sig` 放进 `artifacts/mathdraw/releases/<版本>/`，运行：
+发布时将安装包、独立 EXE、Mac ZIP、Mac 更新 tar.gz 以及安装包和 tar.gz 对应的 `.sig` 放进 `数学绘图/产物/releases/<版本>/`，运行：
 
 ```sh
-node scripts/publish-mathdraw.mjs artifacts/mathdraw/releases/0.2.6
+node scripts/publish-mathdraw.mjs 产物/releases/0.2.6
 # 检查清单和文件后发布：
-node scripts/publish-mathdraw.mjs artifacts/mathdraw/releases/0.2.6 --publish
+node scripts/publish-mathdraw.mjs 产物/releases/0.2.6 --publish
 ```
 
 脚本只上传明确列出的安装文件、签名、SHA-256 和 `latest.json` 到 `DrChuan/Mathdraw`，先创建草稿，全部上传后才发布。版本由应用配置读取，修改版本需同步 package.json、package-lock.json、Cargo.toml、Cargo.lock 和 tauri.conf.json。EXE 的 Authenticode 证书与更新签名是两回事；目前仅配置更新签名。

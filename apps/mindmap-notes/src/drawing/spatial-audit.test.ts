@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import {conditionFaces} from './constraints/faces';
 import {parseCondition,pointNames,segmentsFrom} from './constraints/input';
 import {type ConstraintProblem,type Positions} from './constraints/types';
-const config=JSON.parse(fs.readFileSync('../../examples/1023bug.mathdraw-conditions.mathdraw-conditions.json','utf8'));
+const config=JSON.parse(fs.readFileSync('../数学绘图/examples/1023bug.mathdraw-conditions.mathdraw-conditions.json','utf8'));
 const names=pointNames(config.points);
 const problem:ConstraintProblem={points:names,segments:segmentsFrom(config.segments,names),conditions:config.conditions.map((c:{source:string})=>parseCondition(c.source,names))};
 const r=Math.sqrt(3);

@@ -39,6 +39,7 @@ export function symbolicPlanarEquations(problem:ConstraintProblem,variables:(Pla
   const curve=(name:string,x:string,y:string):string=>{
     const o=object(name);let source:string;
     if(o.kind==='curve'){
+      if(o.derived)throw Error('派生曲线保留依赖并参与数值联立');
       const symbolic=o.parameters?.fields.equation;
       if(typeof symbolic==='string')source=numeric(symbolic);
       else if(o.circle){

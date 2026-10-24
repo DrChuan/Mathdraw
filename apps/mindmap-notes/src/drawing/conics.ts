@@ -146,3 +146,36 @@ export function conicPath(curve:DrawingCurve,seed:Vec2):DrawingCurve["parametric
     return null;
   }catch{return null;}
 }
+
+/** Lines derived from the current conic, including translated/rotated conics. */
+export function conicFeatureEquation(source:string,feature:'directrix'|'asymptote',index:number):string {
+ const q=conicCoefficients(source);if(!q||![0,1].includes(index))throw Error('圆锥曲线或序号无效');
+ const [A,B,C,D,E,F]=q,det=4*A*C-B*B,theta=.5*Math.atan2(B,A-C),cs=Math.cos(theta),sn=Math.sin(theta),l1=A*cs*cs+B*cs*sn+C*sn*sn,l2=A*sn*sn-B*cs*sn+C*cs*cs;
+ const line=(nx:number,ny:number,offset:number)=>`${nx}*x+(${ny})*y=(${offset})`;
+ if(feature==='asymptote'){
+  if(det>=-1e-12)throw Error('仅双曲线具有两条渐近线');
+  const x=(B*E-2*C*D)/det,y=(B*D-2*A*E)/det,s=index===0?1:-1,nx=Math.sqrt(Math.abs(l1))*cs-s*Math.sqrt(Math.abs(l2))*sn,ny=Math.sqrt(Math.abs(l1))*sn+s*Math.sqrt(Math.abs(l2))*cs;
+  return line(nx,ny,nx*x+ny*y);
+ }
+ const f=conicFoci(source)?.[index];if(!f)throw Error('该曲线没有指定准线');
+ if(Math.abs(det)>1e-12){
+  const x=(B*E-2*C*D)/det,y=(B*D-2*A*E)/det,dist=Math.hypot(f[0]-x,f[1]-y);if(dist<1e-10)throw Error('圆没有有限准线');
+  const k=-(A*x*x+B*x*y+C*y*y+D*x+E*y+F),r=[k/l1,k/l2],a2=det>0?Math.max(...r):r.find(v=>v>0)!;
+  const nx=(f[0]-x)/dist,ny=(f[1]-y)/dist;return line(nx,ny,nx*x+ny*y+a2/dist);
+ }
+ const d1=D*cs+E*sn,d2=-D*sn+E*cs;
+ const [u,v]=Math.abs(l1)>Math.abs(l2)?[-d1/(2*l1),-(F-d1*d1/(4*l1))/d2]:[-(F-d2*d2/(4*l2))/d1,-d2/(2*l2)];
+ const x=cs*u-sn*v,y=sn*u+cs*v,dist=Math.hypot(f[0]-x,f[1]-y),nx=(f[0]-x)/dist,ny=(f[1]-y)/dist;
+ return line(nx,ny,nx*x+ny*y-dist);
+}
+
+/** Major/transverse-axis vertices first; ellipse minor-axis endpoints second. */
+export function conicVertices(source:string):Vec2[] {
+ const q=conicCoefficients(source);if(!q)throw Error('不是圆锥曲线');
+ const [A,B,C,D,E,F]=q,t=.5*Math.atan2(B,A-C),cs=Math.cos(t),sn=Math.sin(t),l1=A*cs*cs+B*cs*sn+C*sn*sn,l2=A*sn*sn-B*cs*sn+C*cs*cs,d1=D*cs+E*sn,d2=-D*sn+E*cs,det=4*A*C-B*B;
+ const world=(u:number,v:number):Vec2=>[cs*u-sn*v,sn*u+cs*v];
+ if(Math.abs(det)<1e-12){const uv=Math.abs(l1)>Math.abs(l2)?[-d1/(2*l1),-(F-d1*d1/(4*l1))/d2]:[-(F-d2*d2/(4*l2))/d1,-d2/(2*l2)];const p=world(uv[0],uv[1]);if(!p.every(Number.isFinite))throw Error('抛物线顶点失效');return [p];}
+ const u=-d1/(2*l1),v=-d2/(2*l2),k=-F+d1*d1/(4*l1)+d2*d2/(4*l2),r=[k/l1,k/l2];
+ const pair=(axis:number)=>{if(!(r[axis]>0))throw Error('圆锥曲线没有实顶点');const delta=Math.sqrt(r[axis]);return [world(u-(axis===0?delta:0),v-(axis===1?delta:0)),world(u+(axis===0?delta:0),v+(axis===1?delta:0))].sort((a,b)=>Math.abs(a[0]-b[0])>1e-8?a[0]-b[0]:a[1]-b[1]);};
+ const axis=det>0?(r[0]>=r[1]?0:1):(r[0]>0?0:1);return det>0?[...pair(axis),...pair(1-axis)]:pair(axis);
+}

@@ -1,4 +1,5 @@
 import {localMobility} from './mobility';
+import {shapeMobility} from './shapeMobility';
 import type { Vec3 } from "../types";
 import { validateProblem } from "./input";
 import { contradictions, evaluator, flatten, positions, problemScale } from "./compile";
@@ -145,11 +146,12 @@ function analyze(problem:ConstraintProblem,x:number[],deadline:number,random:()=
   const {rigid,reference,rigidityPending}=chosen??rigidity(problem,x,samples),raw=positions(problem.points,x),p=chosen?raw:canonical(raw,reference),flat=flatten(problem.points,p);
   const fixed=fixedCoordinates(problem.points,p,reference),variables=flat.map((_,i)=>i).filter(i=>!fixed.has(i));
   const mobility=localMobility(v=>{const q=[...flat];variables.forEach((index,k)=>q[index]=v[k]);return e.values(q,false);},variables.map(i=>flat[i]),e.scale,Math.max(deadline,Date.now()+80));
-  const dof=mobility.dof;
-  const loci=dof?analyticLoci(problem,p,reference,e.scale):[];
+  const shape=shapeMobility(v=>e.values(v,false),flat,e.scale,Math.max(deadline,Date.now()+80));
+  const dof=shape.dof,motionDof=dof?mobility.dof:0;
+  const loci=motionDof?analyticLoci(problem,p,reference,e.scale):[];
   // Trace a one-dimensional solution family with a tangent hyperplane
   // corrector. Every stored point comes from a jointly verified configuration.
-  if(dof===1&&Date.now()<deadline&&problem.points.some(n=>!reference.includes(n)&&!loci.some(l=>l.point===n&&l.complete))) {
+  if(motionDof===1&&Date.now()<deadline&&problem.points.some(n=>!reference.includes(n)&&!loci.some(l=>l.point===n&&l.complete))) {
     const paths:Record<string,Vec3[][]>=Object.fromEntries(problem.points.filter(n=>!reference.includes(n)).map(n=>[n,[]]));
     for(const sign of [-1,1]) {
       let current=[...flat],previous:number[]|undefined;
@@ -174,7 +176,7 @@ function analyze(problem:ConstraintProblem,x:number[],deadline:number,random:()=
       {const old=loci.findIndex(l=>l.point===name);if(old>=0)loci.splice(old,1);
       loci.push({point:name,kind:"sampled",origin:p[name],u:[1,0,0],v:[0,1,0],radius:e.scale,paths:traces,complete:false});}
   }
-  return {positions:p,rigid,reference,dof,loci,residual:e.verify(flat).max,rigidityPending,mobility:{version:1,linear:mobility.linear,removed:mobility.removed,checked:mobility.checked}};
+  return {positions:p,rigid,reference,dof,motionDof,loci,residual:e.verify(flat).max,rigidityPending,mobility:{version:2,linear:shape.linear,removed:shape.removed,checked:shape.checked&&mobility.checked}};
 }
 function branchEquivalent(a:SolutionBranch,b:SolutionBranch,scale:number) {
   if(a.dof===0&&b.dof===0)return Object.keys(a.positions).every(n=>norm(sub(a.positions[n],b.positions[n]))<scale*2e-4);
@@ -194,10 +196,11 @@ function branchEquivalent(a:SolutionBranch,b:SolutionBranch,scale:number) {
 }
 /** Refresh old first-order counts without changing coordinates or constraints. */
 export function refreshSpatialMobility(problem:ConstraintProblem,branch:SolutionBranch):SolutionBranch {
-  if(problem.mode==='plane'||problem.mode==='coordinate'||branch.mobility?.version===1)return branch;
+  if(problem.mode==='plane'||problem.mode==='coordinate'||branch.mobility?.version===2)return branch;
   const e=evaluator(problem),flat=flatten(problem.points,branch.positions),fixed=fixedCoordinates(problem.points,branch.positions,branch.reference),indices=flat.map((_,i)=>i).filter(i=>!fixed.has(i));
   const mobility=localMobility(v=>{const next=[...flat];indices.forEach((index,i)=>next[index]=v[i]);return e.values(next,false);},indices.map(i=>flat[i]),e.scale,Date.now()+100);
-  return {...branch,dof:mobility.dof,loci:mobility.dof?branch.loci:[],mobility:{version:1,linear:mobility.linear,removed:mobility.removed,checked:mobility.checked}};
+  const shape=shapeMobility(v=>e.values(v,false),flat,e.scale,Date.now()+100),motionDof=shape.dof?mobility.dof:0;
+  return {...branch,dof:shape.dof,motionDof,loci:motionDof?branch.loci:[],mobility:{version:2,linear:shape.linear,removed:shape.removed,checked:shape.checked&&mobility.checked}};
 }
 export function solveConstraints(request:SolveRequest):ConstraintResult {
   if(request.problem.mode==='plane'||request.problem.mode==='coordinate')return solvePlanar(request);
@@ -248,7 +251,8 @@ export function solveConstraints(request:SolveRequest):ConstraintResult {
     if(!branch||!problem.points.includes(request.move.point))throw new Error("动点或构型已失效");
     if(branch.reference.includes(request.move.point))throw new Error("此点属于参照结构，请先切换参照结构或选择其他动点");
     const refreshed=refreshSpatialMobility(problem,branch);Object.assign(branch,refreshed);
-    if(branch.dof===0)throw Error(branch.mobility?.removed?'当前构型在极值或相切处被条件锁定，没有可连续拖动的自由度':'当前参照下没有可连续拖动的自由度');
+    if(branch.dof===0)throw Error(branch.mobility?.removed?'当前构型在极值或相切处被条件锁定，没有可连续拖动的自由度':'当前形状已固定，整体平移和旋转不计构型自由度');
+    if(branch.motionDof===0)throw Error('当前参照下没有可连续拖动的自由度，请减少固定点');
     const fixed=fixedCoordinates(problem.points,branch.positions,branch.reference),index=problem.points.indexOf(request.move.point)*3;
     const locus=branch.loci.find(l=>l.point===request.move!.point),target=locus?nearestLocus(locus,request.move.target):request.move.target;
     const transported=rigidMotion(branch.positions,branch.reference,request.move.point,target,e.scale);
@@ -288,7 +292,7 @@ export function solveConstraints(request:SolveRequest):ConstraintResult {
     const branches:SolutionBranch[]=[];
     for(const raw of construction.positions) {
       const p=canonical(raw,problem.points),branch:SolutionBranch={positions:p,rigid:[[...problem.points]],reference:[...problem.points],
-        dof:0,loci:[],residual:e.verify(flatten(problem.points,p)).max,rigidityPending:false};
+        dof:0,motionDof:0,mobility:{version:2,linear:0,removed:0,checked:true},loci:[],residual:e.verify(flatten(problem.points,p)).max,rigidityPending:false};
       if(!branches.some(b=>branchEquivalent(b,branch,e.scale)))branches.push(branch);
     }
     const complete=branches.length<=12,shown=branches.slice(0,12);
@@ -306,7 +310,7 @@ export function solveConstraints(request:SolveRequest):ConstraintResult {
       const provisional:SolutionBranch=branches.length?{...branches[0],positions:p}:{positions:p,rigid:[problem.points],reference:problem.points,dof:0,loci:[],residual:0};
       if(branches.some(b=>branchEquivalent(b,provisional,e.scale)))continue;
       if(branches.length>=12||branches.length&&Date.now()>deadline){complete=false;break;}
-      const branch=plan.finite?{...provisional,rigidityPending:false,residual:e.verify(flatten(problem.points,p)).max}:
+      const branch=plan.finite?{...provisional,motionDof:0,mobility:{version:2 as const,linear:0,removed:0,checked:true},rigidityPending:false,residual:e.verify(flatten(problem.points,p)).max}:
         analyze(problem,flatten(problem.points,raw),Math.min(deadline,Date.now()+700),random);
       // Guard the coordinate change too, not only the construction pose.
       if(e.verify(flatten(problem.points,branch.positions)).valid)branches.push(branch);
@@ -317,11 +321,12 @@ export function solveConstraints(request:SolveRequest):ConstraintResult {
         "辅助直线、平面、圆和球面只参与构造计算，不加入绘图区。",
         complete?"此构造的有限分支已枚举完成；整体平移和旋转视为同一构型。":"存在连续自由度或尚未完成全部分支枚举，不声明穷尽。"]};
   }
-  const branches=structuredClone(request.previous?.branches??[]);let attempts=request.previous?.attempts??0,bestErrors:{id:string;error:number;degenerate:boolean}[]=[];
+  const branches=structuredClone(request.previous?.branches??[]).map(b=>refreshSpatialMobility(problem,b));let attempts=request.previous?.attempts??0,bestErrors:{id:string;error:number;degenerate:boolean}[]=[];
   let best=Infinity;
   for(let i=0;i<32&&Date.now()<deadline;i++,attempts++) {
     let start=initial(problem,random);
-    if(i<plan.seeds.length)start=flatten(problem.points,{...positions(problem.points,start),...plan.seeds[i]});
+    if(request.seeds?.[i]){const seed=request.seeds[i];start=flatten(problem.points,Object.fromEntries(problem.points.map((name,k)=>[name,seed[name]?.every(Number.isFinite)?seed[name]:start.slice(k*3,k*3+3) as Vec3])));}
+    else if(i<plan.seeds.length)start=flatten(problem.points,{...positions(problem.points,start),...plan.seeds[i]});
     if(branches.length&&i%3!==2) {
       const base=branches[i%branches.length].positions;
       start=flatten(problem.points,base).map((n,k)=>i%3===0?(k%3===2?-n:n):n+(random()-.5)*e.scale);
@@ -348,8 +353,7 @@ export function solveConstraints(request:SolveRequest):ConstraintResult {
     diagnostics.push(...worst.map(w=>`${problem.conditions.find(c=>c.id===w.id)?.source??`曲线 ${problem.curves?.find(c=>c.id===w.id)?.name??w.id}`}：${w.degenerate?"图形退化":`归一化误差 ${w.error.toPrecision(3)}`}`));
   } else {
     diagnostics.push(`已找到 ${branches.length} 个可行构型，尚未证明穷尽。`);
-    if(branches.some(b=>b.dof>0))diagnostics.push("保留参照结构之外的连续自由度；轨迹上的移动会重新校验整组条件。");
-    if(branches.some(b=>b.reference.length<3))diagnostics.push("参照结构不足以确定完整空间朝向，保留相应旋转自由度。");
+    if(branches.some(b=>b.dof>0))diagnostics.push("构型自由度只计形状变化，排除整图平移、旋转；轨迹上的移动会重新校验整组条件。");
     if(branches.some(b=>b.rigidityPending))diagnostics.push("本轮时间不足以完成全部刚性扰动验证，仅固定已确认的参照关系，可继续搜索。");
   }
   return {branches,status:branches.length?"solved":"notFound",method:hybrid?"hybrid":"numerical",approximationReason,complete:false,attempts,elapsed:Date.now()-started,

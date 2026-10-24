@@ -1,3 +1,4 @@
+import { conicFeatureEquation,conicVertices } from './conics';
 import { reframeCurve,reflectedCurve, tangentCandidates, withinDerivedCurve, pointConstrainedToCurve } from "./advanced";
 import { angleMark, defaultAngleRadius } from "./angleMark";
 import { exactLocus, cartesianLocus,locusDocument,naturalLocusParameter } from "./locus";
@@ -447,7 +448,8 @@ function computeGeometry(doc: DrawingDocument) {
       }
       if(source.derived) {
         const c=source.derived,plane=doc.planes.find(p=>p.id===source.planeId)!;
-        if(c.type === "reflection") {
+        if(c.type === "conicFeature") {const original=getCurve(c.curve);result={...source,planeId:original.planeId,frame:original.frame,equation:conicFeatureEquation(original.equation,c.feature,c.index)};}
+        else if(c.type === "reflection") {
           const ref=straightReference(c.axis); if(!ref.a||!ref.b) throw new Error("对称轴必须是直线或边");
           const original=getCurve(c.source),frame=original.frame??doc.planes.find(p=>p.id===original.planeId)!;
           if(doc.dimension==='3d') {
@@ -845,6 +847,7 @@ function computeGeometry(doc: DrawingDocument) {
         if (!center) throw new Error("圆心暂时失效，方程需为有效圆");
         p = fromPlane(curve.frame??doc.planes.find(p => p.id === curve.planeId)!, ...center);
       }
+      else if (c.type === "vertex") {const curve=getCurve(c.curve),vertex=conicVertices(curve.equation)[c.index];if(!vertex)throw Error("该顶点不存在");p=fromPlane(curve.frame??doc.planes.find(p=>p.id===curve.planeId)!,...vertex);}
       else if (c.type === "focus") {
         const curve = getCurve(c.curve), foci = conicFoci(curve.equation, curve.preset);
         const focus = foci?.[c.index];
@@ -1148,7 +1151,7 @@ function geometryDependencies(obj: GeometryObject): string[] {
     if (c.type === "constraint") return [c.set];
     if(c.type==="planeOffset")return [c.anchor,...planeDependencies(c.plane)];
     if(c.type==="planeOrigin"||c.type==="planeNormal")return planeDependencies(c.plane);
-    if (c.type === "focus" || c.type === "curveCenter") return [c.curve];
+    if (c.type === "focus" || c.type === "vertex" || c.type === "curveCenter") return [c.curve];
     if (c.type === "alias") return [c.point];
     if(c.type === "rotation")return [c.point,c.axis,c.angle];
     if (c.type === "reflection") return [c.point,c.axis];
@@ -1178,7 +1181,7 @@ function geometryDependencies(obj: GeometryObject): string[] {
   }
   if(obj.kind === "label" && obj.measurement) return obj.measurement.references;
   if(obj.kind === "curve" && obj.derived) {
-    const c=obj.derived;return c.type === "reflection" ? [c.source,c.axis] : c.type === "tangent" ? [c.curve,c.point] : [c.driver,c.follower];
+    const c=obj.derived;return c.type === "conicFeature" ? [c.curve] : c.type === "reflection" ? [c.source,c.axis] : c.type === "tangent" ? [c.curve,c.point] : [c.driver,c.follower];
   }
   if (obj.kind === "curve" && obj.declaration)return obj.declaration.points;
   if (obj.kind === "curve" && obj.circle) return obj.circle.points;
@@ -1343,7 +1346,7 @@ export function validateDrawing(input: unknown): DrawingDocument {
           ![
             "free",
             "constraint",
-            "origin", "focus", "curveCenter", "onAxis",
+            "origin", "focus", "vertex", "curveCenter", "onAxis",
             "alias", "reflection", "rotation", "angleDirection", "planeOffset", "planeOrigin", "planeNormal",
             "division",
             "center",
@@ -1357,6 +1360,7 @@ export function validateDrawing(input: unknown): DrawingDocument {
           !["none", "full", "axes"].includes(o.coordinates)
         )
           throw new Error("点数据无效");
+        if(c.type === "vertex"&&(!Number.isInteger(c.index)||c.index<0||c.index>3))throw Error("顶点序号无效");
         if (c.type === "focus" && (!Number.isInteger(c.index) || c.index < 0 || c.index > 1))
           throw new Error("焦点序号无效");
         if (c.type === "onAxis" && (!["x","y","z"].includes(c.axis) || !finite(c.parameter) ||
@@ -1433,7 +1437,8 @@ export function validateDrawing(input: unknown): DrawingDocument {
         equation(replaceCoordinates(d,o.equation,o.parameters?.references ?? {},()=>[1,1,1]), Object.keys(o.parameters?.references ?? {}));
         if(o.derived) {
           const c=o.derived;
-          if(!["reflection","tangent","locus"].includes(c.type) || (c.type === "tangent" && (!Number.isInteger(c.branch)||c.branch<0||c.branch>32)) || (c.type === "locus" && (!finite(c.min)||!finite(c.max)||c.min>=c.max||c.natural!==undefined&&typeof c.natural!=="boolean")))throw new Error("派生曲线参数无效");
+          if(c.type==="conicFeature"&&(!["directrix","asymptote"].includes(c.feature)||![0,1].includes(c.index)))throw Error("准线或渐近线参数无效");
+          if(!["reflection","tangent","locus","conicFeature"].includes(c.type) || (c.type === "tangent" && (!Number.isInteger(c.branch)||c.branch<0||c.branch>32)) || (c.type === "locus" && (!finite(c.min)||!finite(c.max)||c.min>=c.max||c.natural!==undefined&&typeof c.natural!=="boolean")))throw new Error("派生曲线参数无效");
         }
         if(o.parametric) {
           if(typeof o.parametric.x!=="string" || typeof o.parametric.y!=="string" || !finite(o.parametric.tMin) || !finite(o.parametric.tMax) || o.parametric.tMin>=o.parametric.tMax)
@@ -1623,7 +1628,7 @@ export function validateDrawing(input: unknown): DrawingDocument {
       else if(c.type === "constraint") {
         const set=objects.get(c.set);
         if(set?.kind!=="solutionSet"||!set.problem.points.includes(c.point))throw new Error("约束点引用无效");
-      } else if (c.type === "focus" || c.type === "curveCenter") {
+      } else if (c.type === "focus" || c.type === "vertex" || c.type === "curveCenter") {
         if (objects.get(c.curve)?.kind !== "curve") throw new Error("焦点引用的曲线不存在");
       } else if (c.type === "curveCoordinate") {
         if (objects.get(c.curve)?.kind !== "curve")
@@ -1665,6 +1670,7 @@ export function validateDrawing(input: unknown): DrawingDocument {
       const set=objects.get(o.constraintSet!);if(set?.kind!=="solutionSet"||!set.problem.curves?.some(c=>c.id===o.declaration!.id))throw new Error("声明曲线的来源无效");refs=o.declaration.points;
     } else if(o.kind === "curve" && o.derived) {
       const c=o.derived;
+      if(c.type === "conicFeature"&&objects.get(c.curve)?.kind!=="curve")throw Error("圆锥曲线引用无效");
       if(c.type === "reflection" && (objects.get(c.source)?.kind!=="curve"||!lineRef(c.axis)))throw new Error("对称曲线引用无效");
       if(c.type === "tangent" && (objects.get(c.curve)?.kind!=="curve"||!pointRef(c.point)))throw new Error("切线引用无效");
       if(c.type === "locus" && (!pointRef(c.driver)||!pointRef(c.follower)||c.driver===c.follower))throw new Error("轨迹需要不同的主动点和从动点");

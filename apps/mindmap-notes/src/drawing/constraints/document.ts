@@ -36,7 +36,7 @@ export function validateSolutionSet(set:DrawingSolutionSet) {
       !Array.isArray(b.reference)||!planar&&!b.reference.length||new Set(b.reference).size!==b.reference.length||b.reference.some(n=>!names.includes(n))||!Array.isArray(b.rigid)||b.rigid.length>2500||
       b.rigid.some(g=>!Array.isArray(g)||g.length<2||new Set(g).size!==g.length||g.some(n=>!names.includes(n)))||
       !Number.isFinite(b.residual)||!Array.isArray(b.loci)||b.loci.length>names.length)throw new Error("约束构型无效");
-    if(b.mobility&&(b.mobility.version!==1||!Number.isInteger(b.mobility.linear)||b.mobility.linear<0||b.mobility.linear>names.length*3||!Number.isInteger(b.mobility.removed)||b.mobility.removed<0||b.mobility.removed>b.mobility.linear||typeof b.mobility.checked!=='boolean'))throw Error('局部自由度分析数据无效');
+    if(b.mobility&&(![1,2].includes(b.mobility.version)||!Number.isInteger(b.mobility.linear)||b.mobility.linear<0||b.mobility.linear>names.length*3||!Number.isInteger(b.mobility.removed)||b.mobility.removed<0||b.mobility.removed>b.mobility.linear||typeof b.mobility.checked!=='boolean')||b.motionDof!==undefined&&(!Number.isInteger(b.motionDof)||b.motionDof<0||b.motionDof>(planar?.variables.length??names.length*3)))throw Error('局部自由度分析数据无效');
     if(planar){
       const values=planar.encode(b.positions,b.values),calculated=planar.model(values).positions;
       if(names.some(n=>Math.abs(b.positions[n][2])>1e-9||norm(sub(b.positions[n],calculated[n]))>1e-6*Math.max(1,planar.scale))||planar.errors(values).length||b.motionDof!==undefined&&(!Number.isInteger(b.motionDof)||b.motionDof<0)||b.values&&Object.values(b.values).some(v=>!Number.isFinite(v)))throw new Error('保存的二维构型不满足条件');

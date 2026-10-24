@@ -11,12 +11,13 @@ export interface PlanarContext {
   absorbedSets?:string[];
   inheritedConditions?:Condition[];
   inheritedCurves?:ConstraintCurve[];
+  automaticSearch?:boolean;
   searchScale?:number;
   searchBounds?:Record<string,{xMin?:number;xMax?:number;yMin?:number;yMax?:number}>;
 }
 export interface AlgebraicValue {polynomial:string[];interval:[number,number];approximate:number;expression?:string}
 
-export const constraintKinds = ["distance","equal","ratio","lineAngle","vertexAngle","linePlaneAngle","dihedral",
+export const constraintKinds = ["pointLineDistance","pointPlaneDistance","distance","equal","ratio","lineAngle","vertexAngle","linePlaneAngle","dihedral",
   "parallel","perpendicular","collinear","onSegment","division","coplanar","parallelogram","rectangle","rhombus","square","prism","pyramid","frustum","regularPolygon","cube",
   "scalarEquation","vectorRelation","vectorDot","convexPolygon","congruent","similar",
   "area","volume","circumradius","concyclic","cospherical","onCurve","cylinder","cone","coneFrustum","sphere"] as const;
@@ -38,11 +39,13 @@ export interface SpatialLocus {
   paths?: Vec3[][]; complete: boolean;
 }
 export interface SolutionBranch {
+  /** Intrinsic shape DOF, excluding an overall translation/rotation. */
   positions: Positions; rigid: string[][]; reference: string[]; dof: number;
   loci: SpatialLocus[]; residual: number;
   rigidityPending?: boolean;
+  /** Motion allowed by the chosen fixed reference, separate from shape DOF. */
   motionDof?:number;
-  mobility?:{version:1;linear:number;removed:number;checked:boolean};
+  mobility?:{version:1|2;linear:number;removed:number;checked:boolean};
   values?:Record<string,number>;
   exactValues?:Record<string,AlgebraicValue>;
 }
@@ -60,5 +63,8 @@ export interface SolveRequest {
   reference?: {branch:number; points:string[]};
   parameter?: {variable:string;target:number;branch:number};
   refreshMobility?:boolean;
+  /** Starting guesses only: never accepted without verifying the new problem. */
+  seeds?:Positions[];
+  seedValues?:Record<string,number>[];
 }
 export interface SolveResponse { id: number; result?: ConstraintResult; error?: string }
