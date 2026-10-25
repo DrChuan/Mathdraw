@@ -1304,6 +1304,8 @@ export function validateDrawing(input: unknown): DrawingDocument {
           d.objects.some((q) => q.id !== o.id && q.symbol === o.symbol)))
     )
       throw new Error("对象身份、名称或样式无效");
+    if(o.symbolHistory!==undefined&&(!Array.isArray(o.symbolHistory)||o.symbolHistory.length>20||o.symbolHistory.some(n=>typeof n!=="string"||!/^\w{1,120}$/.test(n))))throw new Error("曾用符号记录无效");
+    if(o.recognitionItem!==undefined&&(typeof o.recognitionItem!=="string"||o.recognitionItem.length>128))throw new Error("题干来源标记无效");
     if (o.auxiliary !== undefined && typeof o.auxiliary !== "boolean")throw new Error("辅助对象标记无效");
     if ((o.kind === "line" || o.kind === "segment" || o.kind === "vector") && o.ray !== undefined && typeof o.ray !== "boolean")throw new Error("射线标记无效");
     if (o.style.color !== undefined && !/^#[0-9a-fA-F]{6}$/.test(o.style.color)) throw new Error("线条颜色无效");

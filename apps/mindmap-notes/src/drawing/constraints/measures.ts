@@ -44,6 +44,7 @@ export function curveGeometry(c:ConstraintCurve,p:Positions) {
     const circle=circleThrough(points);if(!circle)throw new Error(`圆 ${c.name} 的三个点共线`);
     return {...circle,v:unit(cross(circle.normal,circle.u)),a:circle.radius,b:circle.radius};
   }
+  if(c.normalAxis){const [o,t]=c.normalAxis.map(n=>p[n]),center=points[0];if(!o||!t)throw Error('底面圆的轴未确定');const normal=unit(sub(t,o));if(norm(normal)<.9)throw Error('底面圆的轴退化');const radial=c.radiusSegment?sub(p[c.radiusSegment[1]],p[c.radiusSegment[0]]):sub(points[1],center),radius=norm(radial);if(radius<1e-10)throw Error('底面圆半径为零');const projected=sub(radial,mul(normal,dot(radial,normal))),u=norm(projected)>1e-10?unit(projected):perpendicular(normal);return {center,normal,u,v:unit(cross(normal,u)),a:radius,b:radius,radius};}
   const plane=c.plane?.map(n=>p[n])??(c.type==='circle'&&points.every(p=>Math.abs(p[2])<1e-10)?[[0,0,0],[1,0,0],[0,1,0]] as Vec3[]:undefined);
   if(!plane||plane.some(v=>!v))throw new Error(`请指定曲线 ${c.name} 所在的平面`);
   const normal=unit(cross(sub(plane[1],plane[0]),sub(plane[2],plane[0])));

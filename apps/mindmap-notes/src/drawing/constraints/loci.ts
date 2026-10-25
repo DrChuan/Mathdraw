@@ -18,7 +18,7 @@ export function analyticLoci(problem:ConstraintProblem,p:Positions,reference:str
       const otherEdge=(edge:string[])=>edge.includes(point)?p[edge.find(n=>n!==point)!]:undefined;
       if(c.kind==="onCurve") {
         const curve=problem.curves?.find(k=>k.id===c.curve);
-        if(!curve||![...curve.points,...(curve.plane??[])].every(n=>fixed.has(n))){unsupported=true;continue;}
+        if(!curve||![...curve.points,...(curve.plane??[]),...(curve.normalAxis??[]),...(curve.radiusSegment??[])].every(n=>fixed.has(n))){unsupported=true;continue;}
         try{const g=curveGeometry(curve,p);if(curve.type==="circle"){plane(g.center,g.normal);spheres.push({c:g.center,r:g.radius});}else unsupported=true;}catch{unsupported=true;}
       } else if(c.kind==="concyclic"||c.kind==="cospherical") {
         const anchors=c.refs[0].filter(n=>n!==point).map(n=>p[n]);

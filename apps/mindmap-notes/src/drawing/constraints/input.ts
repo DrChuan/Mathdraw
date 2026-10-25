@@ -1,3 +1,4 @@
+import {validateRecognition} from '../recognition/model';
 import { scalarRelation } from './scalarRelations';
 import { angleDegrees,angleKinds,parseTrigCondition } from "./angles";
 import { scalar } from "../expression";
@@ -5,18 +6,8 @@ import { validatePlanarContext } from './planarModel';
 import { parseVectorRelation,vectorDotSource } from "./vectors";
 import { constraintKinds, type Condition, type ConstraintKind, type ConstraintProblem, type ConstraintCurve, type VolumeShape } from "./types";
 
-export const conditionLabels:Record<ConstraintKind,string>={pointLineDistance:"点到直线距离",pointPlaneDistance:"点到平面距离",distance:"长度",equal:"等长",ratio:"长度比",lineAngle:"线线角",vertexAngle:"三点角",
-  linePlaneAngle:"线面角",dihedral:"二面角",parallel:"平行",perpendicular:"垂直",collinear:"三点共线",onSegment:"点在线段上",division:"定比分点（默认中点）",
-  coplanar:"四点共面",parallelogram:"平行四边形",rectangle:"矩形",rhombus:"菱形",square:"正方形",prism:"棱柱",pyramid:"棱锥",frustum:"棱台",regularPolygon:"正多边形",cube:"正方体",
-  scalarEquation:"长度 / 角等式",vectorRelation:"向量线性关系",vectorDot:"向量数量积",convexPolygon:"凸多边形（按顺序）",congruent:"三角形 / 多边形全等",similar:"三角形 / 多边形相似",
-  area:"多边形面积",volume:"几何体体积",circumradius:"三角形外接圆半径",concyclic:"若干点共圆",cospherical:"若干点共球",onCurve:"点在曲线上",cylinder:"圆柱",cone:"圆锥",coneFrustum:"圆台",sphere:"球"};
-export const conditionExamples:Record<ConstraintKind,string>={pointLineDistance:"pointLineDistance(P,AB)=2",pointPlaneDistance:"pointPlaneDistance(P,ABC)=2",distance:"AB = 3",equal:"AB = CD",ratio:"AB / CD = 2",lineAngle:"angle(AB, CD) = 60",
-  vertexAngle:"angle(A, B, C) = 120",linePlaneAngle:"angle(AB, CDE) = 30",dihedral:"dihedral(AB, C, D) = 120",
-  parallel:"AB // CD",perpendicular:"AB ⟂ CDE",collinear:"collinear(A, B, C)",onSegment:"onSegment(P, A, B)",
-  division:"division(M, AB, 1)",coplanar:"coplanar(A, B, C, D)",parallelogram:"parallelogram(A, B, C, D)",rectangle:"rectangle(A, B, C, D)",rhombus:"rhombus(A, B, C, D)",
-  square:"square(A, B, C, D)",prism:"prism(A, B, C, A_1, B_1, C_1)",pyramid:"pyramid(P, A, B, C, D)",frustum:"frustum(A, B, C, A_1, B_1, C_1)",regularPolygon:"regularPolygon(A, B, C, D, E)",cube:"cube(A, B, C, D, E, F, G, H)",
-  scalarEquation:"AB+BC=2AC",vectorRelation:"vec(AB)=2*vec(AC)-vec(AD)",vectorDot:"dot(AB,AC)=1/2",convexPolygon:"convexPolygon(A,B,C,D)",congruent:"congruent(ABC,DEF)",similar:"similar(ABCD,EFGH)",
-  area:"area(ABCD)=6",volume:"volume(pyramid(P,A,B,C,D))=3",circumradius:"circumradius(ABC)=2",concyclic:"concyclic(A,B,C,D)=2",cospherical:"cospherical(A,B,C,D,E)=3",onCurve:"onCurve(P,c)",cylinder:"cylinder(O,O_1,A)",cone:"cone(O,P,A)",coneFrustum:"coneFrustum(O,O_1,A,B)",sphere:"sphere(O,A)"};
+import {conditionLabels} from "./catalog";
+export {conditionLabels,conditionExamples} from "./catalog";
 export function pointNames(source:string,maximum=50):string[] {
   const names=source.trim().split(/[\s,，;；]+/).filter(Boolean);
   if(!names.length||names.length>maximum||names.some(s=>s.length>64||!/^[A-Za-z][A-Za-z0-9_]*$/.test(s))||new Set(names).size!==names.length)
@@ -24,7 +15,14 @@ export function pointNames(source:string,maximum=50):string[] {
   return names;
 }
 export function entity(source:string,names:string[]):string[] {
-  source=source.trim().replace(/^plane\((.*)\)$/i,"$1").replace(/[()]/g,"");
+  source=source.trim();
+  const shape=source.match(/^(Point|Segment|Line|Vector|Triangle|Polygon|Plane)\s*\(([^()]*)\)$/i);
+  if(shape){const kind=shape[1].toLowerCase(),points=entity(shape[2],names),count=({point:1,segment:2,line:2,vector:2,triangle:3} as Record<string,number>)[kind];
+    if(count!==undefined?points.length!==count:points.length<3)throw Error(`${shape[1]} 的顶点数量不正确`);
+    return points;
+  }
+  if(/[A-Za-z]\s*\(/.test(source))throw Error(`不支持的图形引用“${source}”，请使用顶点或 Triangle/Polygon/Line 等引用`);
+  source=source.replace(/[()]/g,"");
   if(names.includes(source))return [source];
   const explicit=source.split(/[\s,，]+/).filter(Boolean);
   if(explicit.length>1) {if(explicit.some(n=>!names.includes(n)))throw new Error(`引用了未声明的点：${source}`);return explicit;}
@@ -56,8 +54,9 @@ export function validateCondition(c:Condition,names:string[],curves?:ConstraintC
   if(c.kind==="volume") {
     if(!["prism","pyramid","frustum","cylinder","cone","coneFrustum"].includes(c.solid??""))throw new Error("体积仅支持棱柱、棱锥、棱台、圆柱、圆锥和圆台");
     validateCondition({...c,kind:c.solid!,solid:undefined,value:undefined},names,curves);
-  } else if(c.kind==="onCurve") {
-    if(sizes!=="1"||typeof c.curve!=="string"||curves&&!curves.some(k=>k.id===c.curve))throw new Error("点在曲线上需要一个已声明点和一条已声明曲线");
+  } else if(c.kind==="onCurve"||c.kind==="diameter") {
+    if(c.refs.length!==1||(c.kind==='diameter'?c.refs[0].length!==2:c.refs[0].length<1||c.refs[0].length>50)||typeof c.curve!=="string"||curves&&!curves.some(k=>k.id===c.curve))throw new Error("点在曲线上需要一个已声明点和一条已声明曲线");
+    if(c.kind==='diameter'&&curves?.find(k=>k.id===c.curve)?.type!=='circle')throw Error("直径需要引用圆对象");
   } else if(["area","circumradius","concyclic","cospherical"].includes(c.kind)) {
     const minimum=c.kind==="cospherical"?4:3;
     if(c.refs.length!==1||c.refs[0].length<minimum||c.refs[0].length>50||c.kind==="circumradius"&&c.refs[0].length!==3)throw new Error(`${conditionLabels[c.kind]}需要${c.kind==="circumradius"?"恰好三个":`至少 ${minimum} 个`}点`);
@@ -90,7 +89,7 @@ export function validateCondition(c:Condition,names:string[],curves?:ConstraintC
   if(c.alternateValue!==undefined&&(!["vertexAngle","dihedral"].includes(c.kind)||!Number.isFinite(c.alternateValue)||c.alternateValue<0||c.alternateValue>180))throw new Error("角的另一分支无效");
   if(["area","volume","circumradius"].includes(c.kind)||["concyclic","cospherical"].includes(c.kind)&&c.value!==undefined)
     if(typeof c.value!=="number"||!Number.isFinite(c.value)||c.value<=0||c.value>1e18)throw new Error("面积、体积或半径必须为有限的正数，可用分数和根式");
-  if(c.solid!==undefined&&c.kind!=="volume"||c.curve!==undefined&&c.kind!=="onCurve")throw new Error("条件的图形引用无效");
+  if(c.solid!==undefined&&c.kind!=="volume"||c.curve!==undefined&&!["onCurve","diameter"].includes(c.kind))throw new Error("条件的图形引用无效");
   if(c.kind==="vertexAngle"&&new Set(c.refs.flat()).size!==3)throw new Error("三点角需要三个不同的点");
   if(["onSegment","division"].includes(c.kind)&&c.refs[1].includes(c.refs[0][0]))throw new Error("线段上的动点应与端点不同");
   if(c.kind==="dihedral"&&new Set(c.refs.flat()).size!==4)throw new Error("二面角需要公共棱两端及两侧各一个不同的点");
@@ -151,10 +150,10 @@ function parseGeometricCondition(source:string,names:string[],id:string,curves:C
     const solid=constraintKinds.find(k=>k.toLowerCase()===shape[1].toLowerCase()) as VolumeShape;
     const c:Condition={id,kind:"volume",solid,refs:[splitArguments(shape[2]).flatMap(a=>entity(a,names))],value:scalar(call[3]??args.pop()??""),source:original,enabled:true};validateCondition(c,names,curves);return c;
   }
-  if(call&&call[1].toLowerCase()==="oncurve") {
-    const args=splitArguments(call[2]),curve=curves.find(c=>c.name===args[1]||c.id===args[1]);
-    if(!curve||args.length!==2)throw new Error("请指定已声明曲线，如 onCurve(P,c)");
-    const c:Condition={id,kind:"onCurve",refs:[entity(args[0],names)],curve:curve.id,enabled:true,source:original};validateCondition(c,names,curves);return c;
+  if(call&&["oncurve","diameter"].includes(call[1].toLowerCase())) {
+    const args=splitArguments(call[2]),curve=curves.find(c=>c.name===args.at(-1)||c.id===args.at(-1));
+    if(!curve||args.length<2)throw new Error("请指定已声明曲线，如 onCurve(P,c)");
+    const c:Condition={id,kind:call[1].toLowerCase()==="diameter"?"diameter":"onCurve",refs:[args.slice(0,-1).flatMap(arg=>entity(arg,names))],curve:curve.id,enabled:true,source:original};validateCondition(c,names,curves);return c;
   }
   if(relation) {kind=relation[2]==="//"?"parallel":relation[2]==="⟂"?"perpendicular":relation[2]==="≅"?"congruent":"similar";refs=[entity(relation[1],names),entity(relation[3],names)];}
   else if(call) {
@@ -173,6 +172,7 @@ function parseGeometricCondition(source:string,names:string[],id:string,curves:C
       else if(kind==="onSegment"||kind==="division") {const p=entity(args.shift()??"",names);refs=[p,args.flatMap(a=>entity(a,names))];}
       else if(kind==="distance")refs=[args.flatMap(a=>entity(a,names))];
       else if(kind==="vertexAngle")refs=args.map(a=>entity(a,names));
+      else if(kind==="dihedral"&&args.length===4){const p=args.map(a=>entity(a,names));if(p.some(r=>r.length!==1))throw Error("四点式二面角须依次填写侧点、棱端点、棱端点、侧点");refs=[[...p[1],...p[2]],p[0],p[3]];}
       else refs=args.map(a=>entity(a,names));
     }
   } else {
@@ -215,6 +215,19 @@ function splitArguments(source:string):string[] {
 /** Expand a chained equality atomically, retaining each exact numeric source. */
 export function parseConditions(source:string,names:string[],id:string=crypto.randomUUID(),curves:ConstraintCurve[]=[]):Condition[] {
   if(source.length>2048)throw new Error("单条条件不能超过 2048 个字符");
+  const relationPlane=conditionCall(normalizeConditionNotation(source,names));
+  if(relationPlane&&['parallel','perpendicular'].includes(relationPlane[1].toLowerCase())){
+    const args=splitArguments(relationPlane[2]);let groups:string[][]|undefined;try{groups=args.map(a=>entity(a,names));}catch{/* Named coordinate curves use the planar expression evaluator. */}
+    if(groups?.length===2&&groups.some(g=>g.length>3)){
+      const rows=groups.flatMap(g=>g.length>3?g.slice(3).map(p=>`coplanar(${[...g.slice(0,3),p].join(',')})`):[]);
+      rows.push(`${relationPlane[1]}(${groups.map(g=>g.slice(0,3).join(' ')).join(',')})`);
+      return rows.map((s,k)=>parseCondition(s,names,`${id}:face:${k}`,curves));
+    }
+  }
+  const baseCircle=source.trim().match(/^onBaseCircle\(([^()]+)\)$/i);
+  if(baseCircle){const refs=baseCircle[1].split(',').flatMap(s=>entity(s,names));if(refs.length!==4)throw Error('onBaseCircle 需要圆周点、圆心、轴向点和半径点');const [p,o,t,a]=refs;return [`${o} ${p}=${o} ${a}`,`perpendicular(${o} ${p},${o} ${t})`].map((s,k)=>parseCondition(s,names,`${id}:base:${k}`,curves));}
+  const plane=source.trim().match(/^coplanar\(([^()]+)\)$/i);
+  if(plane){const refs=plane[1].split(',').flatMap(s=>entity(s,names));if(refs.length>4)return refs.slice(3).map((p,k)=>parseCondition(`coplanar(${[...refs.slice(0,3),p].join(',')})`,names,`${id}:plane:${k}`,curves));}
   const vectorBody=source.trim().match(/^vectorRelation\s*\(([\s\S]*)\)$/i)?.[1];
   const marked=vectorBody!==undefined||/\\(?:vec|overrightarrow)\b|\b(?:vec|vector)\s*\(/i.test(source);
   const parts=(marked?(vectorBody??source.trim().replace(/^\$\$?([\s\S]*?)\$\$?$/,"$1")):normalizeConditionNotation(source,names)).replace(/＝/g,"=").split("=").map(s=>s.trim());
@@ -233,6 +246,7 @@ export function parseConditions(source:string,names:string[],id:string=crypto.ra
   return parts.slice(0,-1).map((part,i)=>pair(part,parts[i+1],i));
 }
 export function validateProblem(p:ConstraintProblem) {
+  if(p?.recognition)validateRecognition(p.recognition);
   if(!p||!Array.isArray(p.points)||pointNames(p.points.join(" "),p.mode==='coordinate'?2000:50).length!==p.points.length||!Array.isArray(p.segments)||p.segments.length>200||
     p.segments.some(s=>!Array.isArray(s)||s.length!==2||s[0]===s[1]||s.some(n=>!p.points.includes(n)))||!Array.isArray(p.conditions)||p.conditions.length>200)
     throw new Error("约束作图数据无效（最多 50 个点、200 条条件或线段）");
@@ -246,9 +260,13 @@ export function validateCurves(curves:ConstraintCurve[],names:string[],planar=fa
   const ids=new Set<string>(),symbols=new Set<string>(names);
   for(const c of curves) {
     const count=c?.method==="threePoint"?3:c?.method==="centerRadius"?1:2;
-    if(!c||typeof c.id!=="string"||!c.id||c.id.length>128||ids.has(c.id)||typeof c.name!=="string"||!c.name||c.name.length>64||!/^[A-Za-z][A-Za-z0-9_]*$/.test(c.name)||symbols.has(c.name)||!["circle","ellipse"].includes(c.type)||
+    if(!c||typeof c.id!=="string"||!c.id||c.id.length>128||ids.has(c.id)||typeof c.name!=="string"||!c.name||c.name.length>64||!/^[A-Za-z][A-Za-z0-9_]*$/.test(c.name)||(symbols.has(c.name)&&!(c.type==='circle'&&c.normalAxis&&c.name===c.points?.[0]))||!["circle","ellipse"].includes(c.type)||
       !(c.type==="ellipse"?c.method==="foci":["threePoint","centerPoint","centerRadius"].includes(c.method))||!Array.isArray(c.points)||c.points.length!==count||new Set(c.points).size!==count||c.points.some(n=>!names.includes(n))||
-      c.method!=="threePoint"&&!(planar&&c.type==='circle'&&c.plane===undefined)&&(!Array.isArray(c.plane)||c.plane.length!==3||new Set(c.plane).size!==3||c.plane.some(n=>!names.includes(n))))throw new Error("曲线名称、定义点或所在平面无效；平面需三个不同点");
+      c.method!=="threePoint"&&!c.normalAxis&&!(planar&&c.type==='circle'&&c.plane===undefined)&&(!Array.isArray(c.plane)||c.plane.length!==3||new Set(c.plane).size!==3||c.plane.some(n=>!names.includes(n))))throw new Error("曲线名称、定义点或所在平面无效；平面需三个不同点");
+    for(const refs of [c.normalAxis,c.radiusSegment])if(refs!==undefined&&(!Array.isArray(refs)||refs.length!==2||refs[0]===refs[1]||refs.some(n=>!names.includes(n))))throw Error("圆的轴或半径引用无效");
+    if(c.normalAxis&&(planar||c.type!=='circle'||c.method!=='centerPoint'||c.plane))throw Error("轴向底面圆只适用于空间圆");
+    if(c.radiusSegment&&!c.normalAxis)throw Error("半径线段需要轴向圆定义");
+    if(c.solid!==undefined&&(typeof c.solid!=='string'||!c.solid))throw Error("圆的几何体来源无效");
     if(c.type==="ellipse"||c.method==="centerRadius") {
       if(typeof c.value!=="number"||!Number.isFinite(c.value)||c.value<=0||c.value>1e9||typeof c.valueSource!=="string"||c.valueSource.length>1024||Math.abs(scalar(c.valueSource)-c.value)>1e-9*Math.max(1,c.value))throw new Error("曲线半径或长轴长无效");
     }

@@ -1,20 +1,29 @@
+import {splitArguments} from '../model';
 import type { DrawingDocument,Vec2 } from '../types';
-import type { Condition,ConstraintCurve,PlanarEquation } from './types';
+import {constraintKinds,type Condition,type ConstraintCurve,type PlanarEquation} from './types';
 import { resolveGeometry,toPlane } from '../geometry';
 import { parseExpression,evaluate } from '../expression';
 import { conicCoefficients,conicFoci,circleCenter } from '../conics';
 import { curveFunction } from '../constructions';
+import {planarRelationPattern,lateBoundPlanarCommands,namedAngleSyntaxHint} from './planarRelations';
 import type { Quadratic } from '../quadratic';
 import { parseConditions,entity } from './input';
 import { coordinatePlane,objectSymbol } from './planarModel';
 
 export function parsePlanarInput(source:string,names:string[],curves:ConstraintCurve[]=[]):{conditions:Condition[];equations:PlanarEquation[]} {
+  namedAngleSyntaxHint(source);
   try{
     if(/\b(?:x|y|a|b|c|e|p|radius|eccentricity|focalDistance)\s*\(/.test(source))throw Error('坐标或曲线参数表达式');
     const conditions=parseConditions(source,names,undefined,curves);
     if(conditions.some(c=>c.kind==='vectorRelation')&&!/vectorRelation\s*\(|\bvec\s*\(|\\(?:vec|overrightarrow)\b/.test(source))throw Error('无向量标记的代数式按长度表达式处理');
     return {conditions,equations:[]};}
-  catch {
+  catch(error) {
+    // Geometric commands with invalid arguments are not arbitrary numerical
+    // equations. Keep their real parser error instead of later reporting that
+    // the letters in "area" are unsupported variables.
+    const command=source.trim().match(/^([A-Za-z]+)\s*\(/)?.[1].toLowerCase();
+    const lateBound=lateBoundPlanarCommands;
+    if(command&&[...constraintKinds.map(k=>k.toLowerCase()),'midpoint','angle'].includes(command)&&!lateBound.has(command))throw error;
     if(!source.trim()||source.length>2048)throw Error('请输入有效条件（最多 2048 字符）');
     const normalized=source.replace(/＝/g,'=').replace(/\\(?:leq|le)\b|≤/g,'<=').replace(/\\(?:geq|ge)\b|≥/g,'>=');
     const parts=normalized.split(/(<=|>=|<|>|=)/);
@@ -27,7 +36,7 @@ export function equationEnvironment(doc:DrawingDocument) {
   const object=(name:string)=>{const o=objects.get(name.trim());if(!o)throw Error(`找不到对象 ${name}`);return o;};
   const point=(name:string):Vec2=>{const o=object(name),p=g.points.get(o.id);if(!p)throw Error(`${name}：点定义失效`);return toPlane(plane,p.p);};
   const quadratic=(name:string):Quadratic=>{
-    const o=object(name);if(o.kind==='curve'){const c=g.curves.get(o.id);if(!c||c.parametric)throw Error(`${name} 不是二次曲线`);const q=conicCoefficients(c.equation);if(!q)throw Error(`${name} 不是二次曲线`);return q;}
+    const o=objects.get(name.trim());if(!o){const refs=entity(name,pointNames);if(refs.length!==2)throw Error(`需要两个端点或命名直线：${name}`);const a=point(refs[0]),b=point(refs[1]);return [0,0,0,b[1]-a[1],a[0]-b[0],b[0]*a[1]-a[0]*b[1]];}if(o.kind==='curve'){const c=g.curves.get(o.id);if(!c||c.parametric)throw Error(`${name} 不是二次曲线`);const q=conicCoefficients(c.equation);if(!q)throw Error(`${name} 不是二次曲线`);return q;}
     const r=g.straightReference(o.id),a=toPlane(plane,r.a),b=toPlane(plane,r.b);return [0,0,0,b[1]-a[1],a[0]-b[0],b[0]*a[1]-a[0]*b[1]];
   };
   const line=(name:string)=>{const q=quadratic(name);if(Math.hypot(q[0],q[1],q[2])>1e-10)throw Error(`${name} 不是直线`);const n=Math.hypot(q[3],q[4]);if(n<1e-12)throw Error('直线退化');return q.map(v=>v/n) as Quadratic;};
@@ -44,7 +53,7 @@ export function equationEnvironment(doc:DrawingDocument) {
   const numeric=(raw:string)=>{
     let source=raw.replace(/\b([xy])\s*\(\s*([A-Za-z][A-Za-z0-9_]*)\s*\)/g,(_,axis:string,n:string)=>`(${point(n)[axis==='x'?0:1]})`);
     source=source.replace(/\b(a|b|c|e|p|radius|eccentricity|focalDistance)\s*\(\s*([A-Za-z][A-Za-z0-9_]*)\s*\)/g,(_,prop:string,n:string)=>{const p=properties(n),key=({radius:'r',eccentricity:'e',focalDistance:'c'} as Record<string,string>)[prop]??prop;return `(${p[key as keyof typeof p]*(prop==='focalDistance'?2:1)})`;});
-    source=source.replace(/\b(?:length|Length)\s*\(\s*([A-Za-z][A-Za-z0-9_]*)\s*\)/g,(_,name:string)=>{const o=object(name);if(!['segment','vector'].includes(o.kind))throw Error('长度需要线段或向量；无限直线没有长度');const ref=g.straightReference(o.id);return `(${Math.hypot(...ref.a.map((v,i)=>v-ref.b[i]))})`;});
+    source=source.replace(/\b(?:length|Length)\s*\(\s*([A-Za-z][A-Za-z0-9_]*)\s*\)/g,(_,name:string)=>{const o=objects.get(name);if(o&&!['segment','vector'].includes(o.kind))throw Error('长度需要线段或向量；无限直线没有长度');return `(${Math.hypot(...vector(name))})`;});
     source=source.replace(/\bdot\s*\(\s*([A-Za-z][A-Za-z0-9_]*),\s*([A-Za-z][A-Za-z0-9_]*)\s*\)/g,(_,a:string,b:string)=>{const u=vector(a),v=vector(b);return `(${u[0]*v[0]+u[1]*v[1]})`;});
     source=source.replace(/\b(sin|cos|tan)Angle\s*\(\s*([A-Za-z][A-Za-z0-9_]*),\s*([A-Za-z][A-Za-z0-9_]*)\s*\)/g,(_,fn:string,a:string,b:string)=>{const u=line(a),v=line(b),c=Math.min(1,Math.abs(u[3]*v[3]+u[4]*v[4])),s=Math.sqrt(Math.max(0,1-c*c));return `(${fn==='cos'?c:fn==='sin'?s:s/c})`;});
     source=source.replace(/\b[A-Za-z][A-Za-z0-9_]*\b/g,name=>{if(name in scope)return name;const o=objects.get(name);if(o){if(['segment','vector'].includes(o.kind))return `(${Math.hypot(...vector(name))})`;return name;}try{const p=entity(name,pointNames);if(p.length===2){const v=vector(name);return `(${Math.hypot(...v)})`;}}catch{/* It may be a numerical function. */}return name;});
@@ -74,15 +83,16 @@ export function equationEnvironment(doc:DrawingDocument) {
       };
       const values=parsed.map(s=>walk(parseExpression(s,names))).map(v=>typeof v==='number'?v===0?[0,0] as Vec2:undefined:v);if(!values[0]||!values[1])throw Error('向量等式不能与非零标量相等');return [values[0][0]-values[1][0],values[0][1]-values[1][1]];
     }
-    const call=source.match(/^(pointLineDistance|onCurve|onLine|intersection|tangent|parallel|perpendicular|center|focus|directrix|lineAngle|distance|equal|ratio|vectorDot)\s*\((.*)\)$/i);
-    if(call){const args=call[2].split(',').map(s=>s.trim()),name=call[1].toLowerCase();
+    const call=source.match(planarRelationPattern);
+    if(call){const args=splitArguments(call[2]),name=call[1].toLowerCase();
       if(name==='pointlinedistance'){const distance=numeric(args[2]);if(distance<0)throw Error('距离不能为负数');const l=line(args[1]),p=point(args[0]);return [(Math.abs(l[3]*p[0]+l[4]*p[1]+l[5])-distance)/Math.max(1,distance)];}
-      if(name==='oncurve'||name==='online')return [at(point(args[0]),args[1]),...bounds(point(args[0]),args[1])];
+      if(name==='oncurve'||name==='online')return args.slice(0,-1).flatMap(arg=>entity(arg,pointNames)).flatMap(n=>[at(point(n),args.at(-1)!),...bounds(point(n),args.at(-1)!)]);
       if(name==='intersection')return [at(point(args[0]),args[1]),...bounds(point(args[0]),args[1]),at(point(args[0]),args[2]),...bounds(point(args[0]),args[2])];
       if(name==='distance')return [(numeric(`length(${args[0]})`)-numeric(args[1]))/Math.max(1,Math.abs(numeric(args[1])))];
       if(name==='equal'||name==='ratio')return [(numeric(`length(${args[0]})`)-numeric(`length(${args[1]})`)*(name==='ratio'?numeric(args[2]):1))/Math.max(1,numeric(`length(${args[0]})`),numeric(`length(${args[1]})`))];
-      if(name==='lineangle'){const a=line(args[0]),b=line(args[1]);return [Math.abs(a[3]*b[3]+a[4]*b[4])-Math.cos(numeric(args[2])*Math.PI/180)];}
-      if(name==='vectordot'){const a=g.straightReference(object(args[0]).id),b=g.straightReference(object(args[1]).id),value=a.a.reduce((s,v,i)=>s+(a.b[i]-v)*(b.b[i]-b.a[i]),0);return [(value-numeric(args[2]))/Math.max(1,Math.abs(value),Math.abs(numeric(args[2])))];}
+      if(name==='inclination'){const l=line(args[0]),raw=args[1],rad=raw.match(/^rad\(([\s\S]*)\)$/i),angle=numeric(rad?.[1]??raw)*(rad||/\\pi|\bpi\b|π/.test(raw)?1:Math.PI/180);if(angle<0||angle>=Math.PI)throw Error('倾斜角必须在 [0,180°) 内');return [l[3]*Math.cos(angle)+l[4]*Math.sin(angle)];}
+      if(name==='lineangle'){const a=line(args[0]),b=line(args[1]),raw=args[2],rad=raw.match(/^rad\(([\s\S]*)\)$/i),angle=numeric(rad?.[1]??raw)*(rad||/\\pi|\bpi\b|π/.test(raw)?1:Math.PI/180);if(angle<0||angle>Math.PI/2)throw Error('线线夹角必须在 0～90° 内');return [Math.abs(a[3]*b[3]+a[4]*b[4])-Math.cos(angle)];}
+      if(name==='vectordot'){const a=vector(args[0]),b=vector(args[1]),value=a[0]*b[0]+a[1]*b[1];return [(value-numeric(args[2]))/Math.max(1,Math.abs(value),Math.abs(numeric(args[2])))];}
       if(name==='parallel'||name==='perpendicular'){const a=line(args[0]),b=line(args[1]);return [name==='parallel'?a[3]*b[4]-a[4]*b[3]:a[3]*b[3]+a[4]*b[4]];}
       if(name==='tangent'){
         const l=line(args[0]),q=quadratic(args[1]),o:Vec2=[-l[5]*l[3],-l[5]*l[4]],d:Vec2=[-l[4],l[3]],at=(x:number,y:number)=>q[0]*x*x+q[1]*x*y+q[2]*y*y+q[3]*x+q[4]*y+q[5];

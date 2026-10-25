@@ -98,12 +98,14 @@ export function symbolicGeometry(problem:ConstraintProblem,point:(name:string)=>
      const [base,top]=r,x=difference(point(base[1]),point(base[0])),y=difference(point(top[1]),point(top[0])),ratio=`(${productSum(x,y)})/(${square(x)})`;nonzero(x);
      for(let i=1;i<base.length;i++)zero(difference(difference(point(top[i]),point(top[0])),difference(point(base[i]),point(base[0])).map(v=>`(${ratio})*(${v})`)));break;
     }
+    case 'diameter':{const curve=problem.curves?.find(k=>k.id===c.curve);if(!curve||curve.type!=='circle'||curve.method==='threePoint'){unsupported.push('三点圆直径');break;}const center=point(curve.points[0]),a=point(r[0][0]),b=point(r[0][1]),radius=curve.method==='centerRadius'?`(${curve.valueSource??curve.value})^2`:curve.radiusSegment?square(difference(point(curve.radiusSegment[1]),point(curve.radiusSegment[0]))):square(difference(point(curve.points[1]),center));zero(a.map((v,i)=>`(${v})+(${b[i]})-2*(${center[i]})`));sources.push(`${square(difference(a,center))}=${radius}`,`${radius}>0`);if(curve.normalAxis){const n=difference(point(curve.normalAxis[1]),point(curve.normalAxis[0]));nonzero(n);sources.push(`${productSum(difference(a,center),n)}=0`);}if(curve.plane){const n=normal(curve.plane);nonzero(n);sources.push(`${productSum(difference(a,center),n)}=0`);}break;}
     case 'onCurve':case 'curveDefinition':{
      const curve=problem.curves?.find(k=>k.id===c.curve);if(!curve){unsupported.push('曲线定义缺失');break;}
      if(curve.type!=='circle'||curve.method==='threePoint'){unsupported.push(`曲线 ${curve.name}`);break;}
-     const center=point(curve.points[0]),radius=curve.method==='centerRadius'?`(${curve.valueSource??curve.value})^2`:square(difference(point(curve.points[1]),center));sources.push(`${radius}>0`);
-     const names=c.kind==='onCurve'?[r[0][0]]:curve.points.slice(1);
+     const center=point(curve.points[0]),radius=curve.method==='centerRadius'?`(${curve.valueSource??curve.value})^2`:curve.radiusSegment?square(difference(point(curve.radiusSegment[1]),point(curve.radiusSegment[0]))):square(difference(point(curve.points[1]),center));sources.push(`${radius}>0`);
+     const names=c.kind==='onCurve'?[r[0][0]]:curve.radiusSegment?[]:curve.points.slice(1);
      for(const name of names)sources.push(`${square(difference(point(name),center))}=${radius}`);
+     if(curve.normalAxis){const n=difference(point(curve.normalAxis[1]),point(curve.normalAxis[0]));nonzero(n);for(const name of names)sources.push(`${productSum(difference(point(name),center),n)}=0`);if(c.kind==='curveDefinition'&&curve.radiusSegment)sources.push(`${productSum(difference(point(curve.radiusSegment[1]),point(curve.radiusSegment[0])),n)}=0`);}
      if(curve.plane){const n=normal(curve.plane);nonzero(n);for(const name of [...names,...curve.points])sources.push(`${productSum(difference(point(name),point(curve.plane[0])),n)}=0`);}break;
     }
     case 'circumradius':{

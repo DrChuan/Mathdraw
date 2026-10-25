@@ -1,3 +1,4 @@
+import {independentParameterBranches} from './parameterBlocks';
 import type { Vec3 } from '../types';
 import type { ConstraintProblem,ConstraintResult,PlanarUnknown,Positions,SolutionBranch,SolveRequest,AlgebraicValue } from './types';
 import { evaluator,flatten,problemScale } from './compile';
@@ -177,6 +178,9 @@ export function solvePlanar(request:SolveRequest):ConstraintResult {
   };
   let analytic=false,complete=false;let exactAnalysis:ConstraintResult['exactAnalysis'];
   const symbolic=symbolicPlanarEquations(p,e.variables);
+  const parameterIndices=e.variables.flatMap((u,i)=>context?.document.objects.some(o=>o.id===u.object&&o.kind==='number')?[i]:[]);
+  const parameterBlocks=independentParameterBranches(symbolic.sources,symbolic.tokens,parameterIndices,e.initial,Math.min(deadline,Date.now()+Math.max(100,(request.budget??2000)*.25)));
+  if(parameterBlocks.solved)steps.push(`先独立求解 ${parameterBlocks.solved} 组数值参数，再联立验证点、曲线及其余条件。`);
   if(symbolic.sources.length&&e.variables.length&&(p.conditions.some(c=>c.enabled)||equations.length||p.curves?.length)){
     const exact=solveExactSystem(symbolic.sources,symbolic.tokens,{deadline:Math.min(deadline,Date.now()+Math.max(50,(request.budget??2000)*.4)),initial:e.initial});
     let accepted=0;for(const candidate of exact.candidates){const values=Object.fromEntries(Object.entries(candidate.exactValues).map(([token,value])=>[e.variables[symbolic.tokens.indexOf(token)].id,value]));if(accept(candidate.values,values,candidate.certificate,exact.kind==='finite'))accepted++;}
@@ -231,7 +235,9 @@ export function solvePlanar(request:SolveRequest):ConstraintResult {
       const searchLimits=context?.automaticSearch?limits.map(([lo,hi],i):[number,number]=>[e.variables[i].min??lo*exploration,e.variables[i].max??hi*exploration]):limits;
       const guess=request.seeds?.[0]?e.encode(request.seeds[0],request.seedValues?.[0]):e.initial;
       const start=attempt===0?guess.map((v,i)=>Math.max(limits[i][0],Math.min(limits[i][1],v))):searchLimits.map(([lo,hi],i)=>{const radius=Math.min((hi-lo)/2,Math.max(2,Math.abs(e.initial[i])*2)*exploration);return Math.max(lo,Math.min(hi,e.initial[i]+(random()*2-1)*radius));});
-      const candidate=minimize(e.residual,start,Math.min(deadline,Date.now()+Math.max(50,(request.budget??2000)/5)),searchLimits);accept(candidate);
+      const fixed=parameterBlocks.branches.length?parameterBlocks.branches[attempt%parameterBlocks.branches.length]:undefined;
+      if(fixed?.size){const free=e.variables.flatMap((_,i)=>fixed.has(i)?[]:[i]),inflate=(v:number[])=>{const all=[...start];for(const [i,n]of fixed)all[i]=n;free.forEach((i,j)=>all[i]=v[j]);return all;};const reduced=minimize(v=>e.residual(inflate(v)),free.map(i=>start[i]),Math.min(deadline,Date.now()+Math.max(50,(request.budget??2000)/5)),free.map(i=>searchLimits[i]));accept(inflate(reduced));}
+      else{const candidate=minimize(e.residual,start,Math.min(deadline,Date.now()+Math.max(50,(request.budget??2000)/5)),searchLimits);accept(candidate);}
       if(branches.length&&branches[0].dof>0&&attempt>3)break;
     }
   }

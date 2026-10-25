@@ -1,4 +1,4 @@
-import {findGithubRelease,releaseById} from './github-release.mjs';
+import {findGithubRelease,releaseById,createGithubRelease,editGithubRelease,uploadGithubAsset} from './github-release.mjs';
 import {publishGitee,checkGitee} from './gitee-release.mjs';
 // Publish only explicitly named, signed release files, never the source tree or keys.
 import { readFileSync,writeFileSync,statSync,existsSync } from 'node:fs';
@@ -43,7 +43,7 @@ if((process.argv.includes('--resume')||process.argv.includes('--gitee-only'))&&e
 writeFileSync(join(dir,'SHA256SUMS.txt'),required.map(name=>`${createHash('sha256').update(readFileSync(join(dir,name))).digest('hex')}  ${name}`).join('\n')+'\n');
 const body=option('--notes-file')?readFileSync(resolve(option('--notes-file')),'utf8'):`## 更新\n\n${notes}\n\n### 安装\n\nWindows 推荐下载 **${names[0]}**。独立 mathdraw.exe 需要预装 WebView2。\n\nmacOS 下载 **${names[2]}**。Mathdraw.app.tar.gz 为自动更新专用包。\n\n已安装版本可使用“文件 → 检查更新”。更新包经过签名校验；Windows 安装包尚无 Authenticode 证书，macOS 尚未公证。\n\n### 构建范围\n\nmacOS 通用版及 Windows x64 交叉编译。打包不代表完成平台实际运行检查，本脚本不运行自动化测试。\n`;
 const bodyPath=join(dir,'release-notes.md');writeFileSync(bodyPath,body);
-const gh=args=>execFileSync('gh',args,{stdio:'inherit'});
+const releaseRecord=join(dir,'github-release.json');
 if(!process.argv.includes('--publish')&&!process.argv.includes('--gitee-only')){console.log(`Prepared ${dir}. Add --publish to upload to GitHub and Gitee.`);process.exit(0);}
 const assets=[...required,'latest.json','SHA256SUMS.txt'];
 await checkGitee();
@@ -51,16 +51,22 @@ if(!process.argv.includes('--gitee-only')){
   let published=false,release;
   if(process.argv.includes('--resume')) {
     release=findGithubRelease(repo,tag);
-    if(!release)throw Error(`找不到待继续的发布 ${tag}`);
+    if(!release&&existsSync(releaseRecord)){const saved=JSON.parse(readFileSync(releaseRecord,'utf8'));if(saved.repo!==repo||saved.tag!==tag)throw Error('本地 GitHub 发布记录不匹配');release=releaseById(repo,saved.id);if(release.tag_name!==tag)throw Error('GitHub 发布 ID 与版本不匹配');}
+    if(!release)release=createGithubRelease(repo,tag,`Mathdraw ${version}`,body);
     published=!release.draft;
-    if(!published)gh(['release','edit',tag,'--repo',repo,'--notes-file',bodyPath]);
-  }else gh(['release','create',tag,'--repo',repo,'--draft','--title',`Mathdraw ${version}`,'--notes-file',bodyPath]);
+    if(!published)editGithubRelease(repo,release.id,{tag_name:tag,body});
+  }else {
+    release=findGithubRelease(repo,tag);
+    if(release)throw Error(`发布 ${tag} 已存在，请继续上次发布`);
+    release=createGithubRelease(repo,tag,`Mathdraw ${version}`,body);
+  }
   release??=findGithubRelease(repo,tag);
   if(!release)throw Error(`找不到刚创建的发布 ${tag}`);
+  writeFileSync(releaseRecord,JSON.stringify({repo,tag,id:release.id})+'\n');
   if(!published){
     const current=releaseById(repo,release.id);
     const pending=assets.filter(name=>{const a=current.assets?.find(a=>a.name===name);return a?.state!=='uploaded'||a.digest!==`sha256:${createHash('sha256').update(readFileSync(join(dir,name))).digest('hex')}`;});
-    if(pending.length)gh(['release','upload',tag,'--repo',repo,...pending.map(n=>join(dir,n)),...(process.argv.includes('--resume')?['--clobber']:[])]);
+    if(pending.length)for(const name of pending)await uploadGithubAsset(repo,release.id,name,join(dir,name));
     else console.log('GitHub 草稿附件已全部匹配，跳过重复上传。');
   }
   release??=findGithubRelease(repo,tag);
@@ -70,7 +76,8 @@ if(!process.argv.includes('--gitee-only')){
     const asset=releases.assets?.find(a=>a.name===name),digest=`sha256:${createHash('sha256').update(readFileSync(join(dir,name))).digest('hex')}`;
     if(asset?.state!=='uploaded'||asset.digest!==digest)throw Error(`Uploaded checksum mismatch: ${name}; existing release retained`);
   }
-  if(!published)gh(['release','edit',tag,'--repo',repo,'--draft=false','--latest']);
+  const finalized=!published?editGithubRelease(repo,release.id,{tag_name:tag,draft:false,make_latest:'true'}):releaseById(repo,release.id);
+  if(finalized.draft||finalized.tag_name!==tag||finalized.html_url!==`https://github.com/${repo}/releases/tag/${tag}`)throw Error('GitHub 公开发布的版本标签不匹配，更新清单尚不可用，请修复后继续');
   console.log(`Published https://github.com/${repo}/releases/tag/${tag}`);
 }
 // Failure leaves GitHub's release intact. --resume verifies it and retries only

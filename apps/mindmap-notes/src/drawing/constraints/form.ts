@@ -6,12 +6,13 @@ export const conditionGroups:{name:string;kinds:ConstraintKind[]}[]=[
   {name:"长度",kinds:["distance","pointLineDistance","pointPlaneDistance","equal","ratio","scalarEquation","circumradius","concyclic","cospherical"]},
   {name:"面积 / 体积",kinds:["area","volume"]},
   {name:"角度",kinds:["vertexAngle","lineAngle","linePlaneAngle","dihedral"]},
-  {name:"位置关系",kinds:["parallel","perpendicular","collinear","coplanar","onSegment","division","onCurve"]},
+  {name:"位置关系",kinds:["parallel","perpendicular","collinear","coplanar","onSegment","division","onCurve","diameter"]},
   {name:"向量关系",kinds:["vectorRelation","vectorDot"]},
   {name:"平面图形",kinds:["convexPolygon","parallelogram","rectangle","rhombus","square","regularPolygon","congruent","similar"]},
   {name:"几何体",kinds:["prism","pyramid","frustum","cube","cylinder","cone","coneFrustum","sphere"]},
 ];
 export const conditionFields:Record<ConstraintKind,{label:string;placeholder:string}[]>={
+  diameter:[{label:"直径端点",placeholder:"AE"},{label:"圆名",placeholder:"O"}],
   scalarEquation:[{label:"等式",placeholder:"AB+BC=2AC"}],
   pointLineDistance:[{label:"点",placeholder:"P"},{label:"直线（两点或名称）",placeholder:"AB 或 l"}],pointPlaneDistance:[{label:"点",placeholder:"P"},{label:"平面（三个点）",placeholder:"ABC"}],
   distance:[{label:"线段",placeholder:"AB"}],equal:[{label:"第一条线段",placeholder:"AB"},{label:"第二条线段",placeholder:"CD"}],
@@ -48,9 +49,9 @@ export const conditionFields:Record<ConstraintKind,{label:string;placeholder:str
 export function formConditionSource(kind:ConstraintKind,fields:string[],names:string[],value:string,mode:AngleMode,range:"both"|"acute"|"obtuse",solid:VolumeShape="prism",curves:ConstraintCurve[]=[]) {
   if(kind==='scalarEquation')return fields[0]??'';
   if(kind==="vectorRelation")return `vectorRelation(${fields[0]} = ${fields[1]})`;
-  if(kind==="onCurve") {
+  if(kind==="onCurve"||kind==="diameter") {
     const curve=curves.find(c=>c.name===fields[1]);if(!curve)throw new Error("请选择已声明的曲线");
-    return `onCurve(${entity(fields[0]??"",names).join(" ")},${curve.name})`;
+    return `${kind}(${entity(fields[0]??"",names).join(" ")},${curve.name})`;
   }
   const groups=(kind==="volume"?conditionFields[solid]:conditionFields[kind]).map((_,i)=>entity(fields[i]??"",names));
   if(kind==="volume")return `volume(${solid}(${groups.flat().join(",")}))=${value}`;

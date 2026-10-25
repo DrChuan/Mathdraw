@@ -18,11 +18,14 @@ export interface WorkPlane {
   v: Vec3;
 }
 interface ObjectBase {
+  recognitionItem?: string;
   id: string;
   name: string;
   hidden?: boolean;
   auxiliary?: boolean;
   symbol?: string;
+  /** Previous formula symbols, kept when the user explicitly renames an object. */
+  symbolHistory?: string[];
   locked?: boolean;
   constraintSet?: string;
   /** Ownership only; fixed generated objects retain ordinary editing behavior. */

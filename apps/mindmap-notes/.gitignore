@@ -3,3 +3,6 @@ dist/
 src-tauri/target/
 src-tauri/gen/
 *.tsbuildinfo
+
+.build-cache/
+产物/

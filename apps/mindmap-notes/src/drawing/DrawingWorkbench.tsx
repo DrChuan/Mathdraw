@@ -1,3 +1,5 @@
+import SymbolRename from './SymbolRename';
+import {locusDriver,locusSelectionInfo} from './locus';
 import { relationDirection } from "./spatial";
 import {useConstraintMobility} from './useConstraintMobility';
 import { ColorPalette } from "./ColorPalette";
@@ -170,6 +172,7 @@ export default function DrawingWorkbench(props: Props) {
   const [dragMode, setDragMode] = useState<"box" | "pan">("box");
   const [dragHint,setDragHint]=useState("");
   const [help, setHelp] = useState(false);
+  const [guidedConfiguration,setGuidedConfiguration]=useState<import('./constraints/configuration').ConstraintConfiguration>();
   const [constraintEditor,setConstraintEditor]=useState<string|null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; hit?: Hit } | null>(
       null,
@@ -211,10 +214,15 @@ export default function DrawingWorkbench(props: Props) {
     },
     [props.change],
   );
+  const toolHistory=useRef<ToolState[]>([]);
   const setToolState = (next: ToolState) => {
+    const old=stateRef.current,key=(v:ToolState)=>JSON.stringify([v.points,v.references,v.base,v.axisPlane?.id]);
+    if(old.tool!==next.tool||!next.points.length&&!next.references.length&&!next.base)toolHistory.current=[];
+    else if(key(old)!==key(next))toolHistory.current.push(structuredClone(old));
     stateRef.current = next;
     setState(next);
   };
+  const backToolStep=()=>{const previous=toolHistory.current.pop();if(previous){stateRef.current=previous;setState(previous);setSelection([...previous.points,...previous.references]);setSnap(null);setParameterError('');}};
   const constraintMotion=useConstraintMotion(docRef,update,onError);
   useConstraintMobility(doc,docRef,update);
   const choose = (tool: Tool) => {
@@ -640,6 +648,7 @@ export default function DrawingWorkbench(props: Props) {
       }
       if(t === "locus") {
         if(hit?.kind!=="point")throw new Error("请依次选择已创建的主动点和从动点");
+        if(s.points.length&&doc.dimension==='2d')locusDriver(docRef.current,s.points[0],hit.id);
         const next=acceptPoint(s,hit.id);setToolState(next.state);if(next.ready)finishPoints(next.state);return;
       }
       if(t === "area"||t === "perimeter"||(t === "length"&&!s.points.length&&hit?.kind==="edge")) {
@@ -1031,7 +1040,8 @@ export default function DrawingWorkbench(props: Props) {
         accept(undefined,q,false); svg.current?.focus(); return;
       }
     }
-    let overlap = hits.filter((h) => h.kind === hits[0]?.kind);
+    // Normal picking prioritizes the nearest type. Alt exposes underlying types.
+    let overlap = s.tool==='select'&&e.altKey?hits.filter((h,i,a)=>a.findIndex(k=>k.id===h.id&&k.kind===h.kind)===i):hits.filter((h) => h.kind === hits[0]?.kind);
     if(s.tool==="select"&&overlap[0]?.kind==="face"&&!e.altKey) {
       const seen=new Set<string>();overlap=overlap.filter(h=>{const owner=docRef.current.objects.find(o=>o.id===h.id)?.body??h.id;if(seen.has(owner))return false;seen.add(owner);return true;});
     }
@@ -1669,7 +1679,7 @@ export default function DrawingWorkbench(props: Props) {
           <option value="2d">平面几何</option>
           <option value="3d">立体几何</option>
         </select>
-        <button onClick={()=>{editor.current?.flush();choose("select");setConstraintEditor("new");}}>按条件作图</button>
+        <button onClick={()=>{editor.current?.flush();choose("select");setGuidedConfiguration(undefined);setConstraintEditor("new");}}>按条件作图</button>
         <i />
         <div className="canvas-drag-modes" role="group" aria-label="鼠标拖动方式">
           <button aria-pressed={state.tool === "select" && dragMode === "box"}
@@ -1876,6 +1886,7 @@ export default function DrawingWorkbench(props: Props) {
         </div>
       )}
       {constraintEditor!==null&&<ConstraintWorkbench key={`${doc.id}:${constraintEditor}`} docRef={docRef}
+        initial={constraintEditor==='guided'?guidedConfiguration:undefined}
         existing={doc.objects.find((o):o is import("./types").DrawingSolutionSet=>o.id===constraintEditor&&o.kind==="solutionSet")}
         change={update} close={()=>setConstraintEditor(null)} highlight={setSelection}/>}
       <main className="draw-workspace">
@@ -1884,6 +1895,7 @@ export default function DrawingWorkbench(props: Props) {
             <div className="expressions-width" style={{ width: leftWidth }}>
               <ExpressionPanel
                 doc={doc}
+                highlight={id=>setHover(id?{kind:geometry.points.has(id)?'point':'object',id,owner:id,distance:0}:null)}
                 selected={selection}
                 select={select}
                 change={update}
@@ -1895,6 +1907,7 @@ export default function DrawingWorkbench(props: Props) {
                   setSelection([id]);
                   setMenu({ x, y });
                 }}
+                onGuided={c=>{editor.current?.flush();choose('select');setGuidedConfiguration(c);setConstraintEditor('guided');}}
                 onConstraintEdit={id=>setConstraintEditor(id)}
               />
             </div>
@@ -1947,7 +1960,7 @@ export default function DrawingWorkbench(props: Props) {
             <button title="恢复当前所建坐标系的 z 轴朝上；不改变几何坐标" aria-label="重置为所建 z 轴朝上" onClick={resetSpaceView}>z 轴朝上</button>
           </div>}
 
-          {state.tool !== "select" && <div className="active-tool-prompt" role="status" aria-live="polite"><span>{toolGroups.flatMap(g=>g.items).find(([id])=>id===state.tool)?.[1]}</span><strong>请选择：<mark>{toolTarget(state)}</mark></strong><small>{toolStep(state)}</small><button onClick={()=>choose("select")} aria-label="退出当前作图工具">Esc 退出</button></div>}
+          {state.tool !== "select" && <div className="active-tool-prompt" role="status" aria-live="polite"><span>{toolGroups.flatMap(g=>g.items).find(([id])=>id===state.tool)?.[1]}</span><strong>请选择：<mark>{toolTarget(state)}</mark></strong><small>{toolStep(state)}</small>{state.tool==='locus'&&doc.dimension==='2d'&&<small className="locus-eligibility">{locusSelectionInfo(doc,state.points[0])}</small>}{snap&&wantsPoint(state)&&<small className="construction-reuse">{snap.existing?`复用 ${rname(snap.existing,combined(state))}`:snap.construction?.type==='intersection'?'新建交点（保持两图形关联）':snap.construction?'新建线上点（保持来源关联）':'新建自由点'}</small>}{[...state.points,...state.references,...(state.base?[state.base]:[])].length>0&&<small>已选：{[...state.points,...state.references,...(state.base?[state.base]:[])].map(id=>rname(id,combined(state))).join("、")}</small>}<button disabled={!toolHistory.current.length} onClick={backToolStep}>上一步</button><button onClick={()=>choose("select")} title="Esc 先取消本次选点，再按一次退出工具" aria-label="退出当前作图工具">退出</button></div>}
           {doc.dimension === "3d" && (
             <div className="draw-plane-hint">
               {doc.view.mode === "plane" ? "正在正视" : "作图仍位于"}{" "}
@@ -1979,13 +1992,10 @@ export default function DrawingWorkbench(props: Props) {
                   ? `已选 ${selection.length} 项`
                   : (selectedPoint?.name ?? selectedRoot?.name ?? geometry.objects.get(selection[0])?.name ?? "已选对象")}
               </span>
-              {contextActions.map(([label, action]) => (
-                <button key={label} onClick={action}>
-                  {label}
-                </button>
-              ))}
+              {contextActions.slice(0,3).map(([label,action])=><button key={label} onClick={action}>{label}</button>)}
+              {contextActions.length>3&&<details className="selection-more"><summary>更多构造</summary><div>{contextActions.slice(3).map(([label,action])=><button key={label} onClick={e=>{e.currentTarget.closest('details')?.removeAttribute('open');action();}}>{label}</button>)}</div></details>}
               {perpendicularOption}
-              <button onClick={() => setRight(true)}>属性</button>
+              <button onClick={() => setRight(true)}>对象属性</button>
               {selectedRoot && (
                 <button
                   onClick={() =>
@@ -2095,7 +2105,7 @@ export default function DrawingWorkbench(props: Props) {
                   )}
                   {(selection.includes(p.id) ||
                     selection.includes(p.owner) ||
-                    hover?.id === p.id) &&
+                    hover?.id === p.id || hover?.kind==='object'&&hover.id===p.owner) &&
                     p.owner !== "axis" && (
                       <path
                         d={pathData(p.points)}
@@ -2287,17 +2297,17 @@ export default function DrawingWorkbench(props: Props) {
           </svg>
           {candidates && (
             <div
-              className="hit-candidates"
+              className="hit-candidates" role="dialog" aria-label="选择重叠对象" onPointerLeave={()=>setHover(null)} onKeyDown={e=>{if(['ArrowDown','ArrowUp'].includes(e.key)){e.preventDefault();const buttons=[...e.currentTarget.querySelectorAll<HTMLButtonElement>('button[data-hit]')],i=buttons.indexOf(document.activeElement as HTMLButtonElement),n=(i+(e.key==='ArrowDown'?1:-1)+buttons.length)%buttons.length;buttons[n]?.focus();}if(e.key==='Escape'){e.stopPropagation();setCandidates(null);setHover(null);svg.current?.focus();}}}
               style={{
-                left: Math.min(size[0] - 220, candidates.x),
-                top: Math.min(size[1] - 200, candidates.y),
+                left: Math.max(0,Math.min(size[0] - 260, candidates.x)),
+                top: Math.max(0,Math.min(size[1] - 240, candidates.y)),
               }}
             >
-              <strong>选择重叠对象</strong>
+              <strong>选择重叠对象</strong><small>↑↓ 预览 · Enter 选择 · Alt+点击可选下层对象</small>
               {state.tool==="select"&&candidates.hits.some(draggablePoint)&&<small>按住可拖动的点名，直接拖出菜单</small>}
-              {candidates.hits.map((h) => (
+              {candidates.hits.map((h,i) => (
                 <button
-                  key={h.id}
+                  autoFocus={i===0} key={`${h.kind}:${h.id}`} data-hit={h.id} onFocus={()=>setHover(h)}
                   onPointerEnter={() => setHover(h)}
                   onPointerDown={e=>{
                     e.stopPropagation();
@@ -2305,21 +2315,20 @@ export default function DrawingWorkbench(props: Props) {
                       e.preventDefault();setCandidates(null);executeSelection(h,e,local(e));svg.current?.focus();
                     }
                   }}
-                  onClick={(e) => {
+                  onClick={() => {
                     setCandidates(null);
                     if (stateRef.current.tool === "select") {
-                      const body=h.kind==="face"?docRef.current.objects.find(o=>o.id===h.id)?.body:undefined;
-                      select(body&&!e.altKey?body:h.id);
+                      select(h.id);
                     }
                     else accept(h, candidates.q);
                     svg.current?.focus();
                   }}
                 >
-                  {hitLabel(h)}
+                  {hitLabel(h)}<small> · {({point:'点',edge:'边/直线',curve:'曲线',face:'面',label:'标签',object:'对象'})[h.kind]}{h.owner!==h.id?` · 属于 ${rname(h.owner)}`:''}</small>
                   {h.kind==="point"&&state.tool==="select"&&<small> · {pointRole(h)}</small>}
                 </button>
               ))}
-              <button onClick={() => setCandidates(null)}>取消</button>
+              <button onClick={() => {setCandidates(null);setHover(null);svg.current?.focus();}}>取消</button>
             </div>
           )}
           {(state.preview.length > 0 ||
@@ -2433,7 +2442,7 @@ export default function DrawingWorkbench(props: Props) {
               {object && (
                 <>
                   <label>
-                    显示名称
+                    显示名称（图面文字）
                     <input
                       aria-label="对象显示名称"
                       key={object.id + object.name}
@@ -2441,6 +2450,7 @@ export default function DrawingWorkbench(props: Props) {
                       onBlur={(e) => patch(object.id, { name: e.target.value })}
                     />
                   </label>
+                  <SymbolRename key={object.id} doc={doc} obj={object} change={update} editConditions={()=>setConstraintEditor(object.constraintSet??(object.kind==='point'&&object.construction.type==='constraint'?object.construction.set:object.id))}/>
                   <label>
                     <input
                       type="checkbox"
@@ -2825,7 +2835,7 @@ export default function DrawingWorkbench(props: Props) {
                     setRight(true);
                   }}
                 >
-                  属性与重命名
+                  对象属性 / 改名
                 </button>
                 <button
                   role="menuitem"

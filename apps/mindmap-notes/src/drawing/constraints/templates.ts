@@ -1,3 +1,4 @@
+import {solidCurves} from './solidCurves';
 import type { Condition, ConstraintProblem,ConstraintCurve } from "./types";
 import { parseCondition, parseConditions, pointNames, segmentsFrom, validateProblem } from "./input";
 
@@ -29,7 +30,7 @@ export function declarationProblem(d:ShapeDeclaration):ConstraintProblem {
     const [o,a]=d.base,ordered=d.shape==="sphere"?[o,a]:d.shape==="cone"?[o,d.apex,a]:[o,d.top[0],a,...(d.shape==="coneFrustum"?[d.top[1]]:[])];
     pointNames(ordered.join(" "));if(ordered.some(n=>!n||!/^[A-Za-z][A-Za-z0-9_]*$/.test(n)))throw new Error("请填写有效且互不重复的特征点名称");
     const segments:[string,string][]=[[o,a]];if(d.shape!=="sphere")segments.push([o,ordered[1]]);if(d.shape==="coneFrustum")segments.push([d.top[0],d.top[1]]);
-    const problem={points:ordered,segments,conditions:[parseCondition(`${d.shape}(${ordered.join(",")})`,ordered)]};validateProblem(problem);return problem;
+    const conditions=[parseCondition(`${d.shape}(${ordered.join(",")})`,ordered)];const problem={points:ordered,segments,conditions,curves:solidCurves(conditions)};validateProblem(problem);return problem;
   }
   const n=d.base.length;
   if(!["prism","pyramid","frustum"].includes(d.shape)||!["general","right","regular"].includes(d.variant)||d.variant==="right"&&d.shape!=="prism"||n<3||n>maximumSides(d.shape)||d.shape!=="pyramid"&&d.top.length!==n)throw new Error("图形类型、棱数或顶点数量不正确");
@@ -63,5 +64,5 @@ export function appendDeclaration(pointSource:string,segmentSource:string,condit
   const list=conditions.flatMap(c=>parseConditions(drafts[c.id]??c.source,points,c.id,curves).map(p=>({...p,enabled:c.enabled})));
   const signature=(c:Condition)=>JSON.stringify([c.kind,c.refs,c.value]),enabled=new Set(list.filter(c=>c.enabled).map(signature));
   for(const condition of added.conditions){const key=signature(condition);if(!enabled.has(key)){list.push(condition);enabled.add(key);}}
-  const result={points,segments,conditions:list,curves};validateProblem(result);return result;
+  const result={points,segments,conditions:list,curves:solidCurves(added.conditions,curves)};validateProblem(result);return result;
 }

@@ -1,0 +1,21 @@
+import {describe,it,expect} from 'vitest';
+import {renderToStaticMarkup} from 'react-dom/server';
+import {newDrawing} from './types';
+import ConstraintWorkbench from './ConstraintWorkbench';
+import ConditionInput from './ConditionInput';
+import PlanarObjectForm from './PlanarObjectForm';
+import ConstraintCurves from './ConstraintCurves';
+import {ConfigurationMenu,SolverStatus} from './ConstraintUI';
+import {recognitionDifferences} from './recognition/differences';
+import {createTextDraft} from './recognition/pipeline';
+import type {RecognitionItem} from './recognition/types';
+const base=()=>createTextDraft({image:'data:image/png;base64,AA==',width:10,height:10});
+const item=(id:string,source:string,scope='common'):RecognitionItem=>({id,source,scope,text:source,quote:'原题关系',role:'condition',enabled:true,necessary:true,regions:[]});
+describe('compact condition workspace presentation',()=>{
+ it.each(['2d','3d'] as const)('readonly %s embeds no editor, footer or motion controls',dimension=>{const doc={...newDrawing(),dimension};const html=renderToStaticMarkup(<ConstraintWorkbench embedded docRef={{current:doc}} change={()=>false} close={()=>{}} highlight={()=>{}}/>);expect(html).toContain('constraint-readonly-preview');expect(html).not.toContain('constraint-editor');expect(html).not.toContain('<footer');expect(html).not.toContain('添加条件');expect(html).not.toContain('加载配置');expect(html).not.toContain('运动与轨迹');});
+ it('keeps both input paths and adds coordinate relations to the same categories',()=>{const html=renderToStaticMarkup(<ConditionInput mode="coordinate" points="A B C" append={()=>true} onError={()=>{}}/>);expect(html).toContain('完整输入');expect(html).toContain('简写');expect(html).toContain('坐标 / 曲线');expect(html).not.toContain('坐标与圆锥曲线条件');});
+ it('object creation and angle suggestions are collapsed initially',()=>{const doc=newDrawing();const html=renderToStaticMarkup(<PlanarObjectForm document={doc} submit={()=>true}/>);expect(html).toContain('＋ 添加对象');expect(html).not.toContain('<form');const angles=renderToStaticMarkup(<ConditionInput points="A B C" segments="AB,BC" append={()=>true} onError={()=>{}}/>);expect(angles).toContain('<summary>插入角');expect(angles).not.toContain('<details open');});
+ it('keeps empty curve section quiet and groups file actions accessibly',()=>{const curves=renderToStaticMarkup(<ConstraintCurves points="A B C" curves={[]} conditions={[]} change={()=>{}} onError={()=>{}}/>);expect(curves).toContain('＋ 曲线');expect(curves).not.toContain('支持圆与椭圆');const menu=renderToStaticMarkup(<ConfigurationMenu><button>加载配置</button><button>保存配置</button></ConfigurationMenu>);expect(menu).toContain('<summary>配置');expect(menu).not.toContain('open=');});
+ it('only failed searches offer the contextual deeper-search action',()=>{const props={message:'状态',stale:true,search:()=>{}};expect(renderToStaticMarkup(<SolverStatus {...props} status="satisfied"/>)).not.toContain('深入搜索');expect(renderToStaticMarkup(<SolverStatus {...props} status="notFound"/>)).toContain('深入搜索');expect(renderToStaticMarkup(<SolverStatus {...props} status="invalid"/>)).toContain('显示上次有效结果');});
+ it('readable diffs match regenerated identities and preserve sibling scope separation',()=>{const before={...base(),items:[item('old','AB=2'),{...item('gone','BC=3'),quote:'另一条件'},item('sibling','AB=2','p2')]},after={...base(),items:[{...item('new','AB=4'),quote:'原题关系'},item('added','AC=5','p3'),item('sibling','AB=2','p2')]};const diff=recognitionDifferences(before,after);expect(diff.map(d=>d.kind).sort()).toEqual(['added','modified','removed']);expect(diff.find(d=>d.kind==='modified')?.before?.id).toBe('old');expect(recognitionDifferences(before,before)).toEqual([]);expect(before.items[0].source).toBe('AB=2');});
+});

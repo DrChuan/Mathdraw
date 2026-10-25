@@ -33,8 +33,8 @@ export function metricNetworks(problem:ConstraintProblem,cap=32):{networks:Metri
         if(c.kind==="onCurve") {
           const curve=problem.curves?.find(k=>k.id===c.curve);
           if(curve?.type==="circle"&&curve.method!=="threePoint") {
-            const radius=curve.method==="centerRadius"?curve.value:network.get(distanceKey(...curve.points as [string,string]));
-            if(radius!==undefined)put(curve.points[0],c.refs[0][0],radius);
+            const radius=curve.method==="centerRadius"?curve.value:network.get(distanceKey(...(curve.radiusSegment??curve.points) as [string,string]));
+            if(radius!==undefined)for(const point of c.refs[0])put(curve.points[0],point,radius);
           }
         }
         if(c.kind==="area") {

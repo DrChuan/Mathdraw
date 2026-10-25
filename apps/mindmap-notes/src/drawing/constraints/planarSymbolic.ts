@@ -4,6 +4,8 @@ import {toPlane} from '../geometry';
 import {newDrawing} from '../types';
 import {symbolicGeometry,angleConstant} from './symbolicGeometry';
 import {coordinatePlane,objectSymbol} from './planarModel';
+import {angleDegrees} from './angles';
+import {eccentricityEquations,symbolicConicCoefficients} from './conicAlgebra';
 import {substituteNames,expressionNames} from '../parameters';
 /** Source-level expressions for the rational subset of the dependency graph.
  * Unsupported constructions return no symbolic candidate; never freeze a
@@ -29,7 +31,8 @@ export function symbolicPlanarEquations(problem:ConstraintProblem,variables:(Pla
       const unknown=variables.findIndex(u=>u.object===o.id&&u.field===(axis?'y':'x'));if(unknown>=0){active.delete(key);return tokens[unknown];}
       const coords=o.parameters?.fields['construction.position'];
       s=coords&&typeof coords!=='string'?numeric(coords.coordinates[axis]):field(o,axis?'y':'x',toPlane(plane,c.position)[axis]);
-    }else if(c.type==='alias')s=point(objectSymbol(doc.objects.find(o=>o.id===c.point)!),axis);
+    }else if(c.type==='origin')s=String(toPlane(plane,doc.coordinateFrame?.origin??[0,0,0])[axis]);
+    else if(c.type==='alias')s=point(objectSymbol(doc.objects.find(o=>o.id===c.point)!),axis);
     else if(c.type==='division'){const a=objectSymbol(doc.objects.find(o=>o.id===c.a)!),b=objectSymbol(doc.objects.find(o=>o.id===c.b)!);s=`(1-(${c.t}))*(${point(a,axis)})+(${c.t})*(${point(b,axis)})`;}
     else {
       throw Error('该构造尚无精确表达式，不能冻结为坐标常数');
@@ -63,8 +66,12 @@ export function symbolicPlanarEquations(problem:ConstraintProblem,variables:(Pla
       if((o.kind==='segment'||o.kind==='vector'||o.kind==='line')&&'points'in o){const a=objectSymbol(doc.objects.find(p=>p.id===o.points[0])!),b=objectSymbol(doc.objects.find(p=>p.id===o.points[1])!),dx=`(${point(b,0)})-(${point(a,0)})`,dy=`(${point(b,1)})-(${point(a,1)})`,den=`(${dx})^2+(${dy})^2`,dot=`((${x})-(${point(a,0)}))*(${dx})+((${y})-(${point(a,1)}))*(${dy})`;sources.push(`${den}>0`);if(o.kind!=='line'||o.ray)sources.push(`${dot}>=0`);if(o.kind!=='line')sources.push(`(${den})-(${dot})>=0`);}
       if(o.kind==='curve'&&o.limits){for(const [axis,expression]of [['x',x],['y',y]] as const){const lo=o.limits[`${axis}Min`],hi=o.limits[`${axis}Max`];if(lo!==undefined)sources.push(`(${expression})>=${lo}`);if(hi!==undefined)sources.push(`(${expression})<=${hi}`);}}
     };
-    if(m)incidence(m[1],m[2]);else if(k){incidence(k[1],k[2]);incidence(k[1],k[3]);}
-    else if(q.source.match(/\b(?:tangent|focus|directrix|center|a|b|eccentricity|radius|p)\s*\(/))unsupported.push(q.source);
+    const eccentric=q.source.trim().match(/^(?:e|eccentricity)\(\s*([A-Za-z][A-Za-z0-9_]*)\s*\)\s*=\s*(.+)$/),reversed=q.source.trim().match(/^(.+?)\s*=\s*(?:e|eccentricity)\(\s*([A-Za-z][A-Za-z0-9_]*)\s*\)$/);
+    const inclination=q.source.trim().match(/^inclination\(\s*([^,]+),\s*(.+)\)$/i);
+    if(inclination){const degrees=angleDegrees(inclination[2]);if(degrees<0||degrees>=180)throw Error('倾斜角必须在 [0,180°) 内');const c={kind:'vertexAngle' as const,value:degrees,source:`angle(A,B,C)=${inclination[2]}`,id:'',enabled:true,refs:[]},cos=angleConstant(c),sin=angleConstant(c,true);if(cos===undefined||sin===undefined)throw Error('该倾斜角的精确三角常数暂未支持');const [A,B,C,D,E]=symbolicConicCoefficients(curve(inclination[1],'x','y'),tokens);if([A,B,C].some(v=>v!=='0'))throw Error('倾斜角只能引用直线');sources.push(`(${D})*(${cos})+(${E})*(${sin})=0`, `(${D})^2+(${E})^2>0`);}
+    else if(eccentric||reversed){const name=eccentric?.[1]??reversed![2],value=numeric(eccentric?.[2]??reversed![1]);sources.push(...eccentricityEquations(curve(name,'x','y'),value,tokens));}
+    else if(m)incidence(m[1],m[2]);else if(k){incidence(k[1],k[2]);incidence(k[1],k[3]);}
+    else if(q.source.match(/\b(?:tangent|focus|directrix|center|a|b|c|e|eccentricity|focalDistance|radius|p)\s*\(/))unsupported.push(q.source);
     else sources.push(numeric(q.source));
   }catch(error){unsupported.push(`${q.source}: ${(error as Error).message}`);}
   try{const geometry=symbolicGeometry(problem,name=>[point(name,0),point(name,1),'0']);sources.push(...geometry.sources);unsupported.push(...geometry.unsupported);}catch(error){unsupported.push((error as Error).message);}

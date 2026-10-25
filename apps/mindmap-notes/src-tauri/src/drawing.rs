@@ -784,7 +784,7 @@ pub async fn drawing_conditions_open(app:tauri::AppHandle,window:tauri::WebviewW
     tauri::async_runtime::spawn_blocking(move || {
         let Some(p)=app.dialog().file().set_title("加载条件作图配置").add_filter("条件作图配置", &["mathdraw-conditions.json"]).blocking_pick_file() else{return Ok(None);};
         let path=p.into_path().map_err(vault::err)?;
-        if fs::metadata(&path).map_err(vault::err)?.len()>1024*1024{return Err("条件配置不能超过 1 MB".into());}
+        if fs::metadata(&path).map_err(vault::err)?.len()>8*1024*1024{return Err("条件配置不能超过 8 MB".into());}
         let content=fs::read_to_string(&path).map_err(vault::err)?;check_condition_configuration(&content)?;
         Ok(Some(ConditionConfigurationFile{path:path.to_string_lossy().into_owned(),content}))
     }).await.map_err(vault::err)?

@@ -145,7 +145,7 @@ try {
       for(const name of ['Mathdraw.app.tar.gz','Mathdraw.app.tar.gz.sig'])copyFileSync(join(mac,name),join(dir,name));
       await run('压缩 Mac 应用','ditto',['-c','-k','--sequesterRsrc','--keepParent',bundle,join(dir,`Mathdraw-${version}-macOS-universal.zip`)],'archive.log');
       }else console.log(alreadyPublic?'GitHub 已公开；保留原签名包，仅继续 Gitee 镜像。':'复用上次生成的安装包；发布前会重新校验签名和版本。');
-      await run('校验签名并发布 GitHub 和 Gitee',process.execPath,[join(projectRoot,'scripts/publish-mathdraw.mjs'),dir,'--publish','--summary',summary,...(remote?['--resume']:[])],'publish.log');
+      await run('校验签名并发布 GitHub 和 Gitee',process.execPath,[join(projectRoot,'scripts/publish-mathdraw.mjs'),dir,'--publish','--summary',summary,...(resume||remote?['--resume']:[])],'publish.log');
       published=true;
       if(!alreadyPublic){
       // Update only generated local artifacts after the release is public.

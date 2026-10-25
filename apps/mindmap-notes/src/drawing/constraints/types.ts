@@ -21,16 +21,16 @@ export interface AlgebraicValue {polynomial:string[];interval:[number,number];ra
 export const constraintKinds = ["pointLineDistance","pointPlaneDistance","distance","equal","ratio","lineAngle","vertexAngle","linePlaneAngle","dihedral",
   "parallel","perpendicular","collinear","onSegment","division","coplanar","parallelogram","rectangle","rhombus","square","prism","pyramid","frustum","regularPolygon","cube",
   "scalarEquation","vectorRelation","vectorDot","convexPolygon","congruent","similar",
-  "area","volume","circumradius","concyclic","cospherical","onCurve","cylinder","cone","coneFrustum","sphere"] as const;
+  "area","volume","circumradius","concyclic","cospherical","onCurve","diameter","cylinder","cone","coneFrustum","sphere"] as const;
 export type ConstraintKind = typeof constraintKinds[number];
 export type VolumeShape="prism"|"pyramid"|"frustum"|"cylinder"|"cone"|"coneFrustum";
 export interface ConstraintCurve {
   id:string; name:string; type:"circle"|"ellipse";
   method:"centerPoint"|"centerRadius"|"threePoint"|"foci";
-  points:string[]; plane?:string[]; value?:number; valueSource?:string;
+  points:string[]; plane?:string[]; normalAxis?:[string,string]; radiusSegment?:[string,string]; solid?:string; value?:number; valueSource?:string;
 }
 export interface Condition { id: string; kind: ConstraintKind; refs: string[][]; value?: number; alternateValue?: number; coefficients?:number[];coefficientSources?:string[]; solid?:VolumeShape; curve?:string; enabled: boolean; source: string }
-export interface ConstraintProblem { points: string[]; segments: [string,string][]; conditions: Condition[]; curves?:ConstraintCurve[];mode?:ConstraintMode;planar?:PlanarContext }
+export interface ConstraintProblem { recognition?:import('../recognition/types').RecognizedQuestion;points: string[]; segments: [string,string][]; conditions: Condition[]; curves?:ConstraintCurve[];mode?:ConstraintMode;planar?:PlanarContext }
 export interface Pose { origin: Vec3; x: Vec3; y: Vec3; z: Vec3 }
 export const identityPose = (): Pose => ({origin:[0,0,0],x:[1,0,0],y:[0,1,0],z:[0,0,1]});
 export type Positions = Record<string,Vec3>;

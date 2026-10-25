@@ -175,7 +175,7 @@ export function installSolutionSet(doc:DrawingDocument,set:DrawingSolutionSet):D
     objects.push({id:crypto.randomUUID(),name:`${a}${b}`,kind:"segment",constraintSet:set.id,points:[existing.get(a)!,existing.get(b)!],style:defaultStyle()});
   const planes=[...doc.planes];
   for(const curve of set.problem.curves??[]) {
-    const id=`${set.id}-curve-${curve.id}`,planeId=`${id}-plane`,points=[...new Set([...curve.points,...(curve.plane??[])])].map(n=>existing.get(n)!);
+    const id=`${set.id}-curve-${curve.id}`,planeId=`${id}-plane`,points=[...new Set([...curve.points,...(curve.plane??[]),...(curve.normalAxis??[]),...(curve.radiusSegment??[])])].map(n=>existing.get(n)!);
     const frame=curveGeometry(curve,Object.fromEntries(set.problem.points.map(n=>[n,constraintPoint(set,n)])));
     if(!planes.some(p=>p.id===planeId))planes.push({id:planeId,name:`${curve.name} 所在平面`,origin:frame.center,u:frame.u,v:frame.v});
     const old=objects.find(o=>o.id===id),item:GeometryObject={...(old?.kind==="curve"?old:{}),id,name:curve.name,kind:"curve",constraintSet:set.id,declaration:{id:curve.id,points},circle:undefined,preset:undefined,derived:undefined,parameters:undefined,parametric:undefined,planeId,equation:"x^2+y^2=1",range:[-frame.a*1.1,frame.a*1.1,-frame.b*1.1,frame.b*1.1],followView:true,style:old?.style??defaultStyle()};

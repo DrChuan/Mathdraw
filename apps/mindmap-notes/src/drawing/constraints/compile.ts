@@ -9,6 +9,7 @@ export function expandConditions(problem:ConstraintProblem):Primitive[] {
   const out:Primitive[]=[];
   for(const c of problem.conditions.filter(c=>c.enabled)) {
     const put=(kind:Primitive["kind"],refs:string[][],value?:number)=>out.push({owner:c.id,kind,refs,value,alternateValue:kind===c.kind?c.alternateValue:undefined,coefficients:kind===c.kind?c.coefficients:undefined,coefficientSources:kind===c.kind?c.coefficientSources:undefined,solid:c.solid,curve:c.curve});
+    if(c.kind==='onCurve'){for(const name of c.refs[0])put('onCurve',[[name]]);continue;}
     if(c.kind==="volume") {
       out.push(...expandConditions({...problem,curves:[],conditions:[{...c,kind:c.solid!,solid:undefined,value:undefined}]}));put("volume",c.refs,c.value);continue;
     }
@@ -49,7 +50,7 @@ export function expandConditions(problem:ConstraintProblem):Primitive[] {
       put("perpendicular",[edges[0],edges[1]]);put("perpendicular",[edges[0],edges[2]]);put("perpendicular",[edges[1],edges[2]]);
     }
   }
-  for(const c of problem.curves??[])out.push({owner:c.id,kind:"curveDefinition",curve:c.id,refs:[...c.points,...(c.plane??[])].map(n=>[n])});
+  for(const c of problem.curves??[])out.push({owner:c.id,kind:"curveDefinition",curve:c.id,refs:[...c.points,...(c.plane??[]),...(c.normalAxis??[]),...(c.radiusSegment??[])].map(n=>[n])});
   return out;
 }
 export const flatten=(names:string[],p:Positions)=>names.flatMap(n=>p[n]);
@@ -72,11 +73,15 @@ export function evaluator(problem:ConstraintProblem) {
       case 'scalarEquation':try{return [scalars.get(c.owner)!.residual(positions(problem.points,x))];}catch{return [1e4];}
       case "curveDefinition": {
         const curve=problem.curves!.find(k=>k.id===c.curve)!,ps=curve.points.map(n=>point(x,n));
+        if(curve.normalAxis){const [o,t]=curve.normalAxis.map(n=>point(x,n)),r=curve.radiusSegment?curve.radiusSegment.map(n=>point(x,n)):ps;return [dot(unit(sub(r[1],r[0])),unit(sub(t,o))),Math.max(0,1e-4-norm(sub(t,o))/scale),Math.max(0,1e-4-norm(sub(r[1],r[0]))/scale)];}
         const plane=curve.plane?.map(n=>point(x,n)),out=plane?ps.map(q=>dot(sub(q,plane[0]),unit(cross(sub(plane[1],plane[0]),sub(plane[2],plane[0]))))/scale):[];
         if(plane)out.push(Math.max(0,1e-4-norm(cross(unit(sub(plane[1],plane[0])),unit(sub(plane[2],plane[0]))))));
         if(curve.method==="threePoint")out.push(Math.max(0,1e-4-norm(cross(unit(sub(ps[1],ps[0])),unit(sub(ps[2],ps[0]))))));
         if(curve.type==="ellipse")out.push(Math.max(0,(norm(sub(ps[1],ps[0]))-curve.value!)/scale+1e-5));
         return out;
+      }
+      case 'diameter': {
+        try{const curve=problem.curves!.find(k=>k.id===c.curve)!,g=curveGeometry(curve,positions(problem.points,x)),[a,b]=refs[0],middle=mul(add(a,b),.5),q=sub(a,g.center);return [...sub(middle,g.center).map(v=>v/scale),dot(q,g.normal)/scale,(norm(q)-g.radius)/scale];}catch{return [1,1,1,1,1];}
       }
       case "onCurve": {
         const curve=problem.curves!.find(k=>k.id===c.curve)!;

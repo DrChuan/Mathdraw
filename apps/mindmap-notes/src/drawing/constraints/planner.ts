@@ -32,7 +32,7 @@ export function planConstructions(problem:ConstraintProblem,deadline:number,opti
   const partialChecks=new Map<string,ReturnType<typeof evaluator>>();
   const valid=(p:Positions)=>{
     const names=problem.points.filter(n=>p[n]),key=names.join("|");let check=partialChecks.get(key);
-    if(!check){const curves=problem.curves?.filter(c=>[...c.points,...(c.plane??[])].every(n=>p[n]));check=evaluator({...problem,points:names,curves,conditions:problem.conditions.filter(c=>c.refs.flat().every(n=>p[n])&&(c.kind!=="onCurve"||curves?.some(k=>k.id===c.curve)))});partialChecks.set(key,check);}
+    if(!check){const curves=problem.curves?.filter(c=>[...c.points,...(c.plane??[]),...(c.normalAxis??[]),...(c.radiusSegment??[])].every(n=>p[n]));check=evaluator({...problem,points:names,curves,conditions:problem.conditions.filter(c=>c.refs.flat().every(n=>p[n])&&(!["onCurve","diameter"].includes(c.kind)||curves?.some(k=>k.id===c.curve)))});partialChecks.set(key,check);}
     return check.verify(flatten(names,p)).valid;
   };
   const loci=(point:string,p:Positions,network:MetricNetwork)=>{
@@ -67,7 +67,7 @@ export function planConstructions(problem:ConstraintProblem,deadline:number,opti
     for(const c of primitives.filter(c=>c.refs.flat().includes(point)&&c.refs.flat().every(n=>n===point||p[n]))) {
       const refs=c.refs,edgeOrigin=(r:string[])=>p[r.find(n=>n!==point)!];
       if(c.kind==="onCurve"&&c.refs[0][0]===point) {
-        const curve=problem.curves?.find(k=>k.id===c.curve);if(!curve||![...curve.points,...(curve.plane??[])].every(n=>p[n]))continue;
+        const curve=problem.curves?.find(k=>k.id===c.curve);if(!curve||![...curve.points,...(curve.plane??[]),...(curve.normalAxis??[]),...(curve.radiusSegment??[])].every(n=>p[n]))continue;
         try{const geometry=curveGeometry(curve,p);if(curve.type==="circle"){used=true;spheres.push({center:geometry.center,radius:geometry.radius});plane(geometry.center,geometry.normal);}}catch{/* Source geometry is not yet constructible. */}
       } else if(c.kind==="concyclic"||c.kind==="cospherical") {
         const anchors=c.refs[0].filter(n=>n!==point).map(n=>p[n]);

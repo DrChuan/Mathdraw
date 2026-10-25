@@ -1,3 +1,4 @@
+import {pickablePoints} from './pointPicking';
 import { constraintHidden, selectedBranch } from "./constraints/document";
 import { angleMark, defaultAngleRadius } from "./angleMark";
 import { locusPaths, displayableLocus } from "./constraints/loci";
@@ -276,7 +277,7 @@ export function hitTest(
     hits: Hit[] = [],
     visible = (id: string) =>
       !geometry.objects.get(id)?.hidden && !constraintHidden(geometry.objects,geometry.objects.get(id)) && !geometry.errors.has(id);
-  for (const p of geometry.points.values())
+  for (const p of pickablePoints(geometry))
     if (
       !axisReference(p.owner) &&
       !(geometry.objects.get(p.owner)?.kind === "solutionSet" && !p.object) &&
@@ -590,7 +591,7 @@ export function framePointSnap(doc:DrawingDocument,curves:CurveResult[],size:Vec
     let a:Vec3,b:Vec3;
     try {const line=geometry.straightReference(hit.id);a=line.a;b=line.b;}catch {continue;}
     const direction=sub(b,a),length=norm(direction);if(length<1e-9)continue;
-    const choices=[...geometry.points.values()].filter(p=>!excluded.includes(p.id)&&inPlane(p.p)&&
+    const choices=pickablePoints(geometry).filter(p=>!excluded.includes(p.id)&&inPlane(p.p)&&
       (p.id===edge?.a||p.id===edge?.b||!!p.object&&!p.object.hidden&&!p.object.auxiliary)&&
       norm(cross(sub(p.p,a),direction))<=1e-7*length);
     choices.sort((a,b)=>{

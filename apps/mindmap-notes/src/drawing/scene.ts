@@ -1,3 +1,4 @@
+import {labelPlacement} from './labelPlacement';
 import { annotationLayout } from "./annotation";
 import { angleMark, defaultAngleRadius } from "./angleMark";
 import { exactCoordinates, exactNumber } from "./exactNumber";
@@ -357,6 +358,7 @@ export function sceneFor(
     box.glyphs.forEach((g,i)=>scene.texts.push({id:`${id}:glyph:${i}`,owner,p:[p[0]+g.x,p[1]+g.y],text:g.text,fontSize:g.size,italic:g.italic,literal:true}));
     box.lines.forEach((line,i)=>scene.paths.push({id:`${id}:rule:${i}`,owner,points:line.map(([x,y])=>[p[0]+x,p[1]+y]),dashed:false,width:doc.lineWidth??1.25}));
   };
+  const placeLabel=labelPlacement([...resolved.points.values()].filter(p=>!p.object?.hidden).map(p=>screen(p.p)),scene.paths);
   for (const point of resolved.points.values()) {
     const obj = point.object;
     if (!obj || obj.hidden || constraintHidden(objects,obj)) continue;
@@ -376,7 +378,7 @@ export function sceneFor(
           ]
         : point.p;
     const name = obj.showName ? obj.name : "";
-    const at:Vec2=[p[0]+obj.labelOffset[0],p[1]+obj.labelOffset[1]];
+    const at:Vec2=placeLabel(p,name+(obj.coordinates==='full'?'(00,00)':''),obj.style.fontSize,obj.labelOffset);
     if(obj.coordinates==="full") {
       const coord=exactCoordinates(doc.dimension==="2d"?point.p.slice(0,2):labelCoordinates);
       mathLabel(`${point.id}:label`,point.id,at,`${name}$${coord.approximate?"\\approx":""}${mathPreview(coord.source)}$`,obj.style.fontSize,obj.style.italic);
@@ -422,7 +424,8 @@ export function sceneFor(
         if(mark.angle>1e-8)scene.paths.push({id:`${o.id}:angle-arc`,owner:o.id,points:mark.points.map(screen),dashed:o.style.line==="dashed",width:doc.lineWidth??1.25});
       }
     }
-    const p=screen(o.position);
+    const original=doc.objects.find(a=>a.id===o.id),automatic=o.measurement&&original?.kind==='label'&&original.position.every(v=>Math.abs(v)<1e-10);
+    const p=automatic?placeLabel(screen(o.position),o.text,o.style.fontSize,[9,-10]):screen(o.position);
     if(/\$|\\[([]/.test(o.text)) {
       const b=annotationLayout(o.text,o.style.fontSize,o.style.italic);
       b.glyphs.forEach((g,i)=>scene.texts.push({id:`${o.id}:math:${i}`,owner:o.id,p:[p[0]+g.x,p[1]+g.y],text:g.text,fontSize:g.size,italic:g.italic,literal:true}));

@@ -11,6 +11,7 @@ export function AngleMeasurementControls({label,change,error}:{label:DrawingLabe
     <label>角度文字<select aria-label="角度文字显示" value={m.angleDisplay??"both"} onChange={e=>change({...m,angleDisplay:e.target.value as "both"|"name"|"value"})}>
       <option value="both">角名＋大小</option><option value="name">仅角名（隐藏大小）</option><option value="value">仅大小</option>
     </select></label>
+    <label>拖动预览弧线半径<input type="range" aria-label="预览弧线半径" min="4" max="160" step="1" value={Math.min(160,m.arcRadius??defaultAngleRadius)} onChange={e=>change({...m,arcRadius:Number(e.target.value)})}/></label>
     <NumberField label="弧线半径（像素）" value={m.arcRadius??defaultAngleRadius} error={error}
       change={radius=>{if(radius<4||radius>500){error("弧线半径应为 4～500 像素");return;}change({...m,arcRadius:radius});}}/>
   </div>;

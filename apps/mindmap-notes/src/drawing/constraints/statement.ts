@@ -1,4 +1,4 @@
-import type { Condition } from "./types";
+import type { Condition,ConstraintCurve } from "./types";
 import { conditionLabels,normalizeConditionNotation,entity } from "./input";
 import { vectorRelationFormula } from "./vectors";
 import { mathPreview,symbolLatex } from "../mathPreview";
@@ -8,7 +8,7 @@ import { exactNumber } from "../exactNumber";
 export type StatementPart={text:string}|{math:string};
 const counts=["零","一","二","三","四","五","六","七","八","九","十","十一","十二"];
 export const countName=(n:number)=>counts[n]??String(n);
-export function conditionStatement(c:Condition):StatementPart[] {
+export function conditionStatement(c:Condition,curves:ConstraintCurve[]=[]):StatementPart[] {
   const text=(text:string):StatementPart=>({text}),math=(math:string):StatementPart=>({math});
   const normalized=normalizeConditionNotation(c.source,[...new Set(c.refs.flat())]);
   const r=c.refs.map(group=>group.map(symbolLatex).join(""));
@@ -22,11 +22,12 @@ export function conditionStatement(c:Condition):StatementPart[] {
   if(c.kind==='scalarEquation')return [math(mathPreview(c.source))];
   if(c.kind==="pointLineDistance"||c.kind==="pointPlaneDistance")return [text("点 "),math(r[0]),text(c.kind==="pointLineDistance"?" 到直线 ":" 到平面 "),math(r[1]),text(" 的距离为 "),math(rhs())];
   if(c.kind==="distance")return [math(`${r[0]}=${rhs()}`)];
-  if(c.kind==="area")return [text("多边形 "),math(r[0]),text(" 的面积为 "),math(rhs())];
+  if(c.kind==="area")return [text(c.refs[0].length===3?"三角形 ":"多边形 "),math(c.refs[0].length===3?`\\triangle ${r[0]}`:r[0]),text(" 的面积为 "),math(rhs())];
   if(c.kind==="volume")return [text(`${conditionLabels[c.solid!]} `),math(r[0]),text(" 的体积为 "),math(rhs())];
   if(c.kind==="circumradius")return [text("三角形 "),math(r[0]),text(" 的外接圆半径为 "),math(rhs())];
   if(c.kind==="concyclic"||c.kind==="cospherical")return [math(c.refs[0].map(symbolLatex).join(",")),text(c.kind==="concyclic"?" 共圆":" 共球"),...(c.value!==undefined?[text("，半径为 "),math(rhs())]:[])];
-  if(c.kind==="onCurve")return [text("点 "),math(r[0]),text(" 在曲线 "),math(symbolLatex(c.source.match(/,\s*([A-Za-z][A-Za-z0-9_]*)\s*\)/)?.[1]??"c")),text(" 上")];
+  if(c.kind==='diameter')return [math(r[0]),text(' 是圆 '),math(symbolLatex(c.source.match(/,\s*([A-Za-z][A-Za-z0-9_]*)\s*\)/)?.[1]??'O')),text(' 的直径')];
+  if(c.kind==="onCurve")return [text("点 "),math(c.refs[0].map(symbolLatex).join(",")),text(curves.find(k=>k.id===c.curve)?.type==='circle'?" 在圆 ":" 在曲线 "),math(symbolLatex(c.source.match(/,\s*([A-Za-z][A-Za-z0-9_]*)\s*\)/)?.[1]??"c")),text(" 上")];
   if(["cylinder","cone","coneFrustum","sphere"].includes(c.kind))return [text(`${conditionLabels[c.kind]}（${c.kind==="sphere"?"球心、球上一点":"底面圆心、轴向点、圆上一点"}）`),math(c.refs[0].map(symbolLatex).join(","))];
   if(c.kind==="equal")return [math(`${r[0]}=${r[1]}`)];
   if(c.kind==="ratio")return [math(`\\frac{${r[0]}}{${r[1]}}=${rhs()}`)];

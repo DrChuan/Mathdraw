@@ -1,0 +1,14 @@
+import type {Condition,ConstraintCurve,PlanarContext} from './constraints/types';
+type Snapshot={points:string;segments:string;conditions:Condition[];curves:ConstraintCurve[];context?:PlanarContext;rowDrafts?:Record<string,string>};
+export default function RecentChanges({before,current,status,edit,toggle,locate}:{before?:Snapshot;current:Snapshot;status:string;edit:(id:string,source:string)=>void;toggle:(id:string,enabled:boolean)=>void;locate:(id?:string)=>void}){
+ if(!before||status==='ready')return null;
+ const oldRows=[...before.conditions,...(before.context?.equations??[])],rows=[...current.conditions,...(current.context?.equations??[])];
+ const changed=rows.filter(c=>{const old=oldRows.find(o=>o.id===c.id);return !old||(before.rowDrafts?.[c.id]??old.source)!==(current.rowDrafts?.[c.id]??c.source)||old.enabled!==c.enabled;});
+ const deleted=oldRows.filter(c=>!rows.some(o=>o.id===c.id));
+ const objects=current.context?.document.objects.filter(o=>JSON.stringify(o)!==JSON.stringify(before.context?.document.objects.find(a=>a.id===o.id)))??[];
+ const removed=before.context?.document.objects.filter(o=>!current.context?.document.objects.some(a=>a.id===o.id))??[];
+ const unknowns=current.context?.unknowns.filter(u=>JSON.stringify(u)!==JSON.stringify(before.context?.unknowns.find(a=>a.id===u.id)))??[];
+ const points=before.points!==current.points,segments=before.segments!==current.segments,curves=JSON.stringify(before.curves)!==JSON.stringify(current.curves);
+ if(!changed.length&&!deleted.length&&!objects.length&&!removed.length&&!unknowns.length&&!points&&!segments&&!curves)return null;
+ return <details className="recent-constraint-changes" open={['invalid','notFound','contradiction'].includes(status)}><summary>本次变更 · {changed.length+deleted.length+objects.length+removed.length+unknowns.length+Number(points)+Number(segments)+Number(curves)}</summary><small>这些是最近修改的输入，不代表已判定它们有错。可编辑、暂时禁用，或在底部撤销本次变更。</small>{points&&<button onClick={()=>locate('points')}>定位点名变更</button>}{segments&&<button onClick={()=>locate('segments')}>定位连线变更</button>}{curves&&<span>曲线声明已变化</span>}{objects.map(o=><button key={o.id} onClick={()=>locate(o.id)}>对象 {o.symbol??o.name}</button>)}{unknowns.map(u=><button key={u.id} onClick={()=>locate(u.object)}>待求字段 / 范围：{current.context?.document.objects.find(o=>o.id===u.object)?.symbol} · {u.field}</button>)}{removed.length>0&&<small>已移除对象：{removed.map(o=>o.symbol??o.name).join("、")}，可撤销恢复。</small>}{changed.map(c=><div key={c.id}><button onClick={()=>edit(c.id,current.rowDrafts?.[c.id]??c.source)}>{current.rowDrafts?.[c.id]??c.source}</button>{'refs'in c&&Array.isArray(c.refs)&&c.refs.length>0&&<small>涉及 {c.refs.flat().join('、')}</small>}<button onClick={()=>toggle(c.id,!c.enabled)}>{c.enabled?'暂时禁用':'恢复启用'}</button></div>)}{deleted.length>0&&<small>已删除 {deleted.length} 条条件，可用底部撤销恢复。</small>}</details>;
+}

@@ -50,7 +50,7 @@ const reserved = new Set([
   "asin", "acos", "atan", "log10", "floor", "ceil", "sign", "min", "max",
 ]);
 export const validSymbol = (s: string) =>
-  /^[A-Za-z][A-Za-z0-9_]*$/.test(s) && (s==='E'||!reserved.has(s.toLowerCase()));
+  /^[A-Za-z][A-Za-z0-9_]*$/.test(s) && (s==='E'||s==='e'||!reserved.has(s.toLowerCase()));
 export function nextSymbol(
   doc: DrawingDocument,
   kind: GeometryObject["kind"],
@@ -566,7 +566,7 @@ export function applyDefinition(
     try { numericValue = scalar(text); } catch { /* geometric definition */ }
   }
   if (numericValue !== undefined) {
-    if(requested && !isVariableSymbol(requested) && old?.kind !== "number") throw new Error("变量名使用单个字母，可附加任意长度下标，如 k、a_123");
+    if(requested && requested!=="e" && !isVariableSymbol(requested) && old?.kind !== "number") throw new Error("变量名使用单个字母，可附加任意长度下标，如 k、a_123");
     objects = [{ id: crypto.randomUUID(), kind: "number", name: requested ?? "数值", expression: text,
       references: numericReferences(doc,text), value: numericValue,
       slider: old?.kind === "number" ? { ...old.slider, min: Math.min(old.slider.min,Math.floor(numericValue)), max: Math.max(old.slider.max,Math.ceil(numericValue)) }

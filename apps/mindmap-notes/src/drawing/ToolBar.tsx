@@ -109,7 +109,7 @@ export function ToolBar({ tool, choose, dimension, preset, parametric }: {
       {category === "basic" && <>{buttons(basics.slice(0,4))}
         {dropdown("circle", "圆", circles.map(([id,label]) => <button role="menuitem" key={id} onClick={() => activate(id)}><Circle size={13}/>{label}</button>))}
         {buttons(basics.slice(4))}</>}
-      {category === "construct" && <>{buttons(relations.filter(([t])=>!["angleBisector","angleBisectorLine"].includes(t)))}
+      {category === "construct" && <>{buttons([...relations].sort((a,b)=>(['intersect','perpendicular','parallel','midpoint'].indexOf(a[0])+5)%5-(['intersect','perpendicular','parallel','midpoint'].indexOf(b[0])+5)%5).filter(([t])=>!["angleBisector","angleBisectorLine"].includes(t)))}
         <div className="drawing-tool-group angle-bisector-control">
           <button aria-label={`角平分线，${bisectorMode === "angleBisector" ? "射线" : "直线"}`} className={tool === "angleBisector" || tool === "angleBisectorLine" ? "active" : ""}
             aria-haspopup="menu" aria-expanded={open === "angleBisector"}

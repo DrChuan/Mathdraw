@@ -328,3 +328,11 @@ function polynomialLocus(xy:[string,string]):string|undefined {
     return `${other}=${text||"0"}`;
   }catch{return;}
 }
+
+/** Dependency-only guidance: does not sample or alter the drawing. */
+export function locusSelectionInfo(doc:DrawingDocument,selected?:string):string {
+ const points=doc.objects.filter(o=>o.kind==='point');
+ if(!selected){const paths=points.filter(o=>o.kind==='point'&&['onAxis','onPath','curveCoordinate'].includes(o.construction.type));return paths.length?`先选主动点：${paths.map(o=>o.symbol??o.name).join('、')}；也可选择由唯一上游路径点控制的派生点。`:'先在线、圆或曲线上放一个点；孤立自由点没有唯一的扫描路径。';}
+ const names=points.filter(o=>o.id!==selected).filter(o=>{try{locusDriver(doc,selected,o.id);return true;}catch{return false;}}).map(o=>o.symbol??o.name);
+ return names.length?`可作为从动点：${names.join('、')}。仅位置重合不构成依赖。`:'没有找到由该点或其上游路径控制的从动点；请检查对象的构造依赖。';
+}

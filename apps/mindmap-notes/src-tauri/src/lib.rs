@@ -1,5 +1,6 @@
 mod cos;
 mod drawing;
+mod recognition;
 mod sync;
 mod vault;
 use cos::{CosClient, CosConfig};
@@ -543,6 +544,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .manage(drawing::DrawingState::default())
+        .manage(recognition::RecognitionState::default())
         .on_menu_event(|app, event| {
             if event.id().as_ref()=="drawing-check-update" {let _=app.emit_to("drawing","mathdraw-check-update",());return;}
             let action=match event.id().as_ref(){"drawing-new"=>Some("new"),"drawing-open"=>Some("open"),"drawing-save"=>Some("save"),"drawing-save-as"=>Some("saveAs"),_=>None};
@@ -650,7 +652,13 @@ pub fn run() {
             drawing::drawing_conditions_open,
             drawing::drawing_conditions_save,
             drawing_update_restart,
-            drawing_check_update
+            drawing_check_update,
+            recognition::recognition_settings,
+            recognition::recognition_choose_image,
+            recognition::recognition_paste_image,
+            recognition::recognition_save_settings,
+            recognition::recognition_call,
+            recognition::recognition_cancel
         ])
         .build(tauri::generate_context!())
         .expect("无法启动 Mindgrove")

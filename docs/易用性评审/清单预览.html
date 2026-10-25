@@ -1,0 +1,3436 @@
+<!doctype html>
+<html lang="en" data-visualize-standalone>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src 'unsafe-inline' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Mathdraw Usability Review</title>
+<style>:root{color-scheme:light dark;background:light-dark(rgb(255 255 255), rgb(24 24 24))}html,body{margin:0}body{box-sizing:border-box;padding:1rem;background:inherit}iframe{display:block;width:100%;height:calc(100vh - 2rem);margin:0 auto;border:0}</style>
+
+</head>
+<body>
+<iframe id="codex-visualization" sandbox="allow-scripts" referrerpolicy="no-referrer" title="Mathdraw Usability Review" data-srcdoc="&lt;!doctype html&gt;
+&lt;html lang=&quot;en&quot; data-visualize-standalone&gt;
+&lt;head&gt;
+&lt;meta charset=&quot;utf-8&quot;&gt;
+&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1&quot;&gt;
+&lt;meta name=&quot;referrer&quot; content=&quot;no-referrer&quot;&gt;
+&lt;meta http-equiv=&quot;Content-Security-Policy&quot; content=&quot;default-src &#x27;none&#x27;; script-src &#x27;unsafe-inline&#x27; &#x27;unsafe-eval&#x27; &#x27;wasm-unsafe-eval&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src &#x27;unsafe-inline&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src &#x27;none&#x27;; object-src &#x27;none&#x27;; base-uri &#x27;none&#x27;; form-action &#x27;none&#x27;&quot;&gt;
+&lt;title&gt;Mathdraw Usability Review&lt;/title&gt;
+&lt;style&gt;:root {
+  color-scheme: light dark;
+  background-color: var(
+    --background,
+    var(--color-background-primary, light-dark(rgb(255 255 255), rgb(24 24 24)))
+  ) !important;
+
+  /* Agent-facing contract; keep in sync with SKILL.md. */
+  --background: var(
+    --color-background-primary,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --card: color-mix(in oklab, var(--foreground) 5%, var(--background));
+  --card-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --popover: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255), rgb(45 45 45))
+  );
+  --popover-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --primary: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --primary-foreground: var(
+    --color-text-inverse,
+    light-dark(rgb(255 255 255), rgb(13 13 13))
+  );
+  --secondary: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255 / 96%), rgb(54 54 54 / 96%))
+  );
+  --secondary-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --muted: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --muted-foreground: var(
+    --color-text-secondary,
+    light-dark(rgb(26 28 31 / 49.4%), rgb(255 255 255 / 49.8%))
+  );
+  --accent: var(
+    --color-background-info,
+    light-dark(rgb(229 242 255), rgb(13 39 63))
+  );
+  --accent-foreground: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --destructive: var(
+    --color-text-warning,
+    light-dark(rgb(226 85 7), rgb(255 133 73))
+  );
+  --border: var(
+    --color-border-secondary,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+  --input: var(
+    --color-border-primary,
+    light-dark(
+      rgb(26 28 31 / 11.8%),
+      color-mix(in oklab, rgb(0 0 0) 10%, transparent)
+    )
+  );
+  --ring: var(
+    --color-ring-primary,
+    light-dark(rgb(51 156 255), rgb(131 195 255 / 76%))
+  );
+  --font-size-base: var(--font-text-md-size, 16px);
+  --blue: light-dark(rgb(51 156 255), rgb(51 156 255));
+  --orange: light-dark(rgb(226 85 7), rgb(251 106 34));
+  --green: light-dark(rgb(0 162 64), rgb(64 201 119));
+  --red: light-dark(rgb(224 46 42), rgb(255 103 100));
+  --purple: light-dark(rgb(146 79 247), rgb(173 123 249));
+  --yellow: light-dark(rgb(255 195 0), rgb(255 210 64));
+  --viz-series-1: var(--primary);
+  --viz-series-2: light-dark(rgb(243 136 59), rgb(245 154 86));
+  --viz-series-3: light-dark(rgb(93 201 119), rgb(116 213 139));
+  --viz-series-4: light-dark(rgb(235 119 177), rgb(240 143 192));
+  --viz-series-5: light-dark(rgb(155 121 236), rgb(170 145 239));
+  --viz-series-6: light-dark(rgb(58 185 177), rgb(90 203 194));
+
+  /* Internal implementation variables; not part of the agent contract. */
+  --font-sans:
+    -apple-system-body, ui-sans-serif, -apple-system, system-ui, &quot;Segoe UI&quot;,
+    Helvetica, &quot;Apple Color Emoji&quot;, Arial, sans-serif, &quot;Segoe UI Emoji&quot;,
+    &quot;Segoe UI Symbol&quot;;
+  --font-mono:
+    ui-monospace, SFMono-Regular, &quot;SF Mono&quot;, Menlo, Consolas, &quot;Liberation Mono&quot;,
+    monospace;
+  --font-size-normal: max(11px, var(--font-size-base));
+  --font-size-tooltip: calc(var(--font-size-base) - 1px);
+  --font-size-small: max(11px, calc(var(--font-size-base) - 2px));
+  --font-size-h1: calc(var(--font-size-normal) * 1.7142857143);
+  --font-size-h2: calc(var(--font-size-normal) * 1.4285714286);
+  --font-size-h3: calc(var(--font-size-normal) * 1.2857142857);
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --icon-size: 16px;
+  --line-height-normal: calc(var(--font-size-normal) * 1.5);
+  --line-height-tooltip: calc(var(--font-size-tooltip) * 1.4285714286);
+  --line-height-small: calc(var(--font-size-small) + 4px);
+  --corner-shape: round;
+  --radius: var(--border-radius-lg, 8px);
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.75);
+  --radius-lg: var(--radius);
+  --radius-2xl: calc(var(--radius) * 2);
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px -1px rgb(0 0 0 / 8%);
+  --checkmark-image: url(&quot;data:image/svg+xml,%3Csvg xmlns=&#x27;http://www.w3.org/2000/svg&#x27; viewBox=&#x27;0 0 17 17&#x27;%3E%3Cpath d=&#x27;M12.8961 3.64101C13.1297 3.41418 13.4984 3.37523 13.7779 3.56581C14.0571 3.75635 14.1554 4.11331 14.0299 4.41347L13.9615 4.53847L7.71151 13.7045C7.59411 13.8767 7.4063 13.9877 7.19881 14.0072C6.99136 14.0267 6.78564 13.9533 6.63826 13.806L2.88826 10.056L2.79842 9.9457C2.6192 9.67407 2.64927 9.30496 2.88826 9.06581C3.12738 8.82669 3.49647 8.79676 3.76815 8.97597L3.8785 9.06581L7.03084 12.2182L12.8053 3.74941L12.8961 3.64101Z&#x27;/%3E%3C/svg%3E&quot;);
+
+  /* Legacy aliases; not part of the current agent contract. */
+  --viz-bg: transparent;
+  --viz-panel: var(--card);
+  --viz-border: var(--border);
+  --viz-text: var(--foreground);
+  --viz-muted: var(--muted-foreground);
+  --viz-accent: var(--primary);
+  --viz-accent-text: var(--primary-foreground);
+  --viz-accent-bg: var(--accent);
+  --viz-font-size: var(--font-size-base);
+  --viz-warning: var(--destructive);
+}
+
+:root[data-theme=&quot;light&quot;] {
+  color-scheme: light;
+}
+
+:root[data-theme=&quot;dark&quot;] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html &gt; body {
+  /* Preserve MCP aliases for older inline renderers without creating :root cycles. */
+  --color-background-primary: var(
+    --background,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --color-text-primary: var(
+    --foreground,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --color-border-secondary: var(
+    --border,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+
+  margin: 0;
+  padding: var(--visualize-paint-gutter, 0px);
+  color: var(--foreground);
+  background: transparent !important;
+  font-family: var(--font-sans) !important;
+  -webkit-font-smoothing: antialiased;
+  font-size: var(--font-size-base);
+  line-height: calc(var(--font-size-base) * 1.625);
+  font-weight: var(--font-weight-normal);
+}
+
+.cursor-interaction {
+  cursor: var(--cursor-interaction, pointer);
+}
+
+a {
+  color: color-mix(in srgb, var(--viz-accent) 80%, var(--viz-text) 20%);
+  cursor: var(--cursor-interaction, pointer);
+  text-decoration: none;
+  text-underline-offset: 2px;
+  font-weight: inherit;
+}
+
+a:is(:hover, :focus-visible) {
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-thickness: 0.5px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin-block: 0;
+}
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+li,
+.table {
+  font-family: var(--font-sans);
+}
+
+h1 {
+  font-size: calc(var(--font-size-base) * 1.5);
+  line-height: 1.3333333333;
+}
+
+h2 {
+  font-size: calc(var(--font-size-base) * 1.25);
+  line-height: 1.4;
+}
+h3 {
+  font-size: calc(var(--font-size-base) * 1.125);
+  line-height: 1.5555555556;
+}
+h4 {
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+}
+h5,
+h6 {
+  font-size: var(--font-size-base);
+  line-height: calc(var(--font-size-base) * 1.625);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+b,
+strong,
+th {
+  font-weight: 600;
+}
+
+code:not(pre code) {
+  display: inline;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  corner-shape: var(--corner-shape);
+  background: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  word-break: break-word;
+}
+pre,
+pre code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.table {
+  width: 100%;
+  color: var(--foreground);
+  font: inherit;
+  text-align: start;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: calc(var(--font-size-base) * 0.875);
+  line-height: calc(var(--font-size-base) * 1.625);
+  font-family: var(--font-sans);
+}
+
+.table :is(th, td) {
+  padding-block: 10px;
+  padding-inline: 0 24px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+  border-bottom-color: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+.table :is(th, td):not(:last-child) {
+  padding-inline-end: calc(var(--font-size-base) * 1.5);
+}
+
+.table-responsive &gt; .table :is(th, td) {
+  overflow-wrap: break-word;
+}
+
+.table :is(th, td):last-child {
+  padding-inline-end: 0;
+}
+
+.table :is(caption, thead th) {
+  font-weight: 600;
+}
+
+.table thead :is(th, td) {
+  border-bottom-color: var(--border-strong, var(--input));
+  padding-block: calc(var(--font-size-base) / 2);
+  line-height: var(--font-size-base);
+}
+
+.table tbody tr:last-child :is(th, td) {
+  border-bottom: 0;
+}
+.table tbody :is(th, td) {
+  padding-block: calc(var(--font-size-base) * 0.625);
+}
+
+.table.table-sm :is(th, td) {
+  padding-block: 8px;
+}
+
+.table.table-sm :is(th, td):not(:last-child) {
+  padding-inline-end: 16px;
+}
+
+.table :is(.text-end, [align=&quot;right&quot;]) {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.table :is(.text-center, [align=&quot;center&quot;]) {
+  text-align: center;
+}
+
+.table .text-nowrap {
+  white-space: nowrap;
+}
+
+#widget {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  background: transparent !important;
+}
+
+.card {
+  min-width: 0;
+  padding: 12px;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  border-radius: var(--radius-2xl);
+  corner-shape: var(--corner-shape);
+  color: var(--card-foreground);
+  background: var(--card);
+}
+
+.widget {
+  min-width: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  box-shadow: 0 0 0 0.5px var(--border-strong, var(--border));
+  color: var(--foreground);
+  background: var(--background);
+}
+
+#widget &gt; :not(.card, .widget, .progress) {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: min(
+    20rem,
+    var(--tooltip-available-width, calc(100vw - 10px)),
+    calc(100vw - 10px)
+  );
+  max-height: min(
+    var(--tooltip-available-height, calc(100vh - 10px)),
+    calc(100vh - 10px)
+  );
+  border: 1px solid var(--border);
+  corner-shape: var(--corner-shape);
+  overflow-wrap: break-word;
+  white-space: normal;
+  pointer-events: none;
+  user-select: none;
+  font-family: var(--font-sans);
+  padding: 5px 12px;
+  border-color: color-mix(
+    in oklab,
+    light-dark(var(--primary-foreground), var(--foreground)) 5%,
+    transparent
+  );
+  border-radius: var(--radius-2xl);
+  color: light-dark(var(--primary-foreground), var(--foreground));
+  background: light-dark(var(--foreground), var(--popover));
+  box-shadow: 0 8px 18px rgb(15 23 42 / 20%);
+  letter-spacing: -0.15px;
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+
+.viz-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(max(180px, 24%), 1fr));
+  gap: 10px;
+}
+
+.viz-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.viz-stat-value {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+.viz-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+hr {
+  width: 100%;
+  height: 1px;
+  margin-block: 6px;
+  border: 0;
+  background: var(--border);
+}
+
+.nav {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.progress {
+  display: flex;
+  height: 8px;
+  margin-block: calc((var(--line-height-normal, 1.5em) - 8px) / 2);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+}
+
+.progress-bar:only-child {
+  border-radius: var(--radius-full);
+}
+
+.progress-bar {
+  height: 100%;
+  flex-shrink: 0;
+  border: 0;
+  background: var(--viz-series-1);
+}
+
+.viz-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  color: color-mix(in srgb, var(--foreground) 40%, var(--muted-foreground));
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  font-family: var(--font-sans);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 1;
+}
+
+small,
+.text-small {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.text-muted {
+  color: var(--muted-foreground);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.viz-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.viz-controls &gt; .form-label {
+  display: grid;
+  min-width: min(100%, 260px);
+  flex: 1 1 280px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin-bottom: 0;
+}
+
+.viz-controls &gt; .form-label &gt; :is(.form-control, .form-range, .form-select) {
+  grid-column: 1 / -1;
+}
+
+.btn,
+.nav-link,
+.form-check-input,
+.form-control,
+.form-range,
+.form-select {
+  font: inherit;
+}
+
+/* Match inline alignment without overriding a containing flex or grid layout. */
+.btn,
+.nav-link,
+.form-control,
+.form-select,
+.form-range,
+.form-check {
+  vertical-align: middle;
+}
+
+.btn,
+.nav-link {
+  appearance: button;
+  display: inline-flex;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0 8px;
+  -webkit-app-region: no-drag;
+  border: 1px solid var(--input);
+  corner-shape: var(--corner-shape);
+  cursor: var(--cursor-interaction, pointer);
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-font-smoothing: inherit;
+  font-family: var(--font-sans);
+  height: fit-content;
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  padding-inline: var(--control-spacing, 12px);
+  border-color: transparent;
+  border-radius: var(--radius-full);
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+}
+
+.btn {
+  border-color: var(--border);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+}
+
+.btn:is(.btn-block, .viz-tile) {
+  inline-size: 100%;
+}
+
+.btn.viz-tile {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+a.btn {
+  cursor: var(--cursor-interaction, pointer);
+  text-decoration: none;
+}
+
+.btn:not(:disabled):hover {
+  background: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.nav-link:not(:disabled):not([aria-disabled=&quot;true&quot;]):hover {
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+.btn-primary {
+  border-color: var(--border);
+  color: var(--primary-foreground);
+  background: var(--foreground);
+  background-clip: border-box;
+}
+
+.btn-primary .text-muted {
+  color: color-mix(in srgb, var(--primary-foreground) 50%, transparent);
+}
+
+.btn-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 80%, transparent);
+  background-clip: border-box;
+}
+
+.btn-ghost {
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.btn-ghost:not(:disabled):hover {
+  color: var(--muted-foreground);
+  background: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.nav-pills .nav-link {
+  min-width: 0;
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.nav-justified .nav-link {
+  flex: 1 1 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.nav-pills .nav-link.active {
+  color: var(--foreground);
+  background: var(--muted);
+}
+
+/* Shared preview chrome; product styles stay inside each variant. */
+.viz-dotted-background {
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--foreground) 14%, transparent) 0.8px,
+    transparent 0.8px
+  );
+  background-position: center;
+  background-size: 16px 16px;
+}
+
+.viz-carousel {
+  position: relative;
+  min-width: 0;
+}
+
+.viz-carousel:has(&gt; .viz-carousel-controls) {
+  min-height: calc(60px + var(--viz-carousel-picker-height, 0px));
+  padding-bottom: 60px;
+}
+
+.viz-carousel &gt; [data-variant][hidden] {
+  display: none !important;
+}
+
+.viz-carousel &gt; [data-variant] {
+  isolation: isolate;
+}
+
+.viz-carousel-controls {
+  --viz-carousel-hover: light-dark(
+    color-mix(in srgb, var(--foreground) 5.4%, transparent),
+    color-mix(in srgb, var(--foreground) 7.8%, transparent)
+  );
+  position: absolute;
+  z-index: 2;
+  bottom: 8px;
+  left: 50%;
+  display: flex;
+  width: max-content;
+  /* Leave room for the host&#x27;s design-controls launcher at the trailing edge. */
+  max-width: calc(100% - 96px);
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-sans);
+  /* Match the settings dropdown chrome independently of the content font size. */
+  font-size: 13px;
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+  transform: translateX(-50%);
+  user-select: none;
+}
+
+/* Keep authored mockup button styles out of the shared carousel chrome. */
+.viz-carousel-controls button,
+.viz-carousel-picker &gt; summary {
+  display: flex !important;
+  height: auto !important;
+  min-height: 30px;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px;
+  padding: 0 6px !important;
+  -webkit-app-region: no-drag;
+  border: 0 !important;
+  border-radius: 14px !important;
+  color: inherit !important;
+  background: transparent !important;
+  font: inherit !important;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.viz-carousel-controls &gt; button,
+.viz-carousel-picker &gt; summary {
+  position: relative;
+  isolation: isolate;
+}
+
+.viz-carousel-controls &gt; button {
+  --icon-size: 16px;
+  width: 30px !important;
+  padding: 0 !important;
+}
+
+.viz-carousel-picker &gt; summary {
+  padding-inline: 12px !important;
+}
+
+.viz-carousel-controls .viz-carousel-caret {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  margin: 0;
+  color: inherit;
+  transform: rotate(180deg);
+}
+
+.viz-carousel-controls &gt; button &gt; svg,
+.viz-carousel-controls .viz-carousel-caret,
+.viz-carousel-count {
+  opacity: 0.5;
+}
+
+.viz-carousel-controls &gt; button::before,
+.viz-carousel-picker &gt; summary::before {
+  position: absolute;
+  z-index: -1;
+  inset: 3px;
+  border-radius: 12px;
+  content: &quot;&quot;;
+  pointer-events: none;
+}
+
+.viz-carousel-controls &gt; button:hover::before,
+.viz-carousel-picker &gt; summary:hover::before {
+  background: var(--viz-carousel-hover);
+}
+
+.viz-carousel-controls &gt; button,
+.viz-carousel-controls [data-lucide],
+.viz-carousel-controls .lucide {
+  flex-shrink: 0;
+}
+
+.viz-carousel-picker {
+  min-width: 0;
+}
+
+.viz-carousel-picker &gt; summary {
+  min-width: 0;
+  list-style: none;
+}
+
+.viz-carousel-picker &gt; summary::-webkit-details-marker {
+  display: none;
+}
+
+.viz-carousel-count {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.viz-carousel-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viz-carousel-options {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  left: 0;
+  display: flex;
+  max-height: 240px;
+  flex-direction: column;
+  gap: 2px;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--background);
+  box-shadow: 0 4px 12px light-dark(rgb(0 0 0 / 6%), rgb(0 0 0 / 25%));
+}
+
+.viz-carousel-options &gt; button {
+  border-radius: max(0px, calc(var(--radius-lg) - 5px)) !important;
+  width: 100% !important;
+  min-height: 28px;
+  justify-content: flex-start !important;
+  padding: 4px 8px !important;
+  font-size: var(--font-size-small) !important;
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.viz-carousel-options &gt; [aria-current=&quot;true&quot;],
+.viz-carousel-options &gt; button:hover {
+  background: var(--viz-carousel-hover) !important;
+}
+
+.btn:disabled,
+.nav-link:disabled,
+.nav-link[aria-disabled=&quot;true&quot;] {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+[data-lucide] {
+  stroke-width: 1.6;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--foreground);
+}
+
+.form-control {
+  display: block;
+  width: 100%;
+  padding: 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  padding-inline: calc(4px + var(--control-spacing, 12px) / 2);
+  border-color: var(--input);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--popover) 96%, transparent);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 1.4285714286;
+}
+.form-control:is(
+  [type=&quot;file&quot;],
+  [type=&quot;date&quot;],
+  [type=&quot;datetime-local&quot;],
+  [type=&quot;month&quot;],
+  [type=&quot;week&quot;],
+  [type=&quot;color&quot;]
+) {
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  line-height: 18px;
+}
+.form-control:is(
+  [type=&quot;date&quot;],
+  [type=&quot;datetime-local&quot;],
+  [type=&quot;month&quot;],
+  [type=&quot;week&quot;]
+) {
+  padding-inline: var(--control-spacing, 12px);
+}
+
+.form-control::placeholder {
+  color: var(--muted-foreground);
+}
+
+.form-control[type=&quot;file&quot;] {
+  overflow: hidden;
+  cursor: var(--cursor-interaction, pointer);
+  padding: 0;
+}
+
+.form-control[type=&quot;file&quot;]::file-selector-button {
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid var(--input);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: inherit;
+  font: inherit;
+  min-height: calc(10px + 2 * var(--control-spacing, 12px));
+  padding-inline: var(--control-spacing, 12px);
+  margin-inline-end: var(--control-spacing, 12px);
+}
+
+.form-control[type=&quot;file&quot;]:not(:disabled):hover::file-selector-button {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-control-color[type=&quot;color&quot;] {
+  width: 40px;
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  padding: 3px;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch {
+  border: 0;
+  border-radius: calc(var(--radius-lg) - 4px);
+  corner-shape: var(--corner-shape);
+}
+
+textarea.form-control {
+  height: auto;
+  resize: vertical;
+  min-height: 96px;
+  padding: 8px 10px;
+}
+
+.form-control:focus-visible {
+  border-color: var(--ring);
+  box-shadow: none;
+}
+.form-control:disabled {
+  color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  opacity: 1;
+}
+.form-control[aria-invalid=&quot;true&quot;] {
+  border-color: var(--red);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--red) 20%, transparent);
+}
+
+.form-control:disabled,
+.form-select:disabled {
+  cursor: not-allowed;
+}
+
+.form-select {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: fit-content;
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  margin: 0;
+  /* The secondary icon role is 14px at compact density and 16px at web density. */
+  --icon-size: calc(10px + var(--control-spacing, 12px) / 2);
+  /* Settings dropdowns retain a 12px inset and a 4px text-to-chevron gap. */
+  padding: 0 calc(16px + var(--icon-size)) 0 12px;
+  outline: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  background-color: var(--secondary);
+  background-image:
+    linear-gradient(
+      45deg,
+      transparent calc(50% - 0.6px),
+      var(--muted-foreground) calc(50% - 0.6px) calc(50% + 0.6px),
+      transparent calc(50% + 0.6px)
+    ),
+    linear-gradient(
+      135deg,
+      transparent calc(50% - 0.6px),
+      var(--muted-foreground) calc(50% - 0.6px) calc(50% + 0.6px),
+      transparent calc(50% + 0.6px)
+    );
+  background-position:
+    calc(100% - 12px - var(--icon-size) / 2) 50%,
+    calc(100% - 12px - var(--icon-size) * 0.18) 50%;
+  background-repeat: no-repeat;
+  background-size: calc(var(--icon-size) * 0.32) calc(var(--icon-size) * 0.32);
+  cursor: var(--cursor-interaction, default);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+}
+
+.form-select option {
+  color: var(--popover-foreground);
+  background-color: var(--popover);
+}
+
+.form-select:not(:disabled):hover {
+  background-color: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.form-select:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+.form-select:disabled {
+  opacity: 0.4;
+}
+
+.form-check {
+  display: flex;
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  align-items: center;
+  gap: 6px;
+}
+
+.form-check-input {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin: 0;
+  border: 1px solid var(--input);
+  color: var(--primary-foreground);
+  background-color: transparent;
+  cursor: var(--cursor-interaction, default);
+  transition:
+    background-color 150ms,
+    border-color 150ms,
+    box-shadow 150ms;
+}
+
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;] {
+  corner-shape: round;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  width: calc(10px + var(--control-spacing, 12px) / 2);
+  height: calc(10px + var(--control-spacing, 12px) / 2);
+  border-color: var(--border-strong, var(--input));
+  border-radius: calc(var(--radius-sm) / 2);
+  background-color: transparent;
+  color: var(--foreground);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input:not(:disabled):not(:checked):hover {
+  background-color: var(--card);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type=&quot;checkbox&quot;]:is(:checked, :indeterminate) {
+  border-color: var(--border-strong, var(--input));
+  background-color: color-mix(in srgb, var(--popover) 96%, transparent);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type=&quot;checkbox&quot;]:checked::before {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--primary-foreground);
+  content: &quot;&quot;;
+  mask: var(--checkmark-image) center / 12px 12px no-repeat;
+  background-color: var(--foreground);
+}
+.form-check:not(.form-switch)
+  .form-check-input[type=&quot;checkbox&quot;]:indeterminate::before {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 65%;
+  height: 6.65%;
+  margin: auto;
+  border-radius: var(--radius-full);
+  background: var(--foreground);
+  mask: none;
+  content: &quot;&quot;;
+}
+
+.form-check-input[type=&quot;radio&quot;] {
+  border-radius: var(--radius-full);
+  width: 16px;
+  height: 16px;
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--input);
+}
+
+.form-check-input[type=&quot;radio&quot;]:checked {
+  border: 0;
+  background: radial-gradient(
+    circle,
+    var(--primary-foreground) 0 3px,
+    var(--foreground) 3px
+  );
+  box-shadow: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;]:focus-visible {
+  border-color: var(--ring);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+}
+.form-check:not(.form-switch) .form-check-input[type=&quot;radio&quot;]:disabled,
+.form-check:not(.form-switch)
+  .form-check-input[type=&quot;radio&quot;]:disabled
+  + .form-check-label {
+  opacity: 0.5;
+}
+
+.form-switch .form-check-input:disabled,
+.form-switch .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.form-check-label {
+  color: var(--foreground);
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-switch .form-check-input {
+  position: relative;
+  width: 32px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+  box-shadow: none;
+  transition: background-color 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1px solid light-dark(var(--primary-foreground), var(--foreground));
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+  content: &quot;&quot;;
+  transform: translate(2px, -50%);
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+  border-color: #fff;
+  background: #fff;
+}
+
+.form-switch .form-check-input:checked {
+  background: var(--blue);
+}
+
+.form-switch .form-check-input:checked::before {
+  transform: translate(14px, -50%);
+}
+
+.form-switch .form-check-input:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+  outline: none;
+}
+
+.form-range {
+  appearance: none;
+  display: block;
+  width: 100%;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  accent-color: var(--primary);
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  outline: none;
+  border-radius: var(--radius-full);
+  color: var(--foreground);
+  background: transparent;
+}
+
+.form-range::-webkit-slider-runnable-track {
+  background: var(--form-range-track, var(--border));
+  height: 2px;
+  border-radius: var(--radius-full);
+}
+
+.form-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  margin-top: -9px;
+  border-color: transparent;
+  background: currentColor;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Outline the native track and thumb, preserving the larger input hit area. */
+.form-range:focus-visible::-webkit-slider-runnable-track {
+  outline: 2px auto Highlight;
+  outline-color: -webkit-focus-ring-color;
+}
+
+.form-range::-moz-range-track {
+  background: var(--form-range-track, var(--border));
+  height: 2px;
+  border-radius: var(--radius-full);
+}
+
+.form-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  border-color: transparent;
+  background: currentColor;
+  box-shadow: var(--shadow-sm);
+}
+
+.form-range:focus-visible::-moz-range-thumb {
+  outline: 2px solid Highlight;
+  outline-offset: 2px;
+}
+
+.form-range:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.btn:not(.btn-primary, .viz-tile):is(
+  [aria-pressed=&quot;true&quot;],
+  [aria-selected=&quot;true&quot;],
+  .is-selected
+) {
+  border-color: transparent;
+  color: var(--primary-foreground);
+  background: var(--blue);
+}
+
+.btn.viz-tile:is([aria-pressed=&quot;true&quot;], [aria-selected=&quot;true&quot;], .is-selected) {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.btn:focus-visible,
+.nav-link:focus-visible {
+  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.viz-carousel-controls :is(button, summary):focus-visible {
+  outline: 2px solid var(--ring) !important;
+  outline-offset: 2px !important;
+}
+
+/* Web recipes are the default, including on renderers without inline style queries. */
+@supports (border-radius: if(style(--corner-shape: round): 1px; else: 2px)) {
+  /* Match the host&#x27;s proportional text-sm scale at every text preference. */
+  .tooltip,
+  .viz-badge,
+  .btn,
+  .nav-link,
+  .form-control,
+  .form-select {
+    font-size: if(
+      style(--corner-shape: round): round(
+          nearest,
+          calc(var(--font-size-base) * 14 / 16),
+          1px
+        );
+        else: round(nearest, calc(var(--font-size-base) * 13 / 14), 1px)
+    );
+  }
+
+  .btn,
+  .nav-link,
+  .form-select {
+    border-radius: if(
+      style(--corner-shape: round): var(--radius-full); else: var(--radius-lg)
+    );
+  }
+
+  .form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;] {
+    border-radius: if(
+      style(--corner-shape: round): calc(var(--radius-sm) / 2);
+        else: calc(var(--radius-lg) * 0.4)
+    );
+  }
+
+  .tooltip {
+    font-weight: if(
+      style(--corner-shape: round): 600; else: var(--font-weight-normal)
+    );
+  }
+}
+
+@media (pointer: coarse) {
+  .viz-carousel:has(&gt; .viz-carousel-controls) {
+    min-height: calc(76px + var(--viz-carousel-picker-height, 0px));
+    padding-bottom: 76px;
+  }
+
+  .btn,
+  .nav-link,
+  .viz-carousel-controls button,
+  .viz-carousel-picker &gt; summary,
+  .form-control,
+  .form-select {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Keep small-screen WebKit from zooming when a text field receives focus. */
+  .form-control,
+  .form-select {
+    font-size: max(16px, calc(var(--font-size-base) * 14 / 16));
+    font-size: max(
+      16px,
+      round(nearest, calc(var(--font-size-base) * 14 / 16), 1px)
+    );
+  }
+  .form-control:is(
+    [type=&quot;file&quot;],
+    [type=&quot;date&quot;],
+    [type=&quot;datetime-local&quot;],
+    [type=&quot;month&quot;],
+    [type=&quot;week&quot;],
+    [type=&quot;time&quot;],
+    [type=&quot;color&quot;]
+  ) {
+    height: 44px;
+    min-height: 44px;
+    font-size: max(16px, calc(var(--font-size-base) * 14 / 16));
+    font-size: max(
+      16px,
+      round(nearest, calc(var(--font-size-base) * 14 / 16), 1px)
+    );
+  }
+
+  .form-control[type=&quot;file&quot;]::file-selector-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .form-control-color[type=&quot;color&quot;] {
+    width: 44px;
+    height: 44px;
+  }
+
+  .form-control:is(
+    [type=&quot;date&quot;],
+    [type=&quot;datetime-local&quot;],
+    [type=&quot;month&quot;],
+    [type=&quot;time&quot;],
+    [type=&quot;week&quot;]
+  ) {
+    min-width: 0;
+    max-width: 100%;
+    padding-block: 8px;
+  }
+
+  .form-check {
+    min-height: 44px;
+    padding-inline: 15px;
+  }
+
+  .form-check-input {
+    position: relative;
+  }
+
+  .form-check-input::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    content: &quot;&quot;;
+    transform: translate(-50%, -50%);
+  }
+
+  .form-check-label {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .form-range {
+    height: 44px;
+    touch-action: pan-y;
+  }
+}
+
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+#widget &gt; svg {
+  width: 100%;
+}
+
+/* Model-authored chart rules can otherwise stretch icons after these styles load. */
+svg.lucide {
+  display: block;
+  width: var(--icon-size) !important;
+  height: var(--icon-size) !important;
+  flex: none;
+  margin: 0 !important;
+  stroke-width: 1.6;
+}
+
+.text-warning,
+.text-destructive {
+  color: var(--destructive);
+}
+
+html&gt;body{padding:0}&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;script type=&quot;application/json&quot; id=&quot;codex-visualization-widget-state&quot;&gt;__CODEX_VISUALIZATION_WIDGET_STATE__&lt;/script&gt;
+&lt;script&gt;(() =&gt; {
+  const root = document.documentElement;
+  const mediaQuery = globalThis.matchMedia(&quot;(prefers-color-scheme: dark)&quot;);
+  const apply = Reflect.apply;
+  const isArray = Array.isArray;
+  const hasOwn = Object.hasOwn;
+  const parentWindow = globalThis.parent;
+  const stringify = JSON.stringify;
+  const parse = JSON.parse;
+  const encode = TextEncoder.prototype.encode.bind(new TextEncoder());
+  const initialStateElement = document.getElementById(
+    &quot;codex-visualization-widget-state&quot;,
+  );
+  const initialGlobals = parse(initialStateElement?.textContent ?? &quot;{}&quot;);
+  initialStateElement?.remove();
+  /** @type {Record&lt;string, unknown&gt; | null} */
+  let state = initialGlobals.widgetState ?? null;
+  const statePersistence = initialGlobals.statePersistence ?? &quot;none&quot;;
+  let nextStateRequestId = 0;
+  /** @type {Map&lt;number, { resolve: () =&gt; void; reject: (error: Error) =&gt; void; timeout: ReturnType&lt;typeof globalThis.setTimeout&gt;; serializedState: string }&gt;} */
+  const pendingStateWrites = new Map();
+  const persistenceError = () =&gt;
+    Object.assign(
+      new Error(&quot;The host could not persist the widget state update&quot;),
+      {
+        code: -32000,
+        data: { code: &quot;widget_state_persistence_failed&quot;, retryable: false },
+      },
+    );
+  /**
+   * @param {object} prototype
+   * @param {string} property
+   */
+  const getPrototypeGetter = (prototype, property) =&gt; {
+    // oxlint-disable-next-line typescript/unbound-method -- invoked through captured Reflect.apply
+    const getter = Object.getOwnPropertyDescriptor(prototype, property)?.get;
+    if (getter == null) {
+      throw new Error(`Missing ${property} getter`);
+    }
+    return getter;
+  };
+  const getMessageData = getPrototypeGetter(MessageEvent.prototype, &quot;data&quot;);
+  const getMessagePorts = getPrototypeGetter(MessageEvent.prototype, &quot;ports&quot;);
+  const getMessageSource = getPrototypeGetter(MessageEvent.prototype, &quot;source&quot;);
+  // oxlint-disable-next-line typescript/unbound-method -- captured before the untrusted fragment runs
+  const addHostMessageListener = MessagePort.prototype.addEventListener;
+  // oxlint-disable-next-line typescript/unbound-method -- captured before the untrusted fragment runs
+  const postHostMessage = MessagePort.prototype.postMessage;
+  // oxlint-disable-next-line typescript/unbound-method -- captured before the untrusted fragment runs
+  const startHostPort = MessagePort.prototype.start;
+  // oxlint-disable-next-line typescript/unbound-method -- captured before the untrusted fragment runs
+  const stopMessagePropagation = Event.prototype.stopImmediatePropagation;
+  /** @type {MessagePort | null} */
+  let hostPort = null;
+  const postToHost = (type, payload) =&gt; {
+    if (hostPort != null) {
+      apply(postHostMessage, hostPort, [{ type, ...payload }]);
+    }
+  };
+  const openExternal = ({ href }) =&gt; {
+    if (globalThis.navigator.userActivation?.isActive === true) {
+      postToHost(&quot;open-external&quot;, { href });
+    }
+  };
+  const sendFollowUpMessage = ({ context, prompt, title }) =&gt; {
+    if (globalThis.navigator.userActivation?.isActive === true) {
+      postToHost(&quot;follow-up&quot;, { context, prompt, title });
+    }
+    return Promise.resolve();
+  };
+  /**
+   * @param {Record&lt;string, unknown&gt; | ((previous: Record&lt;string, unknown&gt; | null) =&gt; Record&lt;string, unknown&gt;)} next
+   * @returns {Promise&lt;void&gt;}
+   */
+  const setWidgetState = async (next) =&gt; {
+    const nextState = typeof next === &quot;function&quot; ? next(state) : next;
+    if (
+      nextState == null ||
+      typeof nextState !== &quot;object&quot; ||
+      isArray(nextState)
+    ) {
+      throw new TypeError(&quot;Widget state must be a JSON object&quot;);
+    }
+    const inputState = stringify(
+      nextState,
+      (_key, /** @type {unknown} */ value) =&gt; {
+        if (
+          typeof value === &quot;undefined&quot; ||
+          typeof value === &quot;function&quot; ||
+          typeof value === &quot;symbol&quot; ||
+          (typeof value === &quot;number&quot; &amp;&amp; !Number.isFinite(value))
+        ) {
+          throw new TypeError(&quot;Widget state must be a JSON object&quot;);
+        }
+        return value;
+      },
+    );
+    const parsedState = parse(inputState);
+    if (
+      parsedState == null ||
+      typeof parsedState !== &quot;object&quot; ||
+      isArray(parsedState)
+    ) {
+      throw new TypeError(&quot;Widget state must be a JSON object&quot;);
+    }
+    const storedState = {
+      modelContent: null,
+      privateContent: null,
+      ...parsedState,
+    };
+    const serializedState = stringify(storedState);
+    if (encode(serializedState).length &gt; 16 * 1024) {
+      throw new TypeError(
+        &quot;Widget state must be a JSON object of at most 16 KiB&quot;,
+      );
+    }
+    if (
+      hasOwn(storedState, &quot;imageIds&quot;) &amp;&amp;
+      (!isArray(storedState.imageIds) ||
+        storedState.imageIds.some(
+          (/** @type {unknown} */ id) =&gt; typeof id !== &quot;string&quot;,
+        ))
+    ) {
+      throw new TypeError(&quot;Widget state imageIds must be an array of strings&quot;);
+    }
+    if (storedState.imageIds?.length &gt; 0) {
+      throw Object.assign(
+        new TypeError(&quot;Visualization state does not support image attachments&quot;),
+        { code: -32602, data: { code: &quot;images_unsupported&quot; } },
+      );
+    }
+    state = storedState;
+    globalThis.openai.widgetState = state;
+    globalThis.dispatchEvent(
+      new CustomEvent(&quot;openai:set_globals&quot;, {
+        detail: { globals: { widgetState: state } },
+      }),
+    );
+    if (statePersistence === &quot;none&quot;) {
+      throw persistenceError();
+    }
+    const id = ++nextStateRequestId;
+    return new Promise((resolve, reject) =&gt; {
+      const timeout = globalThis.setTimeout(() =&gt; {
+        pendingStateWrites.delete(id);
+        reject(persistenceError());
+      }, 30_000);
+      pendingStateWrites.set(id, { resolve, reject, timeout, serializedState });
+      postToHost(&quot;widget-state-write&quot;, { id, state: serializedState });
+    });
+  };
+  const syncTheme = () =&gt; {
+    const theme = mediaQuery.matches ? &quot;dark&quot; : &quot;light&quot;;
+    root.dataset.theme = theme;
+    globalThis.openai = {
+      ...globalThis.openai,
+      openExternal,
+      sendFollowUpMessage,
+      setWidgetState,
+      theme,
+      visualizationStyleVariables: {},
+      visualizationTheme: theme,
+      widgetState: state,
+      statePersistence,
+      stateModelContext: &quot;none&quot;,
+    };
+    globalThis.dispatchEvent(
+      new CustomEvent(&quot;openai:set_globals&quot;, {
+        detail: { globals: globalThis.openai },
+      }),
+    );
+  };
+  const sendHeight = () =&gt; {
+    postToHost(&quot;height&quot;, {
+      height: Math.ceil(
+        Math.max(
+          document.body.scrollHeight,
+          document.body.getBoundingClientRect().height,
+        ),
+      ),
+    });
+  };
+
+  globalThis.addEventListener(
+    &quot;message&quot;,
+    (event) =&gt; {
+      const data = apply(getMessageData, event, []);
+      const ports = apply(getMessagePorts, event, []);
+      const source = apply(getMessageSource, event, []);
+      if (
+        hostPort != null ||
+        source !== parentWindow ||
+        typeof data !== &quot;object&quot; ||
+        data?.type !== &quot;codex-visualization-initialize&quot; ||
+        !isArray(ports) ||
+        ports.length !== 1
+      ) {
+        return;
+      }
+      apply(stopMessagePropagation, event, []);
+      const nextHostPort = ports[0];
+      try {
+        apply(addHostMessageListener, nextHostPort, [
+          &quot;message&quot;,
+          (event) =&gt; {
+            const data = apply(getMessageData, event, []);
+            if (typeof data === &quot;object&quot; &amp;&amp; data?.type === &quot;measure&quot;) {
+              sendHeight();
+            } else if (
+              typeof data === &quot;object&quot; &amp;&amp;
+              data?.type === &quot;widget-state-result&quot;
+            ) {
+              /** @type {unknown} */
+              const id = data.id;
+              if (typeof id !== &quot;number&quot;) {
+                return;
+              }
+              const pending = pendingStateWrites.get(id);
+              if (pending != null) {
+                pendingStateWrites.delete(id);
+                globalThis.clearTimeout(pending.timeout);
+                if (data.ok === true) {
+                  pending.resolve();
+                } else {
+                  pending.reject(persistenceError());
+                }
+              }
+            }
+          },
+        ]);
+        apply(startHostPort, nextHostPort, []);
+      } catch {
+        return;
+      }
+      hostPort = nextHostPort;
+      for (const [id, { serializedState }] of pendingStateWrites) {
+        postToHost(&quot;widget-state-write&quot;, { id, state: serializedState });
+      }
+      sendHeight();
+    },
+    { capture: true },
+  );
+  document.currentScript?.remove();
+  mediaQuery.addEventListener(&quot;change&quot;, syncTheme);
+  globalThis.addEventListener(&quot;click&quot;, (event) =&gt; {
+    if (event.defaultPrevented) {
+      return;
+    }
+    let element = null;
+    if (event.target instanceof globalThis.Element) {
+      element = event.target;
+    } else if (event.target instanceof globalThis.Node) {
+      element = event.target.parentElement;
+    }
+    const link = element?.closest(&quot;a[href]&quot;);
+    const href = link?.getAttribute(&quot;href&quot;);
+    if (href == null) {
+      return;
+    }
+    if (href.startsWith(&quot;#&quot;)) {
+      let id;
+      try {
+        id = decodeURIComponent(href.slice(1));
+      } catch {
+        return;
+      }
+      const target = id.length === 0 ? root : document.getElementById(id);
+      if (
+        target == null ||
+        globalThis.navigator.userActivation?.isActive !== true
+      ) {
+        return;
+      }
+      event.preventDefault();
+      postToHost(&quot;scroll-to&quot;, {
+        top: target.getBoundingClientRect().top + globalThis.scrollY,
+      });
+      return;
+    }
+    event.preventDefault();
+    openExternal({ href });
+  });
+  new ResizeObserver(sendHeight).observe(document.body);
+  syncTheme();
+})();
+&lt;/script&gt;
+&lt;div id=&quot;mathdraw-usability-review&quot;&gt;
+  &lt;h2&gt;Mathdraw · 易用性优化清单&lt;/h2&gt;
+  &lt;div class=&quot;viz-row text-small&quot;&gt;&lt;span id=&quot;review-total&quot;&gt;&lt;/span&gt;&lt;span&gt;教师备课 · 学生做题 · 动态探究&lt;/span&gt;&lt;span&gt;2026-10-25&lt;/span&gt;&lt;/div&gt;
+  &lt;div class=&quot;viz-row review-actions&quot;&gt;
+    &lt;button type=&quot;button&quot; class=&quot;btn btn-primary&quot; id=&quot;review-summary&quot;&gt;生成已选清单&lt;/button&gt;
+    &lt;button type=&quot;button&quot; class=&quot;btn&quot; id=&quot;review-save&quot;&gt;保存选择与备注&lt;/button&gt;
+    &lt;label class=&quot;form-label&quot;&gt;载入选择文件&lt;input type=&quot;file&quot; accept=&quot;.json,application/json&quot; class=&quot;form-control&quot; id=&quot;review-load&quot;&gt;&lt;/label&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;viz-row text-small&quot;&gt;&lt;span id=&quot;review-count&quot; aria-live=&quot;polite&quot;&gt;&lt;/span&gt;&lt;span&gt;勾选＝希望优化；未选≠删除功能&lt;/span&gt;&lt;span&gt;“优先”仅为建议&lt;/span&gt;&lt;/div&gt;
+  &lt;div id=&quot;review-status&quot; class=&quot;text-small&quot; role=&quot;status&quot;&gt;&lt;/div&gt;
+  &lt;div id=&quot;review-error&quot; class=&quot;text-destructive&quot; role=&quot;alert&quot; hidden&gt;&lt;/div&gt;
+  &lt;div id=&quot;review-groups&quot;&gt;&lt;/div&gt;
+  &lt;hr&gt;
+  &lt;label class=&quot;form-label&quot;&gt;整体备注（常用场景、设备、最想先做的编号、不希望改变的操作）&lt;textarea class=&quot;form-control&quot; rows=&quot;3&quot; maxlength=&quot;2000&quot; id=&quot;review-overall&quot;&gt;&lt;/textarea&gt;&lt;/label&gt;
+  &lt;section id=&quot;review-output&quot; hidden&gt;&lt;h3&gt;可复制的选择结果&lt;/h3&gt;&lt;textarea class=&quot;form-control&quot; rows=&quot;12&quot; readonly id=&quot;review-output-text&quot; aria-label=&quot;已选清单与备注，选中后可复制&quot;&gt;&lt;/textarea&gt;&lt;/section&gt;
+  &lt;script type=&quot;application/json&quot; id=&quot;review-data&quot;&gt;
+{
+  &quot;version&quot;: 1,
+  &quot;date&quot;: &quot;2026-10-25&quot;,
+  &quot;groups&quot;: [
+    {
+      &quot;id&quot;: &quot;A&quot;,
+      &quot;name&quot;: &quot;入门与整体界面&quot;,
+      &quot;current&quot;: &quot;已有独立启动器、平面/立体模式、工具分类、指南、快捷键和左右侧栏。&quot;,
+      &quot;items&quot;: [
+        {
+          &quot;id&quot;: &quot;A01&quot;,
+          &quot;title&quot;: &quot;第一次打开就知道从哪开始&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;现有指南可见，需课堂评估&quot;,
+          &quot;pain&quot;: &quot;教师备课、学生探索和截图作图的起点不同，仅靠工具名称不易判断。&quot;,
+          &quot;action&quot;: &quot;把现有指南改为三条短路径：手工作图、按条件作图、题干导入；每条只说明第一步。&quot;,
+          &quot;done&quot;: &quot;新用户不用读长文，也能独立开始其中一条路径。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;A02&quot;,
+          &quot;title&quot;: &quot;明确平面/立体切换的后果&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;源码：模式选择提示新建画布&quot;,
+          &quot;pain&quot;: &quot;工具栏像普通视图切换，但实际涉及新画布，容易理解错。&quot;,
+          &quot;action&quot;: &quot;在切换前明确“新建画布”或“继续原画布”，沿用未保存保护。&quot;,
+          &quot;done&quot;: &quot;不会把改变观察视角与创建另一张图混为一谈。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;A03&quot;,
+          &quot;title&quot;: &quot;常用操作更容易找&quot;,
+          &quot;audience&quot;: &quot;教师&quot;,
+          &quot;priority&quot;: &quot;常规&quot;,
+          &quot;basis&quot;: &quot;源码：分类、右键、属性多入口&quot;,
+          &quot;pain&quot;: &quot;同一件事可能要在工具栏、右键和属性栏之间寻找。&quot;,
+          &quot;action&quot;: &quot;整理入口词汇和位置；常用功能保留直接入口，低频项进对应菜单。&quot;,
+          &quot;done&quot;: &quot;能快速找到交点、垂线、标注、隐藏和导出；不新增另一排按钮。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;A04&quot;,
+          &quot;title&quot;: &quot;密度与可读性平衡&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;常规&quot;,
+          &quot;basis&quot;: &quot;列表刚收紧，需实际显示设备评估&quot;,
+          &quot;pain&quot;: &quot;紧凑适合备课，但投影和小屏上可能字小、目标难点。&quot;,
+          &quot;action&quot;: &quot;提供统一的界面字号/密度偏好，数学内容与控件分别保持可读。&quot;,
+          &quot;done&quot;: &quot;笔记本和课堂投影都清楚，长公式不靠缩小字号塞入。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;A05&quot;,
+          &quot;title&quot;: &quot;术语面向高中数学&quot;,
+          &quot;audience&quot;: &quot;学生&quot;,
+          &quot;priority&quot;: &quot;常规&quot;,
+          &quot;basis&quot;: &quot;源码：参数、工作平面、参照、手性等术语&quot;,
+          &quot;pain&quot;: &quot;“参照结构”“手性”“放置”等词不一定符合学生直觉。&quot;,
+          &quot;action&quot;: &quot;保留准确数学术语，附简短解释；统一同一概念的名称。&quot;,
+          &quot;done&quot;: &quot;不读开发文档也能解释当前选项会改变什么。&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: &quot;B&quot;,
+      &quot;name&quot;: &quot;选取、拖动与画布&quot;,
+      &quot;current&quot;: &quot;已有选择/框选、平移、缩放、网格吸附、重叠对象选择、工具步骤提示和撤销重做。&quot;,
+      &quot;items&quot;: [
+        {
+          &quot;id&quot;: &quot;B01&quot;,
+          &quot;title&quot;: &quot;分清拖图与拖点&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;源码可见，历史交互反馈&quot;,
+          &quot;pain&quot;: &quot;同一位置拖动可能框选、移动点或平移，误操作成本高。&quot;,
+          &quot;action&quot;: &quot;让当前拖动模式、鼠标指针及临时空格平移反馈一致。&quot;,
+          &quot;done&quot;: &quot;用户在动手前就能判断拖动的对象，误操作能立即撤销。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;B02&quot;,
+          &quot;title&quot;: &quot;重叠对象好选&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;已有重叠候选功能，需密集图评估&quot;,
+          &quot;pain&quot;: &quot;点、线、面、标签重叠时，候选名称难与图形对应。&quot;,
+          &quot;action&quot;: &quot;候选项悬停/聚焦同步高亮，标明对象类型和所属几何体，支持轮换。&quot;,
+          &quot;done&quot;: &quot;能稳定选到重合的动点、后方边和几何体面。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;B03&quot;,
+          &quot;title&quot;: &quot;看得懂下一步要选什么&quot;,
+          &quot;audience&quot;: &quot;学生&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;已有当前目标及步骤提示&quot;,
+          &quot;pain&quot;: &quot;连续构造中，用户可能忘记已选内容或不知哪里选错。&quot;,
+          &quot;action&quot;: &quot;显示已选对象和当前目标；允许退回上一步，而非只能重做整次构造。&quot;,
+          &quot;done&quot;: &quot;中途选错一个对象可以就地修正，顺序要求明确。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;B04&quot;,
+          &quot;title&quot;: &quot;Esc与撤销的行为一致&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;常规&quot;,
+          &quot;basis&quot;: &quot;源码：多种弹层、编辑与构造状态&quot;,
+          &quot;pain&quot;: &quot;Esc可能关闭菜单、结束编辑或退出工具，层级不明显。&quot;,
+          &quot;action&quot;: &quot;规定先取消最内层操作；撤销只恢复已提交动作，并提供简短反馈。&quot;,
+          &quot;done&quot;: &quot;取消一个输入不会意外关闭工作区，连按Esc不会误改图形。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;B05&quot;,
+          &quot;title&quot;: &quot;吸附是可见且可控的&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;常规&quot;,
+          &quot;basis&quot;: &quot;源码：网格、曲线、交点吸附&quot;,
+          &quot;pain&quot;: &quot;自动吸附和自由放点看起来相近，容易误判点的依赖关系。&quot;,
+          &quot;action&quot;: &quot;创建前标明吸附对象和位置，提供临时跳过吸附的操作。&quot;,
+          &quot;done&quot;: &quot;用户能辨认自由点、线上点和交点，不被悄悄绑定。&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: &quot;C&quot;,
+      &quot;name&quot;: &quot;对象列表与属性&quot;,
+      &quot;current&quot;: &quot;已有紧凑摘要、搜索筛选、条件体系树、显隐、定义编辑、属性栏及参数滑块。&quot;,
+      &quot;items&quot;: [
+        {
+          &quot;id&quot;: &quot;C01&quot;,
+          &quot;title&quot;: &quot;列表与图形双向定位&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;已有选中联动，需复杂文件评估&quot;,
+          &quot;pain&quot;: &quot;几十个对象时，选到画布对象后仍难在树里找到它。&quot;,
+          &quot;action&quot;: &quot;选中时展开所属分组并滚动定位；列表项聚焦时突出对应图形。&quot;,
+          &quot;done&quot;: &quot;隐藏分组里的对象也能定位，不需要逐组找。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;C02&quot;,
+          &quot;title&quot;: &quot;分清四种不同的隐藏/锁定&quot;,
+          &quot;audience&quot;: &quot;学生&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;源码：列表筛选、显隐、锁定、待求&quot;,
+          &quot;pain&quot;: &quot;从列表筛掉、画布隐藏、锁定位置和设为已知含义不同。&quot;,
+          &quot;action&quot;: &quot;使用一致的状态标记和解释，避免用同一种灰色代表所有状态。&quot;,
+          &quot;done&quot;: &quot;用户能说明某对象为何看不到或拖不动。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;C03&quot;,
+          &quot;title&quot;: &quot;长公式完整查看但不撑开整列&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;常规&quot;,
+          &quot;basis&quot;: &quot;紧凑摘要已实现&quot;,
+          &quot;pain&quot;: &quot;长圆锥曲线方程或构造链可能在摘要中截断。&quot;,
+          &quot;action&quot;: &quot;完善选中展开、完整查看和复制；保留当前单行摘要。&quot;,
+          &quot;done&quot;: &quot;能查看或复制全文，邻近对象不被挤出视野。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;C04&quot;,
+          &quot;title&quot;: &quot;重命名更安全易懂&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;已有稳定ID、名称及符号机制&quot;,
+          &quot;pain&quot;: &quot;显示名称、符号和引用名容易混淆，重名提示难判断。&quot;,
+          &quot;action&quot;: &quot;属性中解释各自作用；改名时预览受影响引用并提示冲突。&quot;,
+          &quot;done&quot;: &quot;改点名后线、条件和公式仍正确关联，原题名称可追溯。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;C05&quot;,
+          &quot;title&quot;: &quot;多个对象一起改样式&quot;,
+          &quot;audience&quot;: &quot;教师&quot;,
+          &quot;priority&quot;: &quot;常规&quot;,
+          &quot;basis&quot;: &quot;已有框选和样式属性，批量入口需评估&quot;,
+          &quot;pain&quot;: &quot;备课时逐条改颜色、虚线、标签开关重复劳动多。&quot;,
+          &quot;action&quot;: &quot;让多选后的共有属性能统一设置，混合值显示明确。&quot;,
+          &quot;done&quot;: &quot;选一组辅助线可一次改为同色虚线，并可一次撤销。&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: &quot;D&quot;,
+      &quot;name&quot;: &quot;基本几何与关系构造&quot;,
+      &quot;current&quot;: &quot;已有点线向量、圆的三种方式、多边形、交点、中点/等分、平行垂直、对称、角平分线和切线。&quot;,
+      &quot;items&quot;: [
+        {
+          &quot;id&quot;: &quot;D01&quot;,
+          &quot;title&quot;: &quot;点选与表单是同一件事&quot;,
+          &quot;audience&quot;: &quot;学生&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;源码：工具构造与表达式构造并存&quot;,
+          &quot;pain&quot;: &quot;点选、命令、属性修改的表达不统一，学习一种方法后不能迁移。&quot;,
+          &quot;action&quot;: &quot;同一构造使用一致名称、参数顺序和结果说明；提供当前点选的可读定义。&quot;,
+          &quot;done&quot;: &quot;看“过A作BC的垂线”就能对应所选对象，不必先懂命令。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;D02&quot;,
+          &quot;title&quot;: &quot;能复用现有对象而不重复造点&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;常规&quot;,
+          &quot;basis&quot;: &quot;已有复用、直接交点选择&quot;,
+          &quot;pain&quot;: &quot;在顶点、边上或交叉位置点选时，不清楚会复用还是新建。&quot;,
+          &quot;action&quot;: &quot;预览明确显示复用/新建及名称，完成后短暂高亮新增对象。&quot;,
+          &quot;done&quot;: &quot;重复构造不会悄悄留下同位置的多份对象。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;D03&quot;,
+          &quot;title&quot;: &quot;多边形闭合更自然&quot;,
+          &quot;audience&quot;: &quot;学生&quot;,
+          &quot;priority&quot;: &quot;常规&quot;,
+          &quot;basis&quot;: &quot;源码：点击首点闭合&quot;,
+          &quot;pain&quot;: &quot;学生可能不知道怎样结束连续选点，也可能误闭合。&quot;,
+          &quot;action&quot;: &quot;在近首点时显示闭合预览，明确结束操作和顶点顺序。&quot;,
+          &quot;done&quot;: &quot;三角形和多边形能顺利完成，错选顶点能退一步。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;D04&quot;,
+          &quot;title&quot;: &quot;一组工具只保留一个清晰入口&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;常规&quot;,
+          &quot;basis&quot;: &quot;圆、角平分线已有合并入口&quot;,
+          &quot;pain&quot;: &quot;圆、内外接圆、角平分线等近似功能仍分散在不同上下文。&quot;,
+          &quot;action&quot;: &quot;梳理工具菜单和选中对象的上下文操作，统一命名与可用条件。&quot;,
+          &quot;done&quot;: &quot;不新增重复按钮，也能发现三点圆、内接圆和直线/射线选项。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;D05&quot;,
+          &quot;title&quot;: &quot;多解、退化和不适用要讲清楚&quot;,
+          &quot;audience&quot;: &quot;学生&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;源码：交点与切线分支、空间工具限制&quot;,
+          &quot;pain&quot;: &quot;“没有实切线”或构造失败容易被理解成软件坏了。&quot;,
+          &quot;action&quot;: &quot;区别选错对象、当前无实解、重合退化和模式不支持；给出下一步。&quot;,
+          &quot;done&quot;: &quot;外点两切线、切点单切线、内部无实切线的反馈可理解。&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: &quot;E&quot;,
+      &quot;name&quot;: &quot;表达式、方程与圆锥曲线&quot;,
+      &quot;current&quot;: &quot;已有公式输入与补全、LaTeX、参数/坐标引用、四类圆锥曲线、焦点准线、参数曲线及范围设置。&quot;,
+      &quot;items&quot;: [
+        {
+          &quot;id&quot;: &quot;E01&quot;,
+          &quot;title&quot;: &quot;不用记命令也能录入常见对象&quot;,
+          &quot;audience&quot;: &quot;学生&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;源码：构造命令、模板与高级表达式&quot;,
+          &quot;pain&quot;: &quot;命令表覆盖广，但同一条命令的参数对新手不直观。&quot;,
+          &quot;action&quot;: &quot;把现有常用命令提示整理为可填写字段的引导，显示即时公式预览。&quot;,
+          &quot;done&quot;: &quot;录入焦点、准线、交点时不需要查源代码或猜参数。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;E02&quot;,
+          &quot;title&quot;: &quot;输入错误定位到具体位置&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;已有解析报错与未完成草稿&quot;,
+          &quot;pain&quot;: &quot;位置编号和“不支持变量”难对应长LaTeX的具体问题。&quot;,
+          &quot;action&quot;: &quot;高亮出错片段，区分拼写、缺少对象、未声明参数和数学无定义。&quot;,
+          &quot;done&quot;: &quot;用户知道要改哪一段，修正前原输入保留。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;E03&quot;,
+          &quot;title&quot;: &quot;分清创建参数与已有常量&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;源码：方程自动引入变量、滑块、冲突处理&quot;,
+          &quot;pain&quot;: &quot;字母自动生成参数有便利，也可能把拼写失误当成新变量。&quot;,
+          &quot;action&quot;: &quot;提交前列出将新建的参数及默认值，允许改名或取消。&quot;,
+          &quot;done&quot;: &quot;不会因少打字符而无意多出一个滑块。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;E04&quot;,
+          &quot;title&quot;: &quot;圆锥曲线的参数名称符合课本&quot;,
+          &quot;audience&quot;: &quot;学生&quot;,
+          &quot;priority&quot;: &quot;常规&quot;,
+          &quot;basis&quot;: &quot;源码：半轴、p、焦距、方向模板&quot;,
+          &quot;pain&quot;: &quot;课本中的p、2p、焦距与半焦距约定不同，容易输错一倍。&quot;,
+          &quot;action&quot;: &quot;在字段旁明确对应标准方程和几何含义，未知与已知区别清楚。&quot;,
+          &quot;done&quot;: &quot;可直接从题干判断填写a、b、p、2c还是轴全长。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;E05&quot;,
+          &quot;title&quot;: &quot;范围与视窗分开理解&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;源码：曲线范围、followView、导出裁切&quot;,
+          &quot;pain&quot;: &quot;画布没显示、定义域限制和计算搜索范围容易混为一谈。&quot;,
+          &quot;action&quot;: &quot;把数学定义域、绘制范围、当前视窗分别命名并提示。&quot;,
+          &quot;done&quot;: &quot;缩放或导出不会让用户误以为数学定义改变了。&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: &quot;F&quot;,
+      &quot;name&quot;: &quot;立体几何与空间观察&quot;,
+      &quot;current&quot;: &quot;已有几何体、工作平面、建系、旋转俯仰、z轴朝上、遮挡、法向量、截面和翻折。&quot;,
+      &quot;items&quot;: [
+        {
+          &quot;id&quot;: &quot;F01&quot;,
+          &quot;title&quot;: &quot;分清看图平面与作图平面&quot;,
+          &quot;audience&quot;: &quot;学生&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;源码：工作平面会影响点的落点与视图&quot;,
+          &quot;pain&quot;: &quot;旋转图形后，新点落在哪个平面不直观。&quot;,
+          &quot;action&quot;: &quot;显示当前作图平面的轻量提示，并分别说明切视角和换作图面。&quot;,
+          &quot;done&quot;: &quot;新建点落在预期面上，不因观察旋转产生误解。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;F02&quot;,
+          &quot;title&quot;: &quot;空间关系工具说明数学含义&quot;,
+          &quot;audience&quot;: &quot;学生&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;源码：线线/线面平行垂直语义不同&quot;,
+          &quot;pain&quot;: &quot;“过点作直线的垂线”在空间中可能不唯一，不能套平面直觉。&quot;,
+          &quot;action&quot;: &quot;在选择对象后说明结果是垂线、法线还是平行平面，所需参照明确。&quot;,
+          &quot;done&quot;: &quot;不会在未给参照平面时悄悄选一条空间垂线。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;F03&quot;,
+          &quot;title&quot;: &quot;选面、选边、选几何体更容易&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;源码：虚拟面、边与几何体对象&quot;,
+          &quot;pain&quot;: &quot;面与线重叠时，截面、法向量等工具的选择目标难辨。&quot;,
+          &quot;action&quot;: &quot;按当前工具优先高亮合法目标，并标明对象所属面/体。&quot;,
+          &quot;done&quot;: &quot;能顺利完成三点截面、两线截面及平面法向量操作。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;F04&quot;,
+          &quot;title&quot;: &quot;建系和视角复位可预见&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;常规&quot;,
+          &quot;basis&quot;: &quot;源码：建系、俯仰和z轴朝上&quot;,
+          &quot;pain&quot;: &quot;调整坐标基准与转动画面的后果不相同，按钮容易混用。&quot;,
+          &quot;action&quot;: &quot;预览原点、轴向和将改变的内容；复位只改变观察时明确提示。&quot;,
+          &quot;done&quot;: &quot;不会为了把z轴看正而误改图形坐标。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;F05&quot;,
+          &quot;title&quot;: &quot;遮挡与翻折的教学反馈&quot;,
+          &quot;audience&quot;: &quot;教师&quot;,
+          &quot;priority&quot;: &quot;常规&quot;,
+          &quot;basis&quot;: &quot;已有遮挡、边线型及变量翻折&quot;,
+          &quot;pain&quot;: &quot;看不清虚线来源；翻折后原面、转轴和角度之间关系不显眼。&quot;,
+          &quot;action&quot;: &quot;突出当前翻折面与转轴，说明隐藏边判定；手动线型覆盖可恢复自动。&quot;,
+          &quot;done&quot;: &quot;学生能辨认前后遮挡和旋转前后位置，不靠配色猜。&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: &quot;G&quot;,
+      &quot;name&quot;: &quot;度量、文字与图面标注&quot;,
+      &quot;current&quot;: &quot;已有长度角度面积周长、角弧线与半径、角名/数值、LaTeX文字、点名坐标、颜色和线型。&quot;,
+      &quot;items&quot;: [
+        {
+          &quot;id&quot;: &quot;G01&quot;,
+          &quot;title&quot;: &quot;区分测量值与已知标注&quot;,
+          &quot;audience&quot;: &quot;教师&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;源码：测量标签、文字和条件并存&quot;,
+          &quot;pain&quot;: &quot;题目给定“AB=3”和测得“AB≈3”看起来可能一样。&quot;,
+          &quot;action&quot;: &quot;在编辑和属性中明确标注来源，避免展示近似值时冒充已知。&quot;,
+          &quot;done&quot;: &quot;教师能控制题图是否显示答案，学生能分清读数与题设。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;G02&quot;,
+          &quot;title&quot;: &quot;点名、公式和角标少遮挡&quot;,
+          &quot;audience&quot;: &quot;教师&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;已有标签拖动与角弧设置&quot;,
+          &quot;pain&quot;: &quot;密集图里标签压线或挤在交点附近，靠逐个拖动很费时。&quot;,
+          &quot;action&quot;: &quot;改善默认避让，保留精细拖动；角弧半径提供可见预览。&quot;,
+          &quot;done&quot;: &quot;常见三角形与空间图不需逐点调整就基本可读。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;G03&quot;,
+          &quot;title&quot;: &quot;样式设置按教学任务组织&quot;,
+          &quot;audience&quot;: &quot;教师&quot;,
+          &quot;priority&quot;: &quot;常规&quot;,
+          &quot;basis&quot;: &quot;已有颜色、虚线、圆点、点名设置&quot;,
+          &quot;pain&quot;: &quot;同一张试题图的主线、辅助线、答案线需要一致样式。&quot;,
+          &quot;action&quot;: &quot;基于现有样式提供易理解的组合设置，保留自定义颜色和已使用颜色。&quot;,
+          &quot;done&quot;: &quot;不必逐项改多个字段就能区分主图与辅助构造。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;G04&quot;,
+          &quot;title&quot;: &quot;文字输入和公式预览一致&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;已有LaTeX文字与实时预览&quot;,
+          &quot;pain&quot;: &quot;普通文字、引号、行内公式与独立公式的输入规则需要猜。&quot;,
+          &quot;action&quot;: &quot;明确最短输入示例，预览与最终图面保持同样的换行和字号。&quot;,
+          &quot;done&quot;: &quot;中英文和公式混排能直接使用，不因智能引号出错。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;G05&quot;,
+          &quot;title&quot;: &quot;精确值与近似值的显示可控&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;常规&quot;,
+          &quot;basis&quot;: &quot;已有分数根式与约等号&quot;,
+          &quot;pain&quot;: &quot;学生想看精确量，教师可能只需少量小数，显示过长会挤图。&quot;,
+          &quot;action&quot;: &quot;统一数值显示偏好，始终区分等号和约等号，不改数学定义。&quot;,
+          &quot;done&quot;: &quot;切换显示精度不改变原值，导出遵守同一设置。&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: &quot;H&quot;,
+      &quot;name&quot;: &quot;参数滑块、动态探究与轨迹&quot;,
+      &quot;current&quot;: &quot;已有参数滑块、联动构造、轨迹方程、局部采样、反向拖动及条件运动控制。&quot;,
+      &quot;items&quot;: [
+        {
+          &quot;id&quot;: &quot;H01&quot;,
+          &quot;title&quot;: &quot;拖动时始终知道谁能动&quot;,
+          &quot;audience&quot;: &quot;学生&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;源码：自由点、依赖点、参照点、受约束点&quot;,
+          &quot;pain&quot;: &quot;不同点的拖动结果不同，不能动时容易误以为卡住。&quot;,
+          &quot;action&quot;: &quot;用状态和光标说明自由、受限、固定及反向控制；给出可动对象入口。&quot;,
+          &quot;done&quot;: &quot;无需盲拖多个点就能找到控制图形的方法。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;H02&quot;,
+          &quot;title&quot;: &quot;滑块范围与手势更顺手&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;常规&quot;,
+          &quot;basis&quot;: &quot;已有数值滑块及范围设置&quot;,
+          &quot;pain&quot;: &quot;步长、精确输入和拖动连续性影响课堂演示。&quot;,
+          &quot;action&quot;: &quot;保留直接拖动，精确数值和范围易编辑；边界和暂停反馈清楚。&quot;,
+          &quot;done&quot;: &quot;能平稳扫描参数，也能准确停在根式或指定数值位置。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;H03&quot;,
+          &quot;title&quot;: &quot;轨迹创建过程可解释&quot;,
+          &quot;audience&quot;: &quot;学生&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;源码：主动/从动与依赖追溯&quot;,
+          &quot;pain&quot;: &quot;选错顺序或不存在依赖时，创建失败难判断原因。&quot;,
+          &quot;action&quot;: &quot;分步展示主动点、从动点及依赖关系；给出可选点和失败原因。&quot;,
+          &quot;done&quot;: &quot;用户能独立完成轨迹，不靠试遍点对。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;H04&quot;,
+          &quot;title&quot;: &quot;轨迹的范围与可靠性清楚&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;已有解析/数值轨迹与扫描范围说明&quot;,
+          &quot;pain&quot;: &quot;局部采样可能被误认为完整轨迹或精确方程。&quot;,
+          &quot;action&quot;: &quot;在图形与详情中区分精确轨迹、候选范围及采样覆盖区间。&quot;,
+          &quot;done&quot;: &quot;不会把一段扫描结果用于证明完整结论。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;H05&quot;,
+          &quot;title&quot;: &quot;拖到无解位置时不打断课堂&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;历史反馈；已有失效保护&quot;,
+          &quot;pain&quot;: &quot;快速拖动可能经过无实交点或切线失效位置，反复弹窗会打断。&quot;,
+          &quot;action&quot;: &quot;保留最后有效构型，用非模态提示标出失效原因和恢复状态。&quot;,
+          &quot;done&quot;: &quot;有效位置可继续拖回，依赖不丢失，不连续弹出阻断提示。&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: &quot;I&quot;,
+      &quot;name&quot;: &quot;按条件作图&quot;,
+      &quot;current&quot;: &quot;已有三种模式、双输入、自动预览、对象待求、构型/参照/轨迹、放置及配置读写；近期已收紧界面。&quot;,
+      &quot;items&quot;: [
+        {
+          &quot;id&quot;: &quot;I01&quot;,
+          &quot;title&quot;: &quot;三种模式的选择一眼明白&quot;,
+          &quot;audience&quot;: &quot;学生&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;源码：有坐标、无坐标、立体工作区&quot;,
+          &quot;pain&quot;: &quot;学生不一定知道解三角形与解析几何应选哪个。&quot;,
+          &quot;action&quot;: &quot;使用题型示意说明差别，显示当前模式且保留各自草稿。&quot;,
+          &quot;done&quot;: &quot;能按题型选模式，不把坐标系开关当求解模式切换。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;I02&quot;,
+          &quot;title&quot;: &quot;对象与条件的入口一致&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;入口已合并一部分，坐标对象表单仍有覆盖差异&quot;,
+          &quot;pain&quot;: &quot;部分对象能写命令却没有对应表单，用户不知该去哪里。&quot;,
+          &quot;action&quot;: &quot;盘点已有能力，补齐常用入口与类型化选取，不增加新的数学功能。&quot;,
+          &quot;done&quot;: &quot;常见圆、变量、向量不必绕到高级命令才能添加。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;I03&quot;,
+          &quot;title&quot;: &quot;输入尽量选择对象而不是猜名字&quot;,
+          &quot;audience&quot;: &quot;学生&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;源码：条件字段包含多种文本引用&quot;,
+          &quot;pain&quot;: &quot;手打AB、平面ABC或命名直线时易拼错，关系类型也可能不合。&quot;,
+          &quot;action&quot;: &quot;字段根据目标类型给现有对象建议，并支持画布点选填入。&quot;,
+          &quot;done&quot;: &quot;填垂直、相切、面积等条件时少记语法且能看见选中对象。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;I04&quot;,
+          &quot;title&quot;: &quot;定位是哪次改动导致待处理&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;已有保留旧预览、错误条目和撤销&quot;,
+          &quot;pain&quot;: &quot;显示上次结果时，用户可能分不清新条件是否已经生效。&quot;,
+          &quot;action&quot;: &quot;突出最近变更与受影响对象，提供定位、编辑、禁用及恢复。&quot;,
+          &quot;done&quot;: &quot;能辨认旧预览，不把数值残差最大的一条直接判为错题。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;I05&quot;,
+          &quot;title&quot;: &quot;自由度、构型与运动区分清楚&quot;,
+          &quot;audience&quot;: &quot;学生&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;已有构型自由度和参照下运动维数&quot;,
+          &quot;pain&quot;: &quot;固定形状仍可能整体运动；“几个解”也可能只是当前候选数。&quot;,
+          &quot;action&quot;: &quot;用简短图文说明三者差别，保持所有位置的口径一致。&quot;,
+          &quot;done&quot;: &quot;0自由度不被理解为没有图形，候选构型不被说成全部解。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;I06&quot;,
+          &quot;title&quot;: &quot;深入搜索、放置和配置不打断主线&quot;,
+          &quot;audience&quot;: &quot;教师&quot;,
+          &quot;priority&quot;: &quot;常规&quot;,
+          &quot;basis&quot;: &quot;已有高级折叠、放置摘要与配置菜单&quot;,
+          &quot;pain&quot;: &quot;求解调参和最终放置容易混进录入步骤；配置跨画布时不知会替换什么。&quot;,
+          &quot;action&quot;: &quot;按录入、检查、确认整理状态；加载前说明合并/替换与名称冲突。&quot;,
+          &quot;done&quot;: &quot;常规题不用设置搜索参数，加载和确认都能预知影响。&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: &quot;J&quot;,
+      &quot;name&quot;: &quot;题干截图、全文与条件核对&quot;,
+      &quot;current&quot;: &quot;已有三种识别入口、完整题文、来源关联、小问作用域、逐条编辑、差异确认及百炼设置。&quot;,
+      &quot;items&quot;: [
+        {
+          &quot;id&quot;: &quot;J01&quot;,
+          &quot;title&quot;: &quot;选图、粘贴、裁剪流程一致&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;已有截图与粘贴入口，历史使用反馈&quot;,
+          &quot;pain&quot;: &quot;选择截图、粘贴和裁剪完成后的可用状态曾不直观。&quot;,
+          &quot;action&quot;: &quot;统一加载反馈、失败原因和下一步按钮状态，保留用户选图。&quot;,
+          &quot;done&quot;: &quot;常见截图能稳定进入识别，不需要猜是否已加载。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;J02&quot;,
+          &quot;title&quot;: &quot;看原文就能核对转换结果&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;已有原文/条件对照与来源高亮&quot;,
+          &quot;pain&quot;: &quot;句子拆分、符号改名和模型估计框仍需人工判断。&quot;,
+          &quot;action&quot;: &quot;短语与条件逐条对应；突出改名、待确认与来源精度，保留原文。&quot;,
+          &quot;done&quot;: &quot;不会把推导关系冒充题设，能直接找到每条对应文字。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;J03&quot;,
+          &quot;title&quot;: &quot;公共条件、小问假设与目标分清&quot;,
+          &quot;audience&quot;: &quot;学生&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;已有小问树和角色设置&quot;,
+          &quot;pain&quot;: &quot;学生容易把“证明”或另一小问的假设勾成已知。&quot;,
+          &quot;action&quot;: &quot;默认清晰区分角色，当前有效条件突出，兄弟小问不叠加。&quot;,
+          &quot;done&quot;: &quot;切换小问时知道哪些条件正在参与构图。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;J04&quot;,
+          &quot;title&quot;: &quot;识别失败可以局部修正&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;已有当前文本提取、编辑和差异确认&quot;,
+          &quot;pain&quot;: &quot;某一条错了若只能整题重识别，既慢又增加调用费用。&quot;,
+          &quot;action&quot;: &quot;让原文、关系和源码的局部修正更直接，必要时仅重新处理选定范围并先提示调用。&quot;,
+          &quot;done&quot;: &quot;修正一项时其他已确认内容和来源关联保留。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;J05&quot;,
+          &quot;title&quot;: &quot;云端调用状态与费用预期清楚&quot;,
+          &quot;audience&quot;: &quot;教师&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;已有主动调用、取消和错误提示&quot;,
+          &quot;pain&quot;: &quot;文本识别与条件提取的区别、取消后是否计费可能不清楚。&quot;,
+          &quot;action&quot;: &quot;调用前简短说明发送内容与阶段；区分网络、鉴权、额度和语法错误。&quot;,
+          &quot;done&quot;: &quot;不自动反复重试；失败后原文仍在，也能继续手动录入。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;J06&quot;,
+          &quot;title&quot;: &quot;全文复制可直接用于备课&quot;,
+          &quot;audience&quot;: &quot;教师&quot;,
+          &quot;priority&quot;: &quot;常规&quot;,
+          &quot;basis&quot;: &quot;已有全文LaTeX、预览和原始稿恢复&quot;,
+          &quot;pain&quot;: &quot;自然换行、公式分隔、选项与缺字标记会影响复制质量。&quot;,
+          &quot;action&quot;: &quot;整理复制前预览、段落规则和不确定字符，明确修订稿与原始稿。&quot;,
+          &quot;done&quot;: &quot;粘到笔记或排版工具后只需少量整理，不补写截图之外的题文。&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: &quot;K&quot;,
+      &quot;name&quot;: &quot;文件、复制与导出&quot;,
+      &quot;current&quot;: &quot;已有绘图文件、未保存保护、撤销重做、PNG/SVG/剪贴板、裁切背景尺寸和配置读写。&quot;,
+      &quot;items&quot;: [
+        {
+          &quot;id&quot;: &quot;K01&quot;,
+          &quot;title&quot;: &quot;导出前看清最后会得到什么&quot;,
+          &quot;audience&quot;: &quot;教师&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;源码：导出按钮与参数分处不同区域&quot;,
+          &quot;pain&quot;: &quot;输出尺寸、透明背景、裁切和字号需要在多个地方确认。&quot;,
+          &quot;action&quot;: &quot;把现有导出参数与预览集中呈现，保留一键重复上次设置。&quot;,
+          &quot;done&quot;: &quot;不必反复导出试错，就知道边界、背景和文字大小。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;K02&quot;,
+          &quot;title&quot;: &quot;复制到Word/PPT后仍清楚&quot;,
+          &quot;audience&quot;: &quot;教师&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;已有剪贴板图片、PNG与SVG&quot;,
+          &quot;pain&quot;: &quot;投影和试卷的分辨率、线宽、背景需求不同。&quot;,
+          &quot;action&quot;: &quot;按常见用途给清晰设置说明或预设，避免裁掉标签。&quot;,
+          &quot;done&quot;: &quot;Word/PPT中缩放后线与字清楚，透明背景没有意外底色。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;K03&quot;,
+          &quot;title&quot;: &quot;保存、另存、导出术语不混淆&quot;,
+          &quot;audience&quot;: &quot;学生&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;已有原生文件菜单与标题状态&quot;,
+          &quot;pain&quot;: &quot;导出图片不等于保存可编辑绘图，关闭后可能发现无法继续编辑。&quot;,
+          &quot;action&quot;: &quot;在菜单和成功反馈中强调可编辑文件与图片的差别。&quot;,
+          &quot;done&quot;: &quot;能找回可继续编辑的文件，并知道当前是否已保存。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;K04&quot;,
+          &quot;title&quot;: &quot;改已有图时有安全退路&quot;,
+          &quot;audience&quot;: &quot;教师&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;已有未保存保护、撤销与状态恢复机制&quot;,
+          &quot;pain&quot;: &quot;备课时临时探索可能破坏原题图，取消与撤销作用域不容易判断。&quot;,
+          &quot;action&quot;: &quot;把另存副本、恢复和撤销的边界讲清楚，避免覆盖新编辑。&quot;,
+          &quot;done&quot;: &quot;修改、条件预览和关闭操作均可预知是否影响原稿。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;K05&quot;,
+          &quot;title&quot;: &quot;两台电脑继续做同一张图&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;常规&quot;,
+          &quot;basis&quot;: &quot;已有文件、字体配置和双平台构建&quot;,
+          &quot;pain&quot;: &quot;不同电脑上的字体、版本与文件路径可能改变显示或打开结果。&quot;,
+          &quot;action&quot;: &quot;打开时提示缺失字体和版本差异；保证关联题文、条件随文件保留。&quot;,
+          &quot;done&quot;: &quot;Mac保存的图在Windows可继续编辑，缺项有明确提示。&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: &quot;L&quot;,
+      &quot;name&quot;: &quot;课堂演示、帮助与可靠性&quot;,
+      &quot;current&quot;: &quot;已有操作指南、状态提示、字体配置、更新检查及双平台程序；实际课堂体验需进一步评估。&quot;,
+      &quot;items&quot;: [
+        {
+          &quot;id&quot;: &quot;L01&quot;,
+          &quot;title&quot;: &quot;演示时把画布留给学生&quot;,
+          &quot;audience&quot;: &quot;教师&quot;,
+          &quot;priority&quot;: &quot;常规&quot;,
+          &quot;basis&quot;: &quot;已有侧栏收起、全图和视角控制&quot;,
+          &quot;pain&quot;: &quot;投影时编辑器、细碎按钮与选中框会分散注意力。&quot;,
+          &quot;action&quot;: &quot;基于现有显隐控制整理演示布局，返回编辑时保留上下文。&quot;,
+          &quot;done&quot;: &quot;隐藏编辑界面后能专注看图，退出后不丢选择与视角。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;L02&quot;,
+          &quot;title&quot;: &quot;帮助直接对应当前任务&quot;,
+          &quot;audience&quot;: &quot;学生&quot;,
+          &quot;priority&quot;: &quot;常规&quot;,
+          &quot;basis&quot;: &quot;已有指南、命令提示和工具步骤&quot;,
+          &quot;pain&quot;: &quot;遇到问题时读长命令列表效率低。&quot;,
+          &quot;action&quot;: &quot;提供短的任务式帮助，覆盖作垂线、画圆锥曲线、建系、条件构图等。&quot;,
+          &quot;done&quot;: &quot;从当前界面能找到相关步骤，不需要先理解全部功能。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;L03&quot;,
+          &quot;title&quot;: &quot;慢与卡住有区别&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;历史Windows性能反馈；已有Worker与取消&quot;,
+          &quot;pain&quot;: &quot;复杂曲线或空间遮挡时，用户可能不知道计算还在进行还是无响应。&quot;,
+          &quot;action&quot;: &quot;给出及时反馈和可取消操作，按典型教学文件检查交互流畅度。&quot;,
+          &quot;done&quot;: &quot;忙碌时界面可操作，取消后保留有效图形，不用强制退出。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;L04&quot;,
+          &quot;title&quot;: &quot;更新不妨碍上课和现有文件&quot;,
+          &quot;audience&quot;: &quot;教师&quot;,
+          &quot;priority&quot;: &quot;优先&quot;,
+          &quot;basis&quot;: &quot;已有Gitee/GitHub更新机制&quot;,
+          &quot;pain&quot;: &quot;上课前启动若等待网络或更新，会影响课堂节奏。&quot;,
+          &quot;action&quot;: &quot;后台检查、明确稍后处理；下载/重启前保护当前文件。&quot;,
+          &quot;done&quot;: &quot;断网也能及时进入软件，不被迫更新或丢失未保存内容。&quot;
+        },
+        {
+          &quot;id&quot;: &quot;L05&quot;,
+          &quot;title&quot;: &quot;键盘、触控板和高分屏一致好用&quot;,
+          &quot;audience&quot;: &quot;共用&quot;,
+          &quot;priority&quot;: &quot;常规&quot;,
+          &quot;basis&quot;: &quot;已有快捷键、焦点及触屏操作规则&quot;,
+          &quot;pain&quot;: &quot;缩放、右键、悬停编辑和小按钮在不同设备上表现不同。&quot;,
+          &quot;action&quot;: &quot;逐项检查焦点、可点击范围、文字对比与触控板手势，提供非悬停入口。&quot;,
+          &quot;done&quot;: &quot;不用鼠标也能完成常见操作，触屏不缺失关键按钮。&quot;
+        }
+      ]
+    }
+  ]
+}
+  &lt;/script&gt;
+&lt;/div&gt;
+&lt;style&gt;
+#mathdraw-usability-review{color:var(--foreground);max-width:100%;overflow-wrap:anywhere}
+#mathdraw-usability-review .review-actions{margin:12px 0;align-items:end}
+#mathdraw-usability-review .review-actions&gt;label{flex:1 1 180px;max-width:280px}
+#mathdraw-usability-review .review-group{margin:16px 0}
+#mathdraw-usability-review .review-group&gt;summary{color:var(--foreground);padding:8px 0}
+#mathdraw-usability-review .review-group-count{color:var(--muted-foreground);margin-left:8px}
+#mathdraw-usability-review .review-baseline{color:var(--muted-foreground);margin:8px 0}
+#mathdraw-usability-review .review-item{padding:12px 0;border-top:1px solid var(--border)}
+#mathdraw-usability-review .review-meta{margin:5px 0;color:var(--muted-foreground)}
+#mathdraw-usability-review .review-detail{display:grid;grid-template-columns:76px minmax(0,1fr);gap:5px 10px;margin:8px 0}
+#mathdraw-usability-review .review-detail dt,#mathdraw-usability-review .review-detail dd{margin:0}
+#mathdraw-usability-review .review-detail dt{color:var(--muted-foreground)}
+#mathdraw-usability-review .review-item&gt;.form-label{display:block;margin-top:8px}
+#mathdraw-usability-review #review-output{margin-top:12px}
+&lt;/style&gt;
+&lt;script&gt;
+(()=&gt;{
+ const root=document.getElementById(&#x27;mathdraw-usability-review&#x27;);
+ const data=JSON.parse(root.querySelector(&#x27;#review-data&#x27;).textContent);
+ const items=data.groups.flatMap(g=&gt;g.items),ids=new Set(items.map(i=&gt;i.id)),nodes=new Map();
+ const key=&#x27;mathdraw-usability-review-20261025-v1&#x27;;
+ let answers={},overall=&#x27;&#x27;,savedAt=0,saveTimer;
+ const el=(tag,text,cls)=&gt;{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;};
+ const status=root.querySelector(&#x27;#review-status&#x27;),error=root.querySelector(&#x27;#review-error&#x27;);
+ const valid=(v)=&gt;{if(!v||typeof v!==&#x27;object&#x27;||Array.isArray(v))throw Error(&#x27;文件内容不是选择清单&#x27;);const src=v.answers;if(!src||typeof src!==&#x27;object&#x27;||Array.isArray(src))throw Error(&#x27;缺少选择与备注&#x27;);const out={};for(const [id,a]of Object.entries(src)){if(!ids.has(id))throw Error(&#x27;存在不属于本清单的编号：&#x27;+id);if(!a||typeof a.selected!==&#x27;boolean&#x27;||typeof a.note!==&#x27;string&#x27;||a.note.length&gt;1000)throw Error(&#x27;编号 &#x27;+id+&#x27; 的选择或备注格式有误&#x27;);out[id]={selected:a.selected,note:a.note};}if(v.overall!==undefined&amp;&amp;(typeof v.overall!==&#x27;string&#x27;||v.overall.length&gt;2000))throw Error(&#x27;整体备注格式有误&#x27;);return {answers:out,overall:v.overall||&#x27;&#x27;,savedAt:Number.isFinite(v.savedAt)?v.savedAt:0};};
+ const unpack=(state)=&gt;state?.privateContent?.answers?state.privateContent:state?.answers?state:null;
+ try{const host=unpack(window.openai?.widgetState);if(host){const v=valid(host);answers=v.answers;overall=v.overall;savedAt=v.savedAt;}}catch{}
+ try{const cached=JSON.parse(localStorage.getItem(key)||&#x27;null&#x27;);if(cached){const v=valid(cached);if(v.savedAt&gt;savedAt){answers=v.answers;overall=v.overall;savedAt=v.savedAt;}}}catch{}
+ const snapshot=()=&gt;({format:&#x27;mathdraw-usability-review&#x27;,version:1,date:data.date,savedAt:Date.now(),answers,overall});
+ const sync=()=&gt;{let count=0;for(const [id,n]of nodes){const a=answers[id]||{selected:false,note:&#x27;&#x27;};n.check.checked=a.selected;n.note.value=a.note;if(a.selected)count++;}root.querySelector(&#x27;#review-count&#x27;).textContent=&#x27;已选 &#x27;+count+&#x27; / &#x27;+items.length+&#x27; 项&#x27;;for(const g of data.groups){const n=g.items.filter(i=&gt;answers[i.id]?.selected).length;root.querySelector(&#x27;[data-count=&quot;&#x27;+g.id+&#x27;&quot;]&#x27;).textContent=n+&#x27; 已选 / &#x27;+g.items.length+&#x27; 项&#x27;;}root.querySelector(&#x27;#review-overall&#x27;).value=overall;};
+ const persist=()=&gt;{clearTimeout(saveTimer);const full=snapshot();savedAt=full.savedAt;let local=false;try{localStorage.setItem(key,JSON.stringify(full));local=true;}catch{}const chosen=items.filter(i=&gt;answers[i.id]?.selected).map(i=&gt;i.id);const state={modelContent:{selectedIds:chosen,notes:Object.fromEntries(chosen.filter(id=&gt;answers[id].note).map(id=&gt;[id,answers[id].note]))},privateContent:full};const fit=new TextEncoder().encode(JSON.stringify(state)).length&lt;14500;if(!fit){state.modelContent.notes={};state.privateContent={answers:Object.fromEntries(chosen.map(id=&gt;[id,{selected:true,note:&#x27;&#x27;}])),overall:&#x27;&#x27;,savedAt};}if(window.openai?.setWidgetState){Promise.resolve().then(()=&gt;window.openai.setWidgetState(state)).then(()=&gt;{status.textContent=fit?&#x27;选择与备注已记住；建议另存选择文件。&#x27;:&#x27;勾选已记住；备注较多，请保存选择文件保留全文。&#x27;;}).catch(()=&gt;{status.textContent=local?&#x27;已保存在当前浏览器；可另存选择文件。&#x27;:&#x27;请保存选择文件，以免关闭后丢失。&#x27;;});}else status.textContent=local?&#x27;已保存在当前浏览器；可另存选择文件。&#x27;:&#x27;请保存选择文件，以免关闭后丢失。&#x27;;root.querySelector(&#x27;#review-output&#x27;).hidden=true;};
+ const update=(id,patch)=&gt;{answers[id]={selected:false,note:&#x27;&#x27;,...answers[id],...patch};sync();persist();};
+ root.querySelector(&#x27;#review-total&#x27;).textContent=data.groups.length+&#x27; 类 · &#x27;+items.length+&#x27; 项&#x27;;
+ for(const [index,g]of data.groups.entries()){
+  const group=el(&#x27;details&#x27;,undefined,&#x27;review-group&#x27;);group.open=index===0;
+  const summary=el(&#x27;summary&#x27;);summary.append(el(&#x27;strong&#x27;,g.id+&#x27; · &#x27;+g.name));const count=el(&#x27;span&#x27;,&#x27;&#x27;,&#x27;text-small review-group-count&#x27;);count.dataset.count=g.id;summary.append(count);group.append(summary,el(&#x27;div&#x27;,&#x27;当前已有：&#x27;+g.current,&#x27;review-baseline text-small&#x27;));
+  for(const i of g.items){const row=el(&#x27;article&#x27;,undefined,&#x27;review-item&#x27;);const label=el(&#x27;label&#x27;,undefined,&#x27;form-check&#x27;);const check=el(&#x27;input&#x27;,undefined,&#x27;form-check-input&#x27;);check.type=&#x27;checkbox&#x27;;check.id=&#x27;review-&#x27;+i.id;check.addEventListener(&#x27;change&#x27;,()=&gt;update(i.id,{selected:check.checked}));label.append(check,el(&#x27;span&#x27;,i.id+&#x27;  &#x27;+i.title,&#x27;form-check-label&#x27;));row.append(label,el(&#x27;div&#x27;,i.audience+&#x27; · &#x27;+i.priority+&#x27; · &#x27;+i.basis,&#x27;review-meta text-small&#x27;));
+   const dl=el(&#x27;dl&#x27;,undefined,&#x27;review-detail&#x27;);for(const [name,text]of [[&#x27;使用障碍&#x27;,i.pain],[&#x27;建议调整&#x27;,i.action],[&#x27;完成标准&#x27;,i.done]])dl.append(el(&#x27;dt&#x27;,name),el(&#x27;dd&#x27;,text));row.append(dl);
+   const noteLabel=el(&#x27;label&#x27;,&#x27;我的备注&#x27;,&#x27;form-label&#x27;),note=el(&#x27;textarea&#x27;,undefined,&#x27;form-control&#x27;);note.id=&#x27;note-&#x27;+i.id;note.rows=2;note.maxLength=1000;note.placeholder=&#x27;偏好、具体例子、先后顺序，或不希望改变的行为&#x27;;note.setAttribute(&#x27;aria-label&#x27;,i.id+&#x27; &#x27;+i.title+&#x27; 的备注&#x27;);note.addEventListener(&#x27;input&#x27;,()=&gt;{answers[i.id]={selected:false,note:&#x27;&#x27;,...answers[i.id],note:note.value};clearTimeout(saveTimer);saveTimer=setTimeout(persist,350);});noteLabel.append(note);row.append(noteLabel);group.append(row);nodes.set(i.id,{check,note});
+  }root.querySelector(&#x27;#review-groups&#x27;).append(group);
+ }
+ root.querySelector(&#x27;#review-overall&#x27;).addEventListener(&#x27;input&#x27;,e=&gt;{overall=e.target.value;clearTimeout(saveTimer);saveTimer=setTimeout(persist,350);});
+ root.querySelector(&#x27;#review-summary&#x27;).addEventListener(&#x27;click&#x27;,()=&gt;{clearTimeout(saveTimer);persist();const chosen=items.filter(i=&gt;answers[i.id]?.selected),lines=[&#x27;# Mathdraw 易用性优化选择&#x27;,&#x27;&#x27;,...chosen.map(i=&gt;&#x27;- [x] &#x27;+i.id+&#x27; &#x27;+i.title+&#x27;\n  备注：&#x27;+(answers[i.id].note||&#x27;（未填写）&#x27;))];const other=items.filter(i=&gt;!answers[i.id]?.selected&amp;&amp;answers[i.id]?.note);if(other.length)lines.push(&#x27;&#x27;,&#x27;## 未勾选项的备注&#x27;,...other.map(i=&gt;&#x27;- [ ] &#x27;+i.id+&#x27; &#x27;+i.title+&#x27;\n  备注：&#x27;+answers[i.id].note));if(overall)lines.push(&#x27;&#x27;,&#x27;## 整体备注&#x27;,overall);if(!chosen.length)lines.splice(2,0,&#x27;尚未勾选优化项。&#x27;);root.querySelector(&#x27;#review-output-text&#x27;).value=lines.join(&#x27;\n&#x27;);root.querySelector(&#x27;#review-output&#x27;).hidden=false;root.querySelector(&#x27;#review-output-text&#x27;).focus();root.querySelector(&#x27;#review-output-text&#x27;).select();});
+ root.querySelector(&#x27;#review-save&#x27;).addEventListener(&#x27;click&#x27;,()=&gt;{persist();const blob=new Blob([JSON.stringify(snapshot(),null,2)],{type:&#x27;application/json;charset=utf-8&#x27;});const url=URL.createObjectURL(blob),a=el(&#x27;a&#x27;);a.href=url;a.download=&#x27;Mathdraw-易用性优化选择.json&#x27;;root.append(a);a.click();a.remove();setTimeout(()=&gt;URL.revokeObjectURL(url),1000);status.textContent=&#x27;已发起保存；请保留下载的选择文件。&#x27;;});
+ root.querySelector(&#x27;#review-load&#x27;).addEventListener(&#x27;change&#x27;,async e=&gt;{const file=e.target.files?.[0];if(!file)return;try{if(file.size&gt;250000)throw Error(&#x27;选择文件过大，请使用本清单导出的JSON&#x27;);const raw=JSON.parse(await file.text());if(raw.format!==&#x27;mathdraw-usability-review&#x27;||raw.version!==1)throw Error(&#x27;不是本清单的选择文件&#x27;);const v=valid(raw);answers=v.answers;overall=v.overall;error.hidden=true;sync();persist();status.textContent=&#x27;已载入选择与备注。&#x27;;}catch(ex){error.textContent=ex.message;error.hidden=false;}finally{e.target.value=&#x27;&#x27;;}});
+ window.addEventListener(&#x27;openai:set_globals&#x27;,event=&gt;{const incoming=unpack(event.detail?.globals?.widgetState);if(!incoming)return;try{const v=valid(incoming);if(v.savedAt&lt;=savedAt)return;answers=v.answers;overall=v.overall;savedAt=v.savedAt;sync();}catch{}});
+ sync();status.textContent=&#x27;默认不勾选。填写后可生成已选清单，或保存选择文件。&#x27;;
+})();
+&lt;/script&gt;
+
+&lt;script src=&quot;https://unpkg.com/@floating-ui/core@1.7.3/dist/floating-ui.core.umd.min.js&quot;&gt;&lt;/script&gt;
+&lt;script src=&quot;https://unpkg.com/@floating-ui/dom@1.7.4/dist/floating-ui.dom.umd.min.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+(() =&gt; {
+  if (window.FloatingUIDOM == null) {
+    return;
+  }
+  const { autoUpdate, computePosition, flip, offset, shift, size } =
+    window.FloatingUIDOM;
+  const tooltipPlacements = new Set([&quot;top&quot;, &quot;right&quot;, &quot;bottom&quot;, &quot;left&quot;]);
+  const tooltipId = `codex-visualization-tooltip-${
+    window.crypto?.randomUUID?.() ?? Date.now().toString(36)
+  }`;
+  const tooltipGap = 5;
+  const hoverDelay = 700;
+  const skipDelay = 300;
+  let activeTrigger = null;
+  let pendingTrigger = null;
+  let tooltip = null;
+  let openTimeout = null;
+  let autoUpdateCleanup = null;
+  let positionRequest = 0;
+  let skipDelayUntil = 0;
+  let lastPointerWasTouch = false;
+  let pinnedByTouch = false;
+
+  const getTrigger = (event) =&gt; {
+    for (const target of event.composedPath()) {
+      if (target?.nodeType === Node.ELEMENT_NODE) {
+        const trigger = target.closest(&quot;[data-tooltip]&quot;);
+        if (trigger) return trigger;
+      }
+    }
+    return null;
+  };
+  const containsTarget = (trigger, target) =&gt;
+    target?.nodeType != null &amp;&amp; trigger.contains(target);
+  const getContent = (trigger) =&gt;
+    trigger.getAttribute(&quot;data-tooltip&quot;)?.trim() ?? &quot;&quot;;
+  const getPlacement = (trigger) =&gt; {
+    const placement = trigger.getAttribute(&quot;data-tooltip-placement&quot;);
+    return tooltipPlacements.has(placement) ? placement : &quot;top&quot;;
+  };
+  const getTooltip = () =&gt; {
+    if (tooltip == null) {
+      tooltip = document.createElement(&quot;div&quot;);
+      tooltip.id = tooltipId;
+      tooltip.className = &quot;tooltip&quot;;
+      tooltip.setAttribute(&quot;role&quot;, &quot;tooltip&quot;);
+    }
+    return tooltip;
+  };
+  const setDescribedBy = (trigger, described) =&gt; {
+    const ids = new Set(
+      (trigger.getAttribute(&quot;aria-describedby&quot;) ?? &quot;&quot;)
+        .split(/\s+/)
+        .filter(Boolean),
+    );
+    if (described) {
+      ids.add(tooltipId);
+    } else {
+      ids.delete(tooltipId);
+    }
+    if (ids.size === 0) {
+      trigger.removeAttribute(&quot;aria-describedby&quot;);
+    } else {
+      trigger.setAttribute(&quot;aria-describedby&quot;, [...ids].join(&quot; &quot;));
+    }
+  };
+  const clearOpenTimeout = () =&gt; {
+    if (openTimeout != null) {
+      window.clearTimeout(openTimeout);
+      openTimeout = null;
+    }
+    pendingTrigger = null;
+  };
+  const closeTooltip = (activateSkipDelay = true) =&gt; {
+    clearOpenTimeout();
+    pinnedByTouch = false;
+    positionRequest += 1;
+    autoUpdateCleanup?.();
+    autoUpdateCleanup = null;
+    if (activeTrigger == null) {
+      return;
+    }
+    setDescribedBy(activeTrigger, false);
+    activeTrigger = null;
+    tooltip?.remove();
+    if (activateSkipDelay) {
+      skipDelayUntil = Date.now() + skipDelay;
+    }
+  };
+  const updatePosition = (trigger, floating) =&gt; {
+    const request = ++positionRequest;
+    void computePosition(trigger, floating, {
+      middleware: [
+        offset(tooltipGap),
+        flip({ padding: tooltipGap }),
+        shift({ padding: tooltipGap }),
+        size({
+          padding: tooltipGap,
+          apply({ availableHeight, availableWidth, elements }) {
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-width&quot;,
+              `${Math.max(0, availableWidth)}px`,
+            );
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-height&quot;,
+              `${Math.max(0, availableHeight)}px`,
+            );
+          },
+        }),
+      ],
+      placement: getPlacement(trigger),
+      strategy: &quot;fixed&quot;,
+    })
+      .then(({ x, y }) =&gt; {
+        if (activeTrigger !== trigger || request !== positionRequest) {
+          return;
+        }
+        const scale = window.devicePixelRatio || 1;
+        floating.style.transform = `translate(${Math.round(x * scale) / scale}px, ${Math.round(y * scale) / scale}px)`;
+        floating.style.visibility = &quot;visible&quot;;
+      })
+      .catch(() =&gt; {
+        if (activeTrigger === trigger &amp;&amp; request === positionRequest) {
+          closeTooltip(false);
+        }
+      });
+  };
+  const openTooltip = (trigger) =&gt; {
+    const content = getContent(trigger);
+    if (!trigger.isConnected || content.length === 0) {
+      return;
+    }
+    clearOpenTimeout();
+    if (activeTrigger === trigger) {
+      return;
+    }
+    closeTooltip();
+    const floating = getTooltip();
+    floating.textContent = content;
+    floating.style.visibility = &quot;hidden&quot;;
+    floating.style.transform = &quot;translate(0, 0)&quot;;
+    document.body.appendChild(floating);
+    activeTrigger = trigger;
+    setDescribedBy(trigger, true);
+    autoUpdateCleanup = autoUpdate(trigger, floating, () =&gt; {
+      updatePosition(trigger, floating);
+    });
+  };
+  const requestOpen = (trigger, immediate = false) =&gt; {
+    if (
+      getContent(trigger).length === 0 ||
+      activeTrigger === trigger ||
+      pendingTrigger === trigger
+    ) {
+      return;
+    }
+    clearOpenTimeout();
+    pendingTrigger = trigger;
+    const delay =
+      immediate || activeTrigger != null || Date.now() &lt; skipDelayUntil
+        ? 0
+        : hoverDelay;
+    if (delay === 0) {
+      openTooltip(trigger);
+      return;
+    }
+    openTimeout = window.setTimeout(() =&gt; {
+      openTimeout = null;
+      pendingTrigger = null;
+      openTooltip(trigger);
+    }, delay);
+  };
+  const handlePointerOpen = (event) =&gt; {
+    if (event.pointerType === &quot;touch&quot;) {
+      return;
+    }
+    const trigger = getTrigger(event);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    requestOpen(trigger);
+  };
+  const handlePointer = (event) =&gt; {
+    lastPointerWasTouch =
+      event.type === &quot;pointerdown&quot; &amp;&amp; event.pointerType === &quot;touch&quot;;
+  };
+  const handleTouchClick = (event) =&gt; {
+    const isTouch = event.pointerType === &quot;touch&quot; || lastPointerWasTouch;
+    lastPointerWasTouch = false;
+    if (!isTouch || event.detail === 0) {
+      return;
+    }
+    const trigger = getTrigger(event);
+    if (
+      trigger == null ||
+      !trigger.isConnected ||
+      getContent(trigger).length === 0 ||
+      (pinnedByTouch &amp;&amp; activeTrigger === trigger)
+    ) {
+      if (pinnedByTouch) {
+        closeTooltip();
+      }
+      return;
+    }
+    openTooltip(trigger);
+    pinnedByTouch = activeTrigger === trigger;
+    window.setTimeout(() =&gt; {
+      if (activeTrigger === trigger &amp;&amp; !trigger.isConnected) {
+        closeTooltip(false);
+      }
+    }, 0);
+  };
+  const handleLeave = (event) =&gt; {
+    if (pinnedByTouch) {
+      return;
+    }
+    const trigger = getTrigger(event);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const handleFocusIn = (event) =&gt; {
+    const trigger = getTrigger(event);
+    if (trigger?.matches(&quot;:focus-visible&quot;)) {
+      requestOpen(trigger, true);
+    }
+  };
+  const handleKeyDown = (event) =&gt; {
+    if (event.key === &quot;Escape&quot;) {
+      closeTooltip();
+    }
+  };
+  const handleContextMenu = (event) =&gt; {
+    lastPointerWasTouch = false;
+    const trigger = getTrigger(event);
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const handlers = {
+    pointerover: handlePointerOpen,
+    pointerdown: handlePointer,
+    pointercancel: handlePointer,
+    click: handleTouchClick,
+    pointerout: handleLeave,
+    focusin: handleFocusIn,
+    focusout: handleLeave,
+    keydown: handleKeyDown,
+    contextmenu: handleContextMenu,
+  };
+  const roots = new Map();
+  const handledEvents = new WeakSet();
+  const handleEvent = (event) =&gt; {
+    if (handledEvents.has(event)) return;
+    handledEvents.add(event);
+    handlers[event.type](event);
+  };
+  const discoverRoots = (node) =&gt; {
+    if (node.shadowRoot) listen(node.shadowRoot);
+    for (const element of node.querySelectorAll(&quot;*&quot;)) {
+      if (element.shadowRoot) listen(element.shadowRoot);
+    }
+  };
+  const listen = (root) =&gt; {
+    if (roots.has(root)) return;
+    for (const type of Object.keys(handlers)) root.addEventListener(type, handleEvent);
+    const observer = new window.MutationObserver((records) =&gt; {
+      for (const { addedNodes } of records) {
+        for (const node of addedNodes) {
+          if (node.nodeType === Node.ELEMENT_NODE) discoverRoots(node);
+        }
+      }
+      for (const [root, cleanup] of roots) {
+        if (root.host &amp;&amp; !root.host.isConnected) {
+          cleanup();
+          roots.delete(root);
+        }
+      }
+      if (activeTrigger &amp;&amp; !activeTrigger.isConnected) closeTooltip(false);
+    });
+    observer.observe(root, { childList: true, subtree: true });
+    roots.set(root, () =&gt; {
+      observer.disconnect();
+      for (const type of Object.keys(handlers)) root.removeEventListener(type, handleEvent);
+    });
+    discoverRoots(root);
+  };
+  const destroy = () =&gt; {
+    closeTooltip(false);
+    lastPointerWasTouch = false;
+    for (const cleanup of roots.values()) cleanup();
+    roots.clear();
+    tooltip = null;
+  };
+
+  // Events between children of one shadow root never reach the document.
+  listen(document);
+  window.addEventListener(&quot;pagehide&quot;, destroy, { once: true });
+})();
+&lt;/script&gt;
+&lt;script id=&quot;codex-visualization-tabs&quot;&gt;
+(() =&gt; {
+  const selector = &#x27;.nav[role=&quot;tablist&quot;] [role=&quot;tab&quot;]&#x27;;
+  const disabled = &#x27;:disabled,[aria-disabled=&quot;true&quot;]&#x27;;
+  const selectTab = (selected) =&gt; {
+    const panelId = selected.getAttribute(&quot;aria-controls&quot;);
+    for (const tab of selected.closest(&#x27;[role=&quot;tablist&quot;]&#x27;).querySelectorAll(&#x27;[role=&quot;tab&quot;]&#x27;)) {
+      const active = tab === selected;
+      tab.classList.toggle(&quot;active&quot;, active);
+      tab.setAttribute(&quot;aria-selected&quot;, String(active));
+      const id = tab.getAttribute(&quot;aria-controls&quot;);
+      const panel = id &amp;&amp; document.getElementById(id);
+      if (panel != null) {
+        panel.hidden = id !== panelId;
+        if (!panel.hidden &amp;&amp; selected.id) {
+          panel.setAttribute(&quot;aria-labelledby&quot;, selected.id);
+        }
+      }
+    }
+  };
+  const interact = (event) =&gt; {
+    const tab = event.target?.closest?.(selector);
+    if (event.defaultPrevented || tab == null || tab.matches(disabled)) {
+      return;
+    }
+    if (event.type === &quot;click&quot;) {
+      selectTab(tab);
+      return;
+    }
+    const tabs = Array.from(
+      tab.closest(&#x27;[role=&quot;tablist&quot;]&#x27;).querySelectorAll(&#x27;[role=&quot;tab&quot;]&#x27;),
+    ).filter((candidate) =&gt; !candidate.matches(disabled));
+    const current = tabs.indexOf(tab);
+    let next;
+    if (event.key === &quot;ArrowRight&quot; || event.key === &quot;ArrowDown&quot;) {
+      next = (current + 1) % tabs.length;
+    } else if (event.key === &quot;ArrowLeft&quot; || event.key === &quot;ArrowUp&quot;) {
+      next = (current + tabs.length - 1) % tabs.length;
+    } else if (event.key === &quot;Home&quot;) {
+      next = 0;
+    } else if (event.key === &quot;End&quot;) {
+      next = tabs.length - 1;
+    } else {
+      return;
+    }
+    event.preventDefault();
+    tabs[next].focus();
+    selectTab(tabs[next]);
+  };
+
+  for (const list of document.querySelectorAll(&#x27;.nav[role=&quot;tablist&quot;]&#x27;)) {
+    const selected =
+      list.querySelector(&#x27;[role=&quot;tab&quot;][aria-selected=&quot;true&quot;]&#x27;) ??
+      list.querySelector(&#x27;[role=&quot;tab&quot;].active&#x27;) ??
+      list.querySelector(&#x27;[role=&quot;tab&quot;]&#x27;);
+    if (selected != null) {
+      selectTab(selected);
+    }
+  }
+  document.addEventListener(&quot;click&quot;, interact);
+  document.addEventListener(&quot;keydown&quot;, interact);
+  window.addEventListener(&quot;pagehide&quot;, () =&gt; {
+    document.removeEventListener(&quot;click&quot;, interact);
+    document.removeEventListener(&quot;keydown&quot;, interact);
+  }, { once: true });
+})();
+&lt;/script&gt;
+&lt;script id=&quot;codex-visualization-carousel&quot;&gt;
+  (() =&gt; {
+    for (const root of document.querySelectorAll(&quot;.viz-carousel&quot;)) {
+      const panels = Array.from(
+        root.querySelectorAll(&quot;:scope &gt; [data-variant]&quot;),
+      );
+      if (panels.length === 0) {
+        continue;
+      }
+      root.setAttribute(&quot;role&quot;, &quot;group&quot;);
+      panels.forEach((panel, index) =&gt; {
+        panel.hidden = index !== 0;
+        panel.setAttribute(&quot;role&quot;, &quot;group&quot;);
+        if (!panel.hasAttribute(&quot;aria-label&quot;)) {
+          panel.setAttribute(&quot;aria-label&quot;, panel.dataset.variant);
+        }
+      });
+      root.dataset.activeVariant = panels[0].dataset.variant;
+      if (panels.length === 1) {
+        continue;
+      }
+
+      const controls = document.createElement(&quot;div&quot;);
+      controls.className = &quot;viz-carousel-controls&quot;;
+      // Portable copy of the settings dropdown&#x27;s legacy glyph; no 14px icon-package preset matches it.
+      // https://github.com/openai/openai/blob/master/codex/codex-apps/webview/src/icons/chevron.svg
+      controls.innerHTML = `
+      &lt;button type=&quot;button&quot; class=&quot;viz-carousel-previous cursor-interaction&quot;&gt;&lt;i data-lucide=&quot;chevron-left&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;
+      &lt;details class=&quot;viz-carousel-picker&quot;&gt;
+        &lt;summary class=&quot;cursor-interaction&quot;&gt;
+          &lt;span class=&quot;viz-carousel-count tabular-nums&quot;&gt;&lt;/span&gt;
+          &lt;span class=&quot;viz-carousel-name&quot;&gt;&lt;/span&gt;
+          &lt;svg class=&quot;viz-carousel-caret&quot; width=&quot;14&quot; height=&quot;14&quot; viewBox=&quot;0 0 20 21&quot; fill=&quot;none&quot; aria-hidden=&quot;true&quot; focusable=&quot;false&quot;&gt;
+            &lt;path d=&quot;M15.2793 7.71101C15.539 7.45131 15.961 7.45131 16.2207 7.71101C16.4804 7.97071 16.4804 8.39272 16.2207 8.65242L10.4707 14.4024C10.211 14.6621 9.78902 14.6621 9.52932 14.4024L3.77932 8.65242L3.69436 8.54792C3.52385 8.28979 3.55205 7.93828 3.77932 7.71101C4.00659 7.48374 4.3581 7.45554 4.61623 7.62605L4.72073 7.71101L10 12.9903L15.2793 7.71101Z&quot; fill=&quot;currentColor&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;0.6&quot; /&gt;
+          &lt;/svg&gt;
+        &lt;/summary&gt;
+        &lt;div class=&quot;viz-carousel-options&quot;&gt;&lt;/div&gt;
+      &lt;/details&gt;
+      &lt;button type=&quot;button&quot; class=&quot;viz-carousel-next cursor-interaction&quot;&gt;&lt;i data-lucide=&quot;chevron-right&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;`;
+      const previous = controls.querySelector(&quot;.viz-carousel-previous&quot;);
+      const next = controls.querySelector(&quot;.viz-carousel-next&quot;);
+      const picker = controls.querySelector(&quot;.viz-carousel-picker&quot;);
+      const summary = picker.querySelector(&quot;summary&quot;);
+      const count = controls.querySelector(&quot;.viz-carousel-count&quot;);
+      const name = controls.querySelector(&quot;.viz-carousel-name&quot;);
+      const options = controls.querySelector(&quot;.viz-carousel-options&quot;);
+      const status = document.createElement(&quot;span&quot;);
+      status.className = &quot;sr-only&quot;;
+      status.setAttribute(&quot;role&quot;, &quot;status&quot;);
+      status.setAttribute(&quot;aria-live&quot;, &quot;polite&quot;);
+      status.setAttribute(&quot;aria-atomic&quot;, &quot;true&quot;);
+      previous.setAttribute(
+        &quot;aria-label&quot;,
+        root.dataset.previousLabel ?? &quot;Previous variant&quot;,
+      );
+      next.setAttribute(&quot;aria-label&quot;, root.dataset.nextLabel ?? &quot;Next variant&quot;);
+
+      let active = 0;
+      let mousePointerId = null;
+      let summaryPointerHandled = false;
+      summary.addEventListener(&quot;pointerdown&quot;, (event) =&gt; {
+        summaryPointerHandled =
+          event.pointerType === &quot;mouse&quot; &amp;&amp; event.button === 0 &amp;&amp; !event.ctrlKey;
+        if (!summaryPointerHandled) {
+          return;
+        }
+        event.preventDefault();
+        summary.focus({ preventScroll: true });
+        picker.open = !picker.open;
+        mousePointerId = picker.open ? event.pointerId : null;
+      });
+      summary.addEventListener(&quot;click&quot;, (event) =&gt; {
+        if (summaryPointerHandled &amp;&amp; event.detail &gt; 0) {
+          event.preventDefault();
+        }
+      });
+      const choices = panels.map((panel, index) =&gt; {
+        const choice = document.createElement(&quot;button&quot;);
+        choice.type = &quot;button&quot;;
+        choice.className = &quot;cursor-interaction&quot;;
+        choice.textContent = panel.dataset.variant;
+        choice.addEventListener(&quot;click&quot;, () =&gt; {
+          select(index);
+          summary.focus();
+        });
+        choice.addEventListener(&quot;pointerup&quot;, (event) =&gt; {
+          if (
+            picker.open &amp;&amp;
+            event.pointerType === &quot;mouse&quot; &amp;&amp;
+            event.button === 0 &amp;&amp;
+            event.pointerId === mousePointerId
+          ) {
+            choice.click();
+          }
+        });
+        options.appendChild(choice);
+        return choice;
+      });
+      const select = (index) =&gt; {
+        const changed = active !== index;
+        active = index;
+        panels.forEach((panel, position) =&gt; {
+          panel.hidden = position !== active;
+          choices[position].setAttribute(
+            &quot;aria-current&quot;,
+            String(position === active),
+          );
+        });
+        root.dataset.activeVariant = panels[active].dataset.variant;
+        count.textContent = `${active + 1} / ${panels.length}`;
+        name.textContent = panels[active].dataset.variant;
+        picker.open = false;
+        mousePointerId = null;
+        if (changed) {
+          status.textContent = `${count.textContent}: ${name.textContent}`;
+        }
+      };
+      previous.addEventListener(&quot;click&quot;, () =&gt;
+        select((active + panels.length - 1) % panels.length),
+      );
+      next.addEventListener(&quot;click&quot;, () =&gt;
+        select((active + 1) % panels.length),
+      );
+      picker.addEventListener(&quot;keydown&quot;, (event) =&gt; {
+        if (event.key === &quot;Escape&quot; &amp;&amp; picker.open) {
+          event.preventDefault();
+          picker.open = false;
+          mousePointerId = null;
+          summary.focus();
+          return;
+        }
+        if (event.altKey || event.ctrlKey || event.metaKey) {
+          return;
+        }
+        const index = choices.indexOf(document.activeElement);
+        let nextIndex;
+        if (event.key === &quot;ArrowDown&quot;) {
+          nextIndex = index &lt; 0 ? active : (index + 1) % choices.length;
+        } else if (event.key === &quot;ArrowUp&quot;) {
+          nextIndex = index &lt; 0 ? active : (index + choices.length - 1) % choices.length;
+        } else if (picker.open &amp;&amp; event.key === &quot;Home&quot;) {
+          nextIndex = 0;
+        } else if (picker.open &amp;&amp; event.key === &quot;End&quot;) {
+          nextIndex = choices.length - 1;
+        } else {
+          return;
+        }
+        event.preventDefault();
+        picker.open = true;
+        choices[nextIndex].focus();
+      });
+      picker.addEventListener(&quot;focusout&quot;, (event) =&gt; {
+        if (!picker.contains(event.relatedTarget)) {
+          picker.open = false;
+          mousePointerId = null;
+        }
+      });
+      const dismiss = (event) =&gt; {
+        if (!summary.contains(event.target)) {
+          mousePointerId = null;
+        }
+        if (!picker.contains(event.target)) {
+          picker.open = false;
+        }
+      };
+      const endPointerSelection = () =&gt; {
+        mousePointerId = null;
+      };
+      const sizePicker = () =&gt; {
+        root.style.setProperty(
+          &quot;--viz-carousel-picker-height&quot;,
+          `${picker.open ? options.offsetHeight : 0}px`,
+        );
+      };
+      picker.addEventListener(&quot;toggle&quot;, sizePicker);
+      window.addEventListener(&quot;resize&quot;, sizePicker);
+      document.addEventListener(&quot;pointerdown&quot;, dismiss);
+      document.addEventListener(&quot;pointerup&quot;, endPointerSelection);
+      document.addEventListener(&quot;pointercancel&quot;, endPointerSelection);
+      window.addEventListener(&quot;blur&quot;, endPointerSelection);
+      window.addEventListener(
+        &quot;pagehide&quot;,
+        () =&gt; {
+          document.removeEventListener(&quot;pointerdown&quot;, dismiss);
+          document.removeEventListener(&quot;pointerup&quot;, endPointerSelection);
+          document.removeEventListener(&quot;pointercancel&quot;, endPointerSelection);
+          window.removeEventListener(&quot;blur&quot;, endPointerSelection);
+          window.removeEventListener(&quot;resize&quot;, sizePicker);
+        },
+        { once: true },
+      );
+      root.append(controls, status);
+      select(0);
+    }
+  })();
+&lt;/script&gt;
+&lt;script id=&quot;codex-visualization-lucide&quot; async src=&quot;https://unpkg.com/lucide@1.17.0/dist/umd/lucide.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+(() =&gt; {
+  const initialize = () =&gt; {
+    globalThis.lucide?.createIcons({ attrs: { width: 16, height: 16 } });
+  };
+  if (globalThis.lucide != null) {
+    initialize();
+    return;
+  }
+  document
+    .getElementById(&quot;codex-visualization-lucide&quot;)
+    ?.addEventListener(&quot;load&quot;, initialize, { once: true });
+})();
+&lt;/script&gt;
+
+&lt;/body&gt;
+&lt;/html&gt;
+"></iframe>
+
+<script>(() => {
+  const frame = document.getElementById("codex-visualization");
+  if (!(frame instanceof HTMLIFrameElement)) {
+    return;
+  }
+  const isShare = document.documentElement.classList.contains(
+    "visualization-share-root",
+  );
+  let viewportHeight = globalThis.innerHeight;
+  let sizeFingerprint = null;
+  let sizeWriteTimeout;
+  let lastSize = null;
+  let pendingSize = null;
+  const storageKey = `codex:visualization-widget-state-v2:${JSON.stringify([
+    globalThis.location.pathname,
+    globalThis.location.search,
+  ])}`;
+  const sizeStorageKey = `${storageKey}:share-size-v1`;
+  const parseState = (serializedState) => {
+    if (
+      typeof serializedState !== "string" ||
+      new TextEncoder().encode(serializedState).length > 16 * 1024
+    ) {
+      throw new TypeError(
+        "Widget state must be a JSON object of at most 16 KiB",
+      );
+    }
+    /** @type {unknown} */
+    const state = JSON.parse(serializedState);
+    if (
+      state == null ||
+      typeof state !== "object" ||
+      Array.isArray(state) ||
+      ("imageIds" in state &&
+        (!Array.isArray(state.imageIds) || state.imageIds.length > 0))
+    ) {
+      throw new TypeError("Widget state must be a JSON object");
+    }
+    const storedState = { modelContent: null, privateContent: null, ...state };
+    const canonicalState = JSON.stringify(
+      storedState,
+      (_key, /** @type {unknown} */ value) => {
+        if (typeof value === "number" && !Number.isFinite(value)) {
+          throw new TypeError("Widget state must contain finite numbers");
+        }
+        return value;
+      },
+    );
+    if (new TextEncoder().encode(canonicalState).length > 16 * 1024) {
+      throw new TypeError(
+        "Widget state must be a JSON object of at most 16 KiB",
+      );
+    }
+    return storedState;
+  };
+  let storage = null;
+  let state = null;
+  try {
+    const localStorage = globalThis.localStorage;
+    const probeKey = `${storageKey}:probe`;
+    localStorage.setItem(probeKey, "1");
+    localStorage.removeItem(probeKey);
+    storage = localStorage;
+    const savedState = storage.getItem(storageKey);
+    if (savedState != null) {
+      try {
+        state = parseState(savedState);
+      } catch {
+        // Invalid saved state does not disable future writes.
+      }
+    }
+  } catch {
+    storage = null;
+  }
+  const persistSize = () => {
+    globalThis.clearTimeout(sizeWriteTimeout);
+    if (pendingSize == null) {
+      return;
+    }
+    try {
+      storage?.setItem(sizeStorageKey, pendingSize);
+    } catch {
+      // A denied or full cache must not affect the visualization.
+    }
+    pendingSize = null;
+  };
+  if (isShare) {
+    globalThis.addEventListener("pagehide", persistSize);
+  }
+  const initialGlobals = {
+    widgetState: state,
+    statePersistence: storage == null ? "none" : "local",
+  };
+
+  const channel = new MessageChannel();
+  channel.port1.addEventListener("message", (event) => {
+    const data = event.data;
+    if (typeof data !== "object" || data == null) {
+      return;
+    }
+    if (data.type === "widget-state-write") {
+      if (!Number.isSafeInteger(data.id) || data.id <= 0) {
+        return;
+      }
+      let ok = false;
+      try {
+        if (storage != null) {
+          const state = parseState(data.state);
+          storage.setItem(storageKey, JSON.stringify(state));
+          ok = true;
+        }
+      } catch {
+        // Storage denial, quota limits, and invalid state return a failed receipt.
+      }
+      channel.port1.postMessage({
+        type: "widget-state-result",
+        id: data.id,
+        ok,
+      });
+      return;
+    }
+    if (data.type === "height") {
+      const height = data.height;
+      if (
+        typeof height !== "number" ||
+        !Number.isFinite(height) ||
+        height < 0
+      ) {
+        return;
+      }
+      if (height <= 10_000) {
+        const width = isShare && storage != null ? frame.clientWidth : null;
+        frame.style.height = Math.ceil(height) + "px";
+        if (isShare && storage != null) {
+          const size = JSON.stringify({
+            fingerprint: sizeFingerprint,
+            width,
+            viewportHeight: globalThis.innerHeight,
+            dark: globalThis.matchMedia("(prefers-color-scheme: dark)").matches,
+            scale: globalThis.devicePixelRatio,
+            height: Math.ceil(height),
+          });
+          if (size !== lastSize) {
+            lastSize = size;
+            pendingSize = size;
+            globalThis.clearTimeout(sizeWriteTimeout);
+            sizeWriteTimeout = globalThis.setTimeout(persistSize, 100);
+          }
+        }
+      }
+      if (isShare) {
+        // Keep unusually tall content accessible without accepting an unbounded height.
+        if (height > 10_000 && Number.parseFloat(frame.style.height) === 0) {
+          frame.style.removeProperty("height");
+        }
+        frame.scrolling = height > 10_000 ? "auto" : "no";
+        document.documentElement.classList.add("visualization-share-ready");
+      }
+      return;
+    }
+    if (data.type === "scroll-to") {
+      const top = data.top;
+      if (
+        typeof top === "number" &&
+        Number.isFinite(top) &&
+        top >= 0 &&
+        globalThis.navigator.userActivation?.isActive === true
+      ) {
+        globalThis.scrollTo({
+          top: Math.ceil(
+            globalThis.scrollY + frame.getBoundingClientRect().top + top,
+          ),
+        });
+      }
+      return;
+    }
+    if (data.type === "open-external") {
+      const rawHref = data.href;
+      if (typeof rawHref !== "string") {
+        return;
+      }
+      let href;
+      try {
+        const url = new URL(rawHref, document.baseURI);
+        if (url.protocol !== "https:") {
+          return;
+        }
+        href = url.href;
+      } catch {
+        return;
+      }
+      if (globalThis.navigator.userActivation?.isActive === true) {
+        const anchor = document.createElement("a");
+        anchor.href = href;
+        anchor.rel = "noopener noreferrer";
+        anchor.target = "_blank";
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+      }
+      return;
+    }
+    if (data.type === "follow-up") {
+      const prompt = data.prompt;
+      if (
+        typeof prompt !== "string" ||
+        globalThis.navigator.userActivation?.isActive !== true
+      ) {
+        return;
+      }
+      const title = data.title;
+      globalThis.prompt(typeof title === "string" ? title : prompt, prompt);
+    }
+  });
+  channel.port1.start();
+  const srcdoc = frame.dataset.srcdoc;
+  if (srcdoc == null) {
+    return;
+  }
+  globalThis.addEventListener("resize", () => {
+    const height = Number.parseFloat(frame.style.height);
+    if (!isShare && (!Number.isFinite(height) || height <= viewportHeight)) {
+      frame.style.removeProperty("height");
+    }
+    viewportHeight = globalThis.innerHeight;
+    channel.port1.postMessage({ type: "measure" });
+  });
+  frame.addEventListener(
+    "load",
+    () => {
+      frame.contentWindow?.postMessage(
+        { type: "codex-visualization-initialize" },
+        "*",
+        [channel.port2],
+      );
+    },
+    { once: true },
+  );
+  // Match the trusted bootstrap element, not the same text in an authored title.
+  const frameHtml = srcdoc.replace(
+    '<script type="application/json" id="codex-visualization-widget-state">__CODEX_VISUALIZATION_WIDGET_STATE__<\/script>',
+    () =>
+      '<script type="application/json" id="codex-visualization-widget-state">' +
+      JSON.stringify(initialGlobals).replaceAll("<", "\\u003c") +
+      "<\/script>",
+  );
+  if (isShare && storage != null) {
+    // Fingerprint the rendered document, including restored widget state, without
+    // storing its content. This is a layout cache, not a security identity.
+    let hash = 5381;
+    for (let index = 0; index < frameHtml.length; index += 1) {
+      hash = (hash * 33 + frameHtml.charCodeAt(index)) % 4_294_967_296;
+    }
+    sizeFingerprint = hash.toString(36);
+    try {
+      const size = JSON.parse(storage.getItem(sizeStorageKey) ?? "null");
+      if (
+        size?.fingerprint === sizeFingerprint &&
+        size.width === frame.clientWidth &&
+        size.viewportHeight === globalThis.innerHeight &&
+        size.dark ===
+          globalThis.matchMedia("(prefers-color-scheme: dark)").matches &&
+        size.scale === globalThis.devicePixelRatio &&
+        typeof size.height === "number" &&
+        Number.isFinite(size.height) &&
+        size.height >= 0 &&
+        size.height <= 10_000
+      ) {
+        frame.style.height = size.height + "px";
+      }
+    } catch {
+      // Ignore missing or invalid cache entries and measure the live frame.
+    }
+  }
+  frame.srcdoc = frameHtml;
+  delete frame.dataset.srcdoc;
+})();
+</script>
+</body>
+</html>
