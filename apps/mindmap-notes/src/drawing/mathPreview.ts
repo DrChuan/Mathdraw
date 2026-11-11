@@ -7,7 +7,11 @@ export function symbolLatex(name:string):string {
     .replace(/([A-Za-z][A-Za-z0-9]*)_([A-Za-z0-9_]+)/g,(_all,base,sub)=>`${base}_{${sub.replace(/_/g,"\\,")}}`);
 }
 function latex(ast: Ast, parent = 0): string {
-  if (ast.type === "number") return String(ast.value);
+  if (ast.type === "number") {
+    if(ast.constant)return ast.constant==='pi'?'\\pi':'\\mathrm{e}';
+    const literal=ast.literal??String(ast.value),scientific=literal.match(/^([+-]?[\d.]+)[eE]([+-]?\d+)$/);
+    return scientific?`${scientific[1]}\\times 10^{${Number(scientific[2])}}`:literal;
+  }
   if (ast.type === "variable") return ast.name === "pi" ? "\\pi" : symbolLatex(ast.name);
   if (ast.type === "call") {
     const args = ast.args.map(a => latex(a)).join(", ");

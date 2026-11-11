@@ -35,7 +35,7 @@ export function repairRecognitionSymbols(q:RecognizedQuestion):RecognizedQuestio
  const objects=new Set(q.items.flatMap(i=>splitRecognitionSource(i.source).flatMap(row=>{const m=row.match(/^([A-Za-z][A-Za-z0-9_]*)\s*(?::|=\s*[A-Za-z]+\()/);return m?[m[1]]:[];})));
  for(const item of q.items)for(const token of item.source.match(identifier)??[])used.add(token);
  const scopes=new Map(q.scopes.map(s=>[s.id,s])),states=new Map<string,Map<string,{name:string;source:string;implicit?:boolean}>>(),done=new Set<string>(),items=new Map<string,RecognitionItem>(),warnings=[...q.warnings];
- const fresh=(name:string)=>{const base=/^[A-Za-z](?:_[A-Za-z0-9]+)?$/.test(name)?name:'t';let i=1,next=`${base}_${i}`;if(!isVariableSymbol(next))next=`t_${i}`;while(used.has(next)){i++;next=isVariableSymbol(`${base}_${i}`)?`${base}_${i}`:`t_${i}`;}used.add(next);return next;};
+ const fresh=(name:string)=>{const base=/^[A-Za-z][A-Za-z0-9_]*$/.test(name)?name:'t';let i=1,next=`${base}_${i}`;if(!isVariableSymbol(next))next=`t_${i}`;while(used.has(next)){i++;next=isVariableSymbol(`${base}_${i}`)?`${base}_${i}`:`t_${i}`;}used.add(next);return next;};
  const visit=(scope:string)=>{
   if(done.has(scope))return;const parent=scopes.get(scope)?.parent;if(parent)visit(parent);
   const state=new Map(parent?states.get(parent):undefined);
@@ -45,11 +45,11 @@ export function repairRecognitionSymbols(q:RecognizedQuestion):RecognizedQuestio
    // question binding, not an unrelated helper declared by a preceding item.
    for(const name of aliases.keys())if(mentions(item.quote??'',name))aliases.delete(name);
    for(const row of splitRecognitionSource(item.source)){
-    const declaration=row.match(/^([A-Za-z](?:_[A-Za-z0-9]+)?)\s*=\s*\?$/);
+    const declaration=row.match(/^([A-Za-z][A-Za-z0-9_]*)\s*=\s*\?$/);
     if(declaration){const name=declaration[1],previous=state.get(name),original=mentions(item.quote??'',name);
      if(!item.modified&&previous&&original&&previous.name===name){aliases.delete(name);continue;}
      const sameImplicit=previous?.implicit&&previous.source===item.id;
-     const target=item.modified||sameImplicit?name:previous||points.has(name)||objects.has(name)||!(name==='e'||isVariableSymbol(name))?fresh(name):name;
+     const target=item.modified||sameImplicit?name:previous||points.has(name)||objects.has(name)||!(isVariableSymbol(name)||name==='e'&&original)?fresh(name):name;
      state.set(name,{name:target,source:item.id});aliases.set(name,target);if(target!==name)renames.push({from:name,to:target});
      rows.push(`${target}=?`);continue;
     }

@@ -23,8 +23,14 @@ const monoDivide=(a:string,b:string):string|undefined=>{const u=exps(a),v=exps(b
 const support=(p:P)=>new Set([...p.keys()].flatMap(k=>exps(k).flatMap((n,i)=>n?[i]:[])));
 const degree=(p:P)=>Math.max(0,...[...p.keys()].map(k=>exps(k).reduce((a,b)=>a+b,0)));
 function substitute(p:P,replacements:Map<number,P>,budget:Budget):P{let out:P=new Map();for(const [k,c]of p){let term=constant(c);for(const [i,n]of exps(k).entries())if(n)term=product(term,power(replacements.get(i)??variable(i),n,budget),budget);out=add(out,term);}return out;}
-function fractionAdd(a:R,b:R,budget:Budget):R{return {n:add(product(a.n,b.d,budget),product(b.n,a.d,budget)),d:product(a.d,b.d,budget)};}
-function fractionProduct(a:R,b:R,budget:Budget):R{return {n:product(a.n,b.n,budget),d:product(a.d,b.d,budget)};}
+function fractionAdd(a:R,b:R,budget:Budget):R{
+ // Domains were registered when the operands were parsed. Carrying the
+ // denominator of 0/b into the sum introduces spurious polynomial factors.
+ if(!a.n.size)return b;if(!b.n.size)return a;
+ if(a.d.size===b.d.size&&[...a.d].every(([k,c])=>b.d.get(k)&&cmp(c,b.d.get(k)!)===0))return {n:add(a.n,b.n),d:a.d};
+ return {n:add(product(a.n,b.d,budget),product(b.n,a.d,budget)),d:product(a.d,b.d,budget)};
+}
+function fractionProduct(a:R,b:R,budget:Budget):R{if(!a.n.size||!b.n.size)return {n:new Map(),d:one()};return {n:product(a.n,b.n,budget),d:product(a.d,b.d,budget)};}
 function fractionSubstitute(p:P,replacements:Map<number,R>,budget:Budget,roots?:Map<number,Root>):R{const simplify=(r:R):R=>{
  if(roots)r={n:reduceByRoots(r.n,roots,budget),d:reduceByRoots(r.d,roots,budget)};
  if(!r.d.size)return r;
@@ -110,6 +116,38 @@ class Compiler {
   if(m[2]==='=')this.equations.push(r.n);
   else this.guards.push({p:product(r.n,r.d,this.budget),op:m[2] as Relation});
  }
+}
+/** Shared rational normal form for construction elimination and the solver.
+ * Clearing/cancelling a denominator never clears its original domain guard.
+ * Algebraic radicals stay with Compiler/solveExactSystem, not decimalized here. */
+export function normalizeRationalExpression(source:string,names:string[]){
+ try{
+  const budget=new Budget(Infinity,50000),compiler=new Compiler(names,budget),r=compiler.parse(source);
+  if(compiler.names.length!==names.length||compiler.equations.length)return;
+  const value={n:r.n,d:r.d},variables=[...new Set([...support(r.n),...support(r.d)])];
+  if(!value.d.size)return;
+  if(variables.length===1){const index=variables[0],g=gcdU(univariate(value.n,index),univariate(value.d,index));if(g.length>1){const from=(u:U):P=>new Map(u.flatMap((c,power)=>c.n?[[key(Array.from({length:index+1},(_,i)=>i===index?power:0)),c] as [string,Q]]:[]));value.n=from(udiv(univariate(value.n,index),g).quotient);value.d=from(udiv(univariate(value.d,index),g).quotient);}}
+  const factor=divide(O,value.d.get(lead(value.d))!);value.n=scalar(value.n,factor);value.d=scalar(value.d,factor);
+  return {source:support(value.d).size?fractionFormula(value,names):formula(scalar(value.n,divide(O,value.d.get('')!)),names),guards:compiler.guards.map(g=>`${formula(g.p,names)}${g.op}0`)};
+ }catch{return;}
+}
+export function normalizeRationalRelations(sources:string[],names:string[]){
+ const result:string[]=[],seen=new Set<string>();
+ const push=(p:P,op:Relation)=>{
+  if(!support(p).size){if(!satisfied(sign(p.get('')??Z),op)&&!seen.has('1=0')){seen.add('1=0');result.push('1=0');}return;}
+  // Only a positive factor is removed from an inequality.
+  const first=p.get(lead(p))!,magnitude=first.n<0n?neg(first):first;
+  p=scalar(p,divide(O,op==='='||op==='!='?first:magnitude));
+  const text=`${formula(p,names)}${op}0`;if(!seen.has(text)){seen.add(text);result.push(text);}
+ };
+ for(const source of sources){
+  try{
+   const budget=new Budget(Infinity,50000),compiler=new Compiler(names,budget);compiler.relation(source);
+   if(compiler.names.length!==names.length)throw Error('保留代数根式');
+   for(const p of compiler.equations)push(p,'=');for(const g of compiler.guards)push(g.p,g.op);
+  }catch{if(!seen.has(source)){seen.add(source);result.push(source);}}
+ }
+ return result;
 }
 /** Real zero sets of semidefinite quadratic equations can be smaller than
  * their complex algebraic varieties. Exact completion of squares handles
@@ -306,7 +344,7 @@ export function validateRootExpression(root:Root,deadline=Date.now()+1000){
 }
 /** Recheck stored algebraic evidence, not just its decimal rendering. */
 export function validateExactCertificate(c:ExactCertificate,values:number[],expectedSources:string[],variables:string[],deadline=Date.now()+1000):void{
- const budget=new Budget(deadline);if(!c||c.version!==1||(!Array.isArray(c.sources)||c.sources.length>500||JSON.stringify(c.sources.slice(0,expectedSources.length))!==JSON.stringify(expectedSources))||JSON.stringify(c.variables)!==JSON.stringify(variables)||!c.roots||!c.assignments||!Array.isArray(c.auxiliary)||c.auxiliary.some(n=>typeof n!=='string'||!/^aux_\d+$/.test(n))||Object.keys(c.assignments).length!==variables.length+c.auxiliary.length||Object.keys(c.roots).length>100)throw Error('精确解证书与当前问题不一致');
+ const budget=new Budget(deadline);if(!c||c.version!==1||(!Array.isArray(c.sources)||c.sources.length>500||c.sources.some(s=>typeof s!=='string'||s.length>32768))||JSON.stringify(c.variables)!==JSON.stringify(variables)||!c.roots||!c.assignments||!Array.isArray(c.auxiliary)||c.auxiliary.some(n=>typeof n!=='string'||!/^aux_\d+$/.test(n))||Object.keys(c.assignments).length!==variables.length+c.auxiliary.length||Object.keys(c.roots).length>100)throw Error('精确解证书与当前问题不一致');
  const names=Object.keys(c.roots);if(names.some(n=>!/^root_\d+$/.test(n)))throw Error('代数生成元名称无效');
  const compiler=new Compiler(names,budget),scope=new Map<number,Root>();names.forEach((name,i)=>{validateRoot(c.roots[name],budget);validateRootExpression(c.roots[name],budget.deadline);scope.set(i,copy(c.roots[name]));});
  const maps=new Map<number,R>();[...variables,...c.auxiliary].forEach((v,i)=>{const source=c.assignments[v];if(typeof source!=='string'||source.length>32768)throw Error('精确坐标表达式无效');maps.set(i,compiler.parse(source));const r=maps.get(i)!,d=signWithRoots(r.d,scope,budget);if(!d)throw Error('精确坐标分母为零');const computed=num(evalFraction(r,scope,budget));if(i<variables.length&&(!Number.isFinite(values[i])||Math.abs(computed-values[i])>1e-11*Math.max(1,Math.abs(computed))))throw Error('坐标与精确证书不一致');});
@@ -315,4 +353,15 @@ export function validateExactCertificate(c:ExactCertificate,values:number[],expe
  if(JSON.stringify(original.names)!==JSON.stringify([...variables,...c.auxiliary]))throw Error('辅助变量与原始条件不一致');
  const check=(g:Guard)=>{const r=fractionSubstitute(g.p,maps,budget,scope);const d=signWithRoots(r.d,scope,budget);return d!==0&&satisfied(signWithRoots(r.n,scope,budget)*d,g.op);};
  if(!original.equations.every(p=>check({p,op:'='}))||!original.guards.every(check))throw Error('精确证书不满足原始条件');
+ // A normal-form upgrade may change spelling, order and eliminated definitions.
+ // Prove the current model at the stored algebraic coordinates; string-prefix
+ // equality is not mathematical evidence and breaks legitimate old files.
+ if(JSON.stringify(c.sources.slice(0,expectedSources.length))!==JSON.stringify(expectedSources)){
+  const current=new Compiler(variables,budget);for(const source of expectedSources)current.relation(source);current.normalize();
+  const currentMaps=new Map([...maps].filter(([i])=>i<variables.length));
+  for(const [signature,index]of current.calls){const prior=original.calls.get(signature);if(prior===undefined||!maps.has(prior))throw Error('当前根式辅助量无法由旧证书验证，请重新计算');currentMaps.set(index,maps.get(prior)!);}
+  for(const [name,index]of current.formal){const prior=original.formal.get(name);if(prior!==undefined&&maps.has(prior))currentMaps.set(index,maps.get(prior)!);}
+  const verify=(g:Guard)=>{const r=fractionSubstitute(g.p,currentMaps,budget,scope),d=signWithRoots(r.d,scope,budget);return d!==0&&satisfied(signWithRoots(r.n,scope,budget)*d,g.op);};
+  if(!current.equations.every(p=>verify({p,op:'='}))||!current.guards.every(verify))throw Error('精确证书不满足当前条件模型');
+ }
 }

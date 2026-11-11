@@ -1,3 +1,4 @@
+import {submitConstraintDrawing} from './constraintSubmission';
 import RecentChanges from './RecentChanges';
 import {ConfigurationMenu,SolverStatus} from './ConstraintUI';
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
@@ -137,7 +138,7 @@ function SpatialConstraintWorkbench({docRef,existing,change,close,highlight,init
         for(const x of [curve.range[0],curve.range[1]])for(const y of [curve.range[2],curve.range[3]])ps.push(project(fromPlane(plane,x,y),next));
       }
       if(ps.length){const xs=ps.map(p=>p[0]),ys=ps.map(p=>p[1]);next.view={...next.view,center:[(Math.min(...xs)+Math.max(...xs))/2,(Math.min(...ys)+Math.max(...ys))/2],scale:Math.max(2,Math.min(72,650/Math.max(1,Math.max(...xs)-Math.min(...xs)),440/Math.max(1,Math.max(...ys)-Math.min(...ys))))};}
-      if(change(next)){highlight([preview.set.id]);close();}
+      submitConstraintDrawing(next,change);highlight([preview.set.id]);close();
     }catch(e){setError(text(e));}
   };
   const currentBranch=result?.branches[branch];

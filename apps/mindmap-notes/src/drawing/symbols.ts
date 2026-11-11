@@ -9,4 +9,4 @@ export function numericSource(source: string, known: string[] = []): string {
     });
 }
 export const numericFunctions = builtins;
-export const isVariableSymbol = (s: string) => /^[A-Za-z](?:_[A-Za-z0-9]+)?$/.test(s) && !builtins.has(s.toLowerCase()) && !["x","y","z","u","v"].includes(s);
+export const isVariableSymbol = (s: string) => /^(?:[A-Za-z][0-9]*|[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]+)$/.test(s) && !builtins.has(s.toLowerCase()) && !["x","y","z","u","v"].includes(s);

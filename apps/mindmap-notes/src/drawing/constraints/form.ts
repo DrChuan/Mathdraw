@@ -46,17 +46,20 @@ export const conditionFields:Record<ConstraintKind,{label:string;placeholder:str
   circumradius:[{label:"三角形",placeholder:"ABC"}],concyclic:[{label:"共圆的点",placeholder:"ABCD"}],cospherical:[{label:"共球的点",placeholder:"ABCDE"}],
   onCurve:[{label:"点",placeholder:"P"},{label:"曲线名",placeholder:"c"}],
 };
-export function formConditionSource(kind:ConstraintKind,fields:string[],names:string[],value:string,mode:AngleMode,range:"both"|"acute"|"obtuse",solid:VolumeShape="prism",curves:ConstraintCurve[]=[]) {
+export interface FormReferences {objectNames:ReadonlySet<string>;curveNames:ReadonlySet<string>}
+export function formConditionSource(kind:ConstraintKind,fields:string[],names:string[],value:string,mode:AngleMode,range:"both"|"acute"|"obtuse",solid:VolumeShape="prism",curves:ConstraintCurve[]=[],references?:FormReferences) {
+  const reference=(value:string)=>references?.objectNames.has(value.trim())?[value.trim()]:entity(value,names);
   if(kind==='scalarEquation')return fields[0]??'';
   if(kind==="vectorRelation")return `vectorRelation(${fields[0]} = ${fields[1]})`;
   if(kind==="onCurve"||kind==="diameter") {
-    const curve=curves.find(c=>c.name===fields[1]);if(!curve)throw new Error("请选择已声明的曲线");
-    return `${kind}(${entity(fields[0]??"",names).join(" ")},${curve.name})`;
+    const name=fields[1]?.trim(),curve=curves.find(c=>c.name===name);if(!curve&&!references?.curveNames.has(name))throw new Error("请选择已声明的曲线");
+    return `${kind}(${reference(fields[0]??"").join(" ")},${name})`;
   }
-  const groups=(kind==="volume"?conditionFields[solid]:conditionFields[kind]).map((_,i)=>entity(fields[i]??"",names));
+  const groups=(kind==="volume"?conditionFields[solid]:conditionFields[kind]).map((_,i)=>reference(fields[i]??""));
   if(kind==="volume")return `volume(${solid}(${groups.flat().join(",")}))=${value}`;
   if(kind==="vertexAngle"&&groups[0].length!==3)throw new Error("请填写三个点，如 ABC，B 为角的顶点");
   const refs=kind==="vertexAngle"?groups[0].join(","):groups.map(g=>g.join(" ")).join(",");
+  if(references&&kind==='lineAngle')return ['sin','cos','tan'].includes(mode)?`${mode}Angle(${refs})=${value}`:`lineAngle(${refs},${mode==='radians'?`rad(${value})`:value})`;
   if(angleKinds.includes(kind))return angleSource(kind,refs,value,mode,range);
   if(kind==="vectorDot")return `dot(${refs}) = ${value}`;
   return `${kind}(${refs}${["pointLineDistance","pointPlaneDistance","distance","ratio","division","area","circumradius"].includes(kind)||["concyclic","cospherical"].includes(kind)&&value.trim()?`, ${value}`:""})`;

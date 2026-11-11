@@ -905,6 +905,7 @@ export default function DrawingWorkbench(props: Props) {
     const textTarget = (e.target as Element)
       .closest("[data-owner]")
       ?.getAttribute("data-owner");
+    const binding=constraintBinding(docRef.current,p?.object);
     const trace=p&&hit.kind!=="label"&&!constraintBinding(docRef.current,p.object)?inverseLocus(docRef.current,hit.id):undefined;
     const kind =
       hit.kind === "label"
@@ -912,14 +913,14 @@ export default function DrawingWorkbench(props: Props) {
           ? "label"
           : "annotation"
         : trace ? "locus" : p &&
+            (binding?.movable ||
             (p.object?.construction.type === "free" ||
               p.object?.construction.type === "constraint" ||
-              p.object?.construction.type === "onPath" || p.object?.construction.type === "onAxis")
+              p.object?.construction.type === "onPath" || p.object?.construction.type === "onAxis"))
           ? "point"
           : null;
     if (!kind) return;
     if (p?.object?.locked) return;
-    const binding=constraintBinding(docRef.current,p?.object);
     if(kind!=="label"&&binding&&!binding.movable)return;
     setDragHint("");
     let locus:LocusDrag|undefined;
@@ -973,7 +974,7 @@ export default function DrawingWorkbench(props: Props) {
   const pointRole=(hit:Hit)=>{
     const p=geometry.points.get(hit.id)?.object;
     const binding=constraintBinding(docRef.current,p);
-    if(binding)return binding.reference?"固定参照点":binding.movable?(binding.set.driver===binding.point?"当前动点":"动点"):"约束确定的点";
+    if(binding)return binding.input?"可变输入点":binding.reference?"固定参照点":binding.movable?(binding.set.driver===binding.point?"当前动点":"动点"):"约束确定的点";
     const trace=inverseLocus(docRef.current,hit.id);
     if(trace?.derived?.type==="locus")return `轨迹从动点 · 反向调整 ${rname(trace.derived.driver)}`;
     if(!p||p.construction.type!=="constraint")return draggablePoint(hit)?"可拖动":"参照 / 派生点";
@@ -1123,7 +1124,7 @@ export default function DrawingWorkbench(props: Props) {
             if (obj.kind === "label") patch = { position };
             else if(obj.kind === "point"&&constraintBinding(docRef.current,obj)) {
               const binding=constraintBinding(docRef.current,obj)!;
-              if(binding.movable)constraintMotion.move(binding.set.id,binding.point,position);return;
+              if(binding.movable){if(binding.input)constraintMotion.moveInputPoint(binding.set.id,obj.id,position);else constraintMotion.move(binding.set.id,binding.point,position);}return;
             }
             else if (obj.kind === "point" && obj.construction.type === "onAxis") {
               const c=obj.construction, axis=coordinateAxis(drag.before,c.axis,c.planeId);

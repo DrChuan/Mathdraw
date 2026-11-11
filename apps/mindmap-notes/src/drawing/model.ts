@@ -61,7 +61,7 @@ export function nextSymbol(
     kind === "point"
       ? "A"
       : kind === "curve"
-        ? "c"
+        ? "C"
         : kind === "segment"
           ? "s"
           : kind === "line"
@@ -81,7 +81,7 @@ export function nextSymbol(
   let n = 1,
     candidate = prefix;
   while (used.has(candidate) || !validSymbol(candidate))
-    candidate = prefix + n++;
+    candidate = `${prefix}_${n++}`;
   return candidate;
 }
 export function normalizeDrawing(input: DrawingDocument): DrawingDocument {
@@ -216,6 +216,11 @@ export function splitArguments(text: string): string[] {
   if (depth !== 0 || quoted) throw new Error("括号或引号未闭合");
   out.push(text.slice(start).trim());
   return out;
+}
+function singleFunctionCall(source:string){
+  const call=source.match(/^([A-Za-z\u4e00-\u9fff][A-Za-z0-9\u4e00-\u9fff]*)\s*\(([\s\S]*)\)$/);
+  if(call)try{splitArguments(call[2]);return call;}catch{/* A sum/product of calls is a scalar expression, not one command. */}
+  return null;
 }
 const fmt = (n: number) => Number(n.toFixed(8)).toString();
 export function referenceName(doc: DrawingDocument, id: string): string {
@@ -462,7 +467,7 @@ export function applyDefinition(
       doc.objects.some((o) => o.id !== replaceId && o.symbol === requested))
   )
     throw new Error("符号已被占用或保留，请使用其他符号");
-  const initialCall=text.match(/^([A-Za-z\u4e00-\u9fff][A-Za-z0-9\u4e00-\u9fff]*)\s*\(([\s\S]*)\)$/);
+  const initialCall=singleFunctionCall(text);
   const callName=initialCall ? (commandCatalog.find(c => c[0].toLowerCase() === initialCall[1].toLowerCase() || c[1] === initialCall[1])?.[0] ?? initialCall[1]) : undefined, callArgs=initialCall ? splitArguments(initialCall[2]) : [];
   let pieces:string[]=[];
   if(callName === "Text") pieces=callArgs.slice(1);
@@ -558,15 +563,13 @@ export function applyDefinition(
     followView: true,
     style: defaultStyle(),
   });
-  const call = text.match(
-    /^([A-Za-z\u4e00-\u9fff][A-Za-z0-9\u4e00-\u9fff]*)\s*\(([\s\S]*)\)$/,
-  );
+  const call = initialCall;
   let numericValue: number | undefined;
   if (!text.includes("=") && assignment?.[2] !== ":" && !(text.startsWith("(") && text.endsWith(")") && splitArguments(text.slice(1,-1)).length >= 2)) {
     try { numericValue = scalar(text); } catch { /* geometric definition */ }
   }
   if (numericValue !== undefined) {
-    if(requested && requested!=="e" && !isVariableSymbol(requested) && old?.kind !== "number") throw new Error("变量名使用单个字母，可附加任意长度下标，如 k、a_123");
+    if(requested && requested!=="e" && !isVariableSymbol(requested) && old?.kind !== "number") throw new Error("数值名称使用字母，可附数字或下标，如 k1、a_123、l_1_t");
     objects = [{ id: crypto.randomUUID(), kind: "number", name: requested ?? "数值", expression: text,
       references: numericReferences(doc,text), value: numericValue,
       slider: old?.kind === "number" ? { ...old.slider, min: Math.min(old.slider.min,Math.floor(numericValue)), max: Math.max(old.slider.max,Math.ceil(numericValue)) }

@@ -1,11 +1,12 @@
 import {splitArguments} from '../model';
+import {planarReference,mapPlanarMetrics} from './planarReferences';
 import type { DrawingDocument,Vec2 } from '../types';
 import {constraintKinds,type Condition,type ConstraintCurve,type PlanarEquation} from './types';
 import { resolveGeometry,toPlane } from '../geometry';
 import { parseExpression,evaluate } from '../expression';
 import { conicCoefficients,conicFoci,circleCenter } from '../conics';
 import { curveFunction } from '../constructions';
-import {planarRelationPattern,lateBoundPlanarCommands,namedAngleSyntaxHint} from './planarRelations';
+import {planarRelationSource,planarRelationPattern,lateBoundPlanarCommands,namedAngleSyntaxHint} from './planarRelations';
 import type { Quadratic } from '../quadratic';
 import { parseConditions,entity } from './input';
 import { coordinatePlane,objectSymbol } from './planarModel';
@@ -36,8 +37,8 @@ export function equationEnvironment(doc:DrawingDocument) {
   const object=(name:string)=>{const o=objects.get(name.trim());if(!o)throw Error(`找不到对象 ${name}`);return o;};
   const point=(name:string):Vec2=>{const o=object(name),p=g.points.get(o.id);if(!p)throw Error(`${name}：点定义失效`);return toPlane(plane,p.p);};
   const quadratic=(name:string):Quadratic=>{
-    const o=objects.get(name.trim());if(!o){const refs=entity(name,pointNames);if(refs.length!==2)throw Error(`需要两个端点或命名直线：${name}`);const a=point(refs[0]),b=point(refs[1]);return [0,0,0,b[1]-a[1],a[0]-b[0],b[0]*a[1]-a[0]*b[1]];}if(o.kind==='curve'){const c=g.curves.get(o.id);if(!c||c.parametric)throw Error(`${name} 不是二次曲线`);const q=conicCoefficients(c.equation);if(!q)throw Error(`${name} 不是二次曲线`);return q;}
-    const r=g.straightReference(o.id),a=toPlane(plane,r.a),b=toPlane(plane,r.b);return [0,0,0,b[1]-a[1],a[0]-b[0],b[0]*a[1]-a[0]*b[1]];
+    const ref=planarReference(doc.objects,name);if(ref.kind==='curve'){const c=g.curves.get(ref.object.id);if(!c||c.parametric)throw Error(`${name} 不是二次曲线`);const q=conicCoefficients(c.equation);if(!q)throw Error(`${name} 不是二次曲线`);return q;}
+    const r=ref.object?g.straightReference(ref.object.id):{a:g.points.get(ref.points[0])!.p,b:g.points.get(ref.points[1])!.p},a=toPlane(plane,r.a),b=toPlane(plane,r.b);return [0,0,0,b[1]-a[1],a[0]-b[0],b[0]*a[1]-a[0]*b[1]];
   };
   const line=(name:string)=>{const q=quadratic(name);if(Math.hypot(q[0],q[1],q[2])>1e-10)throw Error(`${name} 不是直线`);const n=Math.hypot(q[3],q[4]);if(n<1e-12)throw Error('直线退化');return q.map(v=>v/n) as Quadratic;};
   const pointNames=doc.objects.filter(o=>o.kind==='point').map(objectSymbol);
@@ -53,21 +54,23 @@ export function equationEnvironment(doc:DrawingDocument) {
   const numeric=(raw:string)=>{
     let source=raw.replace(/\b([xy])\s*\(\s*([A-Za-z][A-Za-z0-9_]*)\s*\)/g,(_,axis:string,n:string)=>`(${point(n)[axis==='x'?0:1]})`);
     source=source.replace(/\b(a|b|c|e|p|radius|eccentricity|focalDistance)\s*\(\s*([A-Za-z][A-Za-z0-9_]*)\s*\)/g,(_,prop:string,n:string)=>{const p=properties(n),key=({radius:'r',eccentricity:'e',focalDistance:'c'} as Record<string,string>)[prop]??prop;return `(${p[key as keyof typeof p]*(prop==='focalDistance'?2:1)})`;});
-    source=source.replace(/\b(?:length|Length)\s*\(\s*([A-Za-z][A-Za-z0-9_]*)\s*\)/g,(_,name:string)=>{const o=objects.get(name);if(o&&!['segment','vector'].includes(o.kind))throw Error('长度需要线段或向量；无限直线没有长度');return `(${Math.hypot(...vector(name))})`;});
-    source=source.replace(/\bdot\s*\(\s*([A-Za-z][A-Za-z0-9_]*),\s*([A-Za-z][A-Za-z0-9_]*)\s*\)/g,(_,a:string,b:string)=>{const u=vector(a),v=vector(b);return `(${u[0]*v[0]+u[1]*v[1]})`;});
-    source=source.replace(/\b(sin|cos|tan)Angle\s*\(\s*([A-Za-z][A-Za-z0-9_]*),\s*([A-Za-z][A-Za-z0-9_]*)\s*\)/g,(_,fn:string,a:string,b:string)=>{const u=line(a),v=line(b),c=Math.min(1,Math.abs(u[3]*v[3]+u[4]*v[4])),s=Math.sqrt(Math.max(0,1-c*c));return `(${fn==='cos'?c:fn==='sin'?s:s/c})`;});
+    source=mapPlanarMetrics(source,(kind,args)=>{
+      if(kind==='slope'){const q=line(args[0]);if(q[4]===0)throw Error(`${args[0]} 是竖直直线，斜率不存在`);return `(${-q[3]/q[4]})`;}
+      if(kind==='length'){const name=args[0],o=objects.get(name);if(o&&!['segment','vector'].includes(o.kind))throw Error('长度需要线段或向量；无限直线没有长度');return `(${Math.hypot(...vector(name))})`;}
+      if(kind==='dot'){const u=vector(args[0]),v=vector(args[1]);return `(${u[0]*v[0]+u[1]*v[1]})`;}
+      const u=line(args[0]),v=line(args[1]),c=Math.min(1,Math.abs(u[3]*v[3]+u[4]*v[4])),sin=Math.sqrt(Math.max(0,1-c*c));return `(${kind==='cosangle'?c:kind==='sinangle'?sin:sin/c})`;
+    });
     source=source.replace(/\b[A-Za-z][A-Za-z0-9_]*\b/g,name=>{if(name in scope)return name;const o=objects.get(name);if(o){if(['segment','vector'].includes(o.kind))return `(${Math.hypot(...vector(name))})`;return name;}try{const p=entity(name,pointNames);if(p.length===2){const v=vector(name);return `(${Math.hypot(...v)})`;}}catch{/* It may be a numerical function. */}return name;});
     const ast=parseExpression(source,Object.keys(scope)),value=evaluate(ast,scope);if(!Number.isFinite(value)||Math.abs(value)>1e15)throw Error('表达式无定义或数值超限');return value;
   };
-  const at=(p:Vec2,name:string)=>{const o=object(name);if(o.kind==='curve'){const c=g.curves.get(o.id);if(!c)throw Error(`曲线 ${name} 失效`);if(c.parametric)throw Error('参数曲线上的点请使用参数定义，不能按占位方程参与隐式求交');const f=curveFunction(c),v=f(...p),h=1e-5,gradient=Math.hypot((f(p[0]+h,p[1])-f(p[0]-h,p[1]))/(2*h),(f(p[0],p[1]+h)-f(p[0],p[1]-h))/(2*h));return v/Math.max(1,gradient);}
+  const at=(p:Vec2,name:string)=>{const ref=planarReference(doc.objects,name);if(ref.kind==='curve'){const c=g.curves.get(ref.object.id);if(!c)throw Error(`曲线 ${name} 失效`);if(c.parametric)throw Error('参数曲线上的点请使用参数定义，不能按占位方程参与隐式求交');const f=curveFunction(c),v=f(...p),h=1e-5,gradient=Math.hypot((f(p[0]+h,p[1])-f(p[0]-h,p[1]))/(2*h),(f(p[0],p[1]+h)-f(p[0],p[1]-h))/(2*h));return v/Math.max(1,gradient);}
     const q=line(name);return q[3]*p[0]+q[4]*p[1]+q[5];};
   const bounds=(p:Vec2,name:string):number[]=>{
-    const o=object(name);if(o.kind==='curve'){const c=g.curves.get(o.id),l=c?.limits;return [l?.xMin===undefined?0:Math.max(0,l.xMin-p[0]),l?.xMax===undefined?0:Math.max(0,p[0]-l.xMax),l?.yMin===undefined?0:Math.max(0,l.yMin-p[1]),l?.yMax===undefined?0:Math.max(0,p[1]-l.yMax)];}
-    if(o.kind==='segment'||o.kind==='vector'||o.kind==='line'&&o.ray){const r=g.straightReference(o.id),a=toPlane(plane,r.a),b=toPlane(plane,r.b),d=[b[0]-a[0],b[1]-a[1]],t=((p[0]-a[0])*d[0]+(p[1]-a[1])*d[1])/Math.max(1e-24,d[0]**2+d[1]**2);return [Math.max(0,-t),o.kind==='line'?0:Math.max(0,t-1),0,0];}return [0,0,0,0];
+    const ref=planarReference(doc.objects,name);if(ref.kind==='curve'){const c=g.curves.get(ref.object.id),l=c?.limits;return [l?.xMin===undefined?0:Math.max(0,l.xMin-p[0]),l?.xMax===undefined?0:Math.max(0,p[0]-l.xMax),l?.yMin===undefined?0:Math.max(0,l.yMin-p[1]),l?.yMax===undefined?0:Math.max(0,p[1]-l.yMax)];}
+    if(ref.extent!=='line'){const r=ref.object?g.straightReference(ref.object.id):{a:g.points.get(ref.points[0])!.p,b:g.points.get(ref.points[1])!.p},a=toPlane(plane,r.a),b=toPlane(plane,r.b),d=[b[0]-a[0],b[1]-a[1]],t=((p[0]-a[0])*d[0]+(p[1]-a[1])*d[1])/Math.max(1e-24,d[0]**2+d[1]**2);return [Math.max(0,-t),ref.extent==='segment'?Math.max(0,t-1):0,0,0];}return [0,0,0,0];
   };
   const residual=(raw:string):number[]=>{
-    let source=raw.trim().replace(/^\$\$?([\s\S]*?)\$\$?$/,'$1').replace(/\\(?:perp|bot)\b|⊥/g,'⟂').replace(/\\parallel\b|∥/g,'//');
-    const relation=source.match(/^(.+?)\s*(⟂|\/\/)\s*(.+)$/);if(relation)source=`${relation[2]==='⟂'?'perpendicular':'parallel'}(${relation[1]},${relation[3]})`;
+    const source=planarRelationSource(raw);
     if(/^vectorRelation\s*\(/i.test(source)||/\bvec\s*\(|\\(?:vec|overrightarrow)\b/.test(source)){
       const body=source.replace(/^vectorRelation\s*\(([\s\S]*)\)$/i,'$1'),vectors:Record<string,Vec2>={};
       const prepare=(s:string)=>s.replace(/\b([xy])\s*\(\s*([A-Za-z][A-Za-z0-9_]*)\s*\)/g,(_,axis:string,n:string)=>`(${point(n)[axis==='x'?0:1]})`).replace(/(?:vec\s*\(([^)]+)\)|\\(?:vec|overrightarrow)\s*\{([^{}]+)\})/g,(_,a:string,b:string)=>{const name=`vector_${Object.keys(vectors).length}`;vectors[name]=vector((a??b).trim());return name;});
@@ -95,7 +98,20 @@ export function equationEnvironment(doc:DrawingDocument) {
       if(name==='vectordot'){const a=vector(args[0]),b=vector(args[1]),value=a[0]*b[0]+a[1]*b[1];return [(value-numeric(args[2]))/Math.max(1,Math.abs(value),Math.abs(numeric(args[2])))];}
       if(name==='parallel'||name==='perpendicular'){const a=line(args[0]),b=line(args[1]);return [name==='parallel'?a[3]*b[4]-a[4]*b[3]:a[3]*b[3]+a[4]*b[4]];}
       if(name==='tangent'){
-        const l=line(args[0]),q=quadratic(args[1]),o:Vec2=[-l[5]*l[3],-l[5]*l[4]],d:Vec2=[-l[4],l[3]],at=(x:number,y:number)=>q[0]*x*x+q[1]*x*y+q[2]*y*y+q[3]*x+q[4]*y+q[5];
+        const l=line(args[0]),raw=quadratic(args[1]),scale=Math.max(...raw.map(Math.abs));
+        if(!scale)throw Error('相切对象必须是非退化二次曲线');
+        const q=raw.map(n=>n/scale),[A,B,C,D,E,F]=q,det=4*A*C*F+B*D*E-A*E*E-C*D*D-F*B*B;
+        if(Math.abs(det)<1e-14)throw Error('相切对象必须是非退化二次曲线');
+        if(Math.abs(A-C)<1e-12*Math.max(Math.abs(A),Math.abs(C))&&Math.abs(B)<1e-12*Math.abs(A)){
+          const cx=-D/(2*A),cy=-E/(2*A),squared=cx*cx+cy*cy-F/A;
+          if(squared<=0)throw Error('相切对象必须是实圆且半径大于零');
+          const radius=Math.sqrt(squared),distance=Math.abs(l[3]*cx+l[4]*cy+l[5]);
+          // A squared discriminant has a vanishing gradient as r tends to 0
+          // and can accept visibly nontangent tiny circles. Check distance
+          // itself, not its square, against the very same circle definition.
+          return [(distance-radius)/Math.max(1,distance,radius)];
+        }
+        const o:Vec2=[-l[5]*l[3],-l[5]*l[4]],d:Vec2=[-l[4],l[3]],at=(x:number,y:number)=>q[0]*x*x+q[1]*x*y+q[2]*y*y+q[3]*x+q[4]*y+q[5];
         const a=q[0]*d[0]**2+q[1]*d[0]*d[1]+q[2]*d[1]**2,b=2*q[0]*o[0]*d[0]+q[1]*(o[0]*d[1]+o[1]*d[0])+2*q[2]*o[1]*d[1]+q[3]*d[0]+q[4]*d[1],c=at(...o);
         if(Math.abs(a)<1e-12)throw Error('此直线不是有限切点处的切线');return [(b*b-4*a*c)/Math.max(1,b*b,Math.abs(4*a*c))];
       }

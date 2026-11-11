@@ -1,10 +1,11 @@
+import {defaultStyle} from '../types';
 import {splitArguments} from '../model';
 import {isVariableSymbol,numericFunctions} from '../symbols';
 import type { PlanarContext,Condition,ConstraintCurve } from './types';
 import { addPlanarDefinition,contextPoints,objectSymbol } from './planarModel';
 import { parsePlanarInput } from './planarExpressions';
 import { entity } from './input';
-import { pointObject,resolveGeometry } from '../geometry';
+import {pointObject,resolveGeometry} from '../geometry';
 import { conicCoefficients } from '../conics';
 
 /** Transactional teacher input: definitions and conditions share one ordered list.
@@ -22,10 +23,11 @@ export function addLessonInput(context:PlanarContext,source:string,points:string
     const conic=row.match(/^(椭圆|双曲线|抛物线)\s+([A-Za-z][A-Za-z0-9_]*)(?:\s+([xy]))?(?:\s+参数\s+([A-Za-z][A-Za-z0-9_]*),([A-Za-z][A-Za-z0-9_]*),([A-Za-z][A-Za-z0-9_]*),([A-Za-z][A-Za-z0-9_]*))?$/);
     const distinct=row.match(/^([A-Za-z][A-Za-z0-9_]*)\s*(?:!=|≠)\s*([A-Za-z][A-Za-z0-9_]*)$/);
     const diameterCircle=row.match(/^([A-Za-z][A-Za-z0-9_]*)\s*=\s*DiameterCircle\(\s*([A-Za-z][A-Za-z0-9_]*)\s*,\s*([A-Za-z][A-Za-z0-9_]*)\s*\)$/);
-    const pair=row.match(/^([A-Za-z][A-Za-z0-9_]*)(?:\s*,\s*([A-Za-z][A-Za-z0-9_]*))?\s*=\s*(?:交点|Intersect)\(([^,]+),([^,)]+)\)$/i);
+    const pair=row.match(/^([A-Za-z][A-Za-z0-9_]*)(?:\s*,\s*([A-Za-z][A-Za-z0-9_]*))?\s*=\s*(?:交点|Intersect)\(([^,]+),([^,)]+)(?:,\s*([1-9][0-9]*))?\)$/i);
     const axisRelation=row.match(/^(.+?)\s*(⊥|∥|\/\/)\s*([xy])轴$/);
     const focus=row.match(/^([A-Za-z][A-Za-z0-9_]*)[是为]([A-Za-z][A-Za-z0-9_]*)的(左|右|上|下)焦点$/);
     const incidence=row.match(/^([A-Za-z][A-Za-z0-9_]*)在([A-Za-z][A-Za-z0-9_]*)上$/);
+    const tangent=row.match(/^([A-Za-z][A-Za-z0-9_]*)\s*=\s*Tangent\(\s*([A-Za-z][A-Za-z0-9_]*)\s*,\s*([A-Za-z][A-Za-z0-9_]*)(?:\s*,\s*([12]))?\s*\)$/i);
     const through=row.match(/^([A-Za-z][A-Za-z0-9_]*)\s*=\s*过点直线\(([^)]+)\)$/);
     if(distinct){const [,a,b]=distinct;if(a===b||![a,b].every(n=>points.includes(n)||contextPoints(next).includes(n)))throw Error('互异关系需要两个已声明的不同点');equation(`(x(${a})-x(${b}))^2+(y(${a})-y(${b}))^2>0`);}
     else if(diameterCircle){const [,name,a,b]=diameterCircle;const names=[...new Set([...points,...contextPoints(next)])];if(a===b||!names.includes(a)||!names.includes(b))throw Error('直径圆需要两个不同的已声明点');add(`${name}: (x-x(${a}))*(x-x(${b}))+(y-y(${a}))*(y-y(${b}))=0`);}
@@ -36,13 +38,14 @@ export function addLessonInput(context:PlanarContext,source:string,points:string
     else if(conic){const [,kind,name,axis,pa,pb,pc,pe]=conic,a=pa??`${name}_a`,b=pb??`${name}_b`,p=pa??`${name}_p`,c=pc??`${name}_c`,e=pe??`${name}_e`;
       if(kind==='抛物线'){unknown(p,1);add(`${name}: ${axis==='y'?'x^2':'y^2'}=2*${p}*${axis==='y'?'y':'x'}`);equation(`${p}>0`);add(`${e}=1`);}
       else{unknown(a,2);unknown(b,1);const x=axis==='y'?'y':'x',y=axis==='y'?'x':'y';add(`${name}: ${x}^2/${a}^2${kind==='椭圆'?'+':'-'}${y}^2/${b}^2=1`);equation(`${a}>0`);equation(`${b}>0`);if(kind==='椭圆'&&axis)equation(`${a}>${b}`);add(`${c}=sqrt(${kind==='椭圆'?`abs(${a}^2-${b}^2)`:`${a}^2+${b}^2`})`);add(`${e}=${c}/${kind==='椭圆'&&!axis?`max(${a},${b})`:a}`);}
-    }else if(pair){const [,a,b,first,second]=pair,refs=[first,second].map(n=>{const o=next.document.objects.find(o=>objectSymbol(o)===n.trim());if(!o||!['line','segment','vector','curve'].includes(o.kind))throw Error(`找不到线或曲线 ${n}`);return o.id;});
-      for(const [branch,name]of [a,b].filter(Boolean).entries()){if(next.document.objects.some(o=>objectSymbol(o)===name))throw Error(`符号 ${name} 已被使用`);next.document.objects.push({...pointObject(name,[0,0,0]),symbol:name,construction:{type:'intersection',first:refs[0],second:refs[1],branch}});}
+    }else if(pair){const [,a,b,first,second,ordinal]=pair,offset=Number(ordinal??1)-1,refs=[first,second].map(n=>{const o=next.document.objects.find(o=>objectSymbol(o)===n.trim());if(!o||!['line','segment','vector','curve'].includes(o.kind))throw Error(`找不到线或曲线 ${n}`);return o.id;});
+      for(const [branch,name]of [a,b].filter(Boolean).entries()){if(next.document.objects.some(o=>objectSymbol(o)===name))throw Error(`符号 ${name} 已被使用`);next.document.objects.push({...pointObject(name,[0,0,0]),symbol:name,construction:{type:'intersection',first:refs[0],second:refs[1],branch:branch+offset}});}
       // Two named crossings must be distinct, even at tangency.
       if(b)equation(`(x(${a})-x(${b}))^2+(y(${a})-y(${b}))^2>0`);
-    }else if(through){const [,name,p]=through,t=`${name}_t`;unknown(t,-.15);add(`${name}: cos(${t})*(y-y(${p}))-sin(${t})*(x-x(${p}))=0`);}
+    }else if(tangent){const [,name,curveName,pointName,ordinal]=tangent,parent=next.document.objects.find(o=>objectSymbol(o)===curveName),point=next.document.objects.find(o=>objectSymbol(o)===pointName);if(parent?.kind!=='curve'||point?.kind!=='point')throw Error('请选择曲线和切线经过的点');if(next.document.objects.some(o=>objectSymbol(o)===name))throw Error(`符号 ${name} 已被使用`);next.document.objects.push({id:crypto.randomUUID(),symbol:name,name:'切线',kind:'curve',planeId:parent.planeId,equation:'0',autoFoci:false,derived:{type:'tangent',curve:parent.id,point:point.id,branch:Number(ordinal??1)-1},range:[-10,10,-10,10],followView:true,style:defaultStyle()});}
+    else if(through){const [,name,p]=through,t=`${name}_t`;unknown(t,-.15);add(`${name}: cos(${t})*(y-y(${p}))-sin(${t})*(x-x(${p}))=0`);}
     else if(/^[A-Za-z][A-Za-z0-9_]*\s*[:：]/.test(row)||/^[A-Za-z][A-Za-z0-9_]*\s*=\s*\?$/.test(row)||(()=>{const body=row.match(/^[A-Za-z][A-Za-z0-9_]*\s*=\s*(\(.*\))$/)?.[1];return !!body&&[2,3].includes(splitArguments(body.slice(1,-1)).length);})()||(()=>{const fn=row.match(/^[A-Za-z][A-Za-z0-9_]*\s*=\s*([A-Za-z\u4e00-\u9fff][A-Za-z0-9\u4e00-\u9fff]*)\(/)?.[1];const name=row.match(/^([A-Za-z][A-Za-z0-9_]*)/)?.[1];return !!fn&&!numericFunctions.has(fn.toLowerCase())&&!next.document.objects.some(o=>o.kind==='number'&&objectSymbol(o)===name);})())add(row);
-    else if(/^([A-Za-z][A-Za-z0-9_]*)\s*=/.test(row)&&(()=>{const n=row.match(/^([A-Za-z][A-Za-z0-9_]*)/)![1];return (isVariableSymbol(n)||n==='e')&&!next.document.objects.some(o=>objectSymbol(o)===n)&&!points.includes(n);})())add(row);
+    else if(/^([A-Za-z][A-Za-z0-9_]*)\s*=/.test(row)&&(()=>{const n=row.match(/^([A-Za-z][A-Za-z0-9_]*)/)![1];return (isVariableSymbol(n)||n==='e')&&!next.document.objects.some(o=>objectSymbol(o)===n)&&!points.includes(n)&&(()=>{try{return entity(n,[...new Set([...points,...contextPoints(next)])]).length!==2;}catch{return true;}})();})())add(row);
     else if(/^vectorRelation\s*\(/.test(row))equation(row);
     else{const parsed=parsePlanarInput(row,[...new Set([...points,...contextPoints(next)])],curves);conditions.push(...parsed.conditions);next.equations.push(...parsed.equations);}
   }catch(e){throw Error(`第 ${index+1} 行「${row}」：${(e as Error).message}`);}

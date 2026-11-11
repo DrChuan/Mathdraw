@@ -26,3 +26,13 @@ export function namedAngleSyntaxHint(source:string){
 }
 
 export const planarRelationReferences=Object.fromEntries(Object.entries(planarRelations).map(([name,spec])=>[name.toLowerCase(),spec.references])) as Record<string,number>;
+
+/** Presentation aliases share one internal relation protocol. Keep the stored
+ * source untouched, including its ID and recognition association. */
+export function planarRelationSource(raw:string):string{
+ const source=raw.trim().replace(/^\$\$?([\s\S]*?)\$\$?$/,'$1').replace(/^\\\(([\s\S]*)\\\)$/,'$1')
+  .replace(/\\(?:left|right)\b/g,'').replace(/\\(?:quad|qquad)\b|\\[,;!]/g,' ')
+  .replace(/\\(?:perp|bot)\b|⊥|⟂/g,'⟂').replace(/\\parallel\b|∥|‖/g,'//').trim();
+ const relation=source.match(/^(.+?)\s*(⟂|\/\/)\s*(.+)$/);
+ return relation?`${relation[2]==='⟂'?'perpendicular':'parallel'}(${relation[1].trim()},${relation[3].trim()})`:source;
+}

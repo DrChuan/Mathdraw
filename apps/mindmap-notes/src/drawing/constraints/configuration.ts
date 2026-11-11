@@ -4,6 +4,7 @@ import { pointNames,validateCurves } from "./input";
 import { validateDrawing } from '../geometry';
 import {validateRecognition} from '../recognition/model';
 import type {RecognizedQuestion} from '../recognition/types';
+import {validatePlanarInputs} from './inputs';
 export interface ConstraintConfiguration {
   format:"mathdraw-conditions";version:1|2;points:string;segments:string;
   mode?:ConstraintMode;planar?:PlanarContext;
@@ -29,7 +30,7 @@ export function decodeConfiguration(content:string):ConstraintConfiguration {
     validateCurves(c.curves,c.curves.length?pointNames(c.points):[],c.mode==='plane'||c.mode==='coordinate');
   }
   if(c.mode==='coordinate'&&!c.planar)throw new Error('缺少有坐标模式的对象定义');
-  if(c.planar){validateDrawing(c.planar.document);if(!Array.isArray(c.planar.unknowns)||!Array.isArray(c.planar.equations))throw new Error('二维条件配置无效');}
+  if(c.planar){validateDrawing(c.planar.document);if(!Array.isArray(c.planar.unknowns)||!Array.isArray(c.planar.equations))throw new Error('二维条件配置无效');validatePlanarInputs(c.planar);}
   return c;
 }
 export const configurationFiles={

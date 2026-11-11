@@ -116,3 +116,16 @@ it('tracks the pointer side when planar exact motion has two algebraic candidate
  const {problem}=setup(['c: x^2+y^2=4'],['onCurve(P,c)']);problem.points.push('P');const previous=solve(problem),next=solveConstraints({id:2,problem,previous,budget:1000,move:{branch:0,point:'P',target:[1,Math.sqrt(3),0]}});
  expect(next.branches[0].positions.P[1]).toBeGreaterThan(0);expect(next.branches[0].exactCertificate).toBeDefined();validateSolutionSet(solutionSetObject(problem,next));
 });
+
+describe('numeric parameter slider availability',()=>{
+ it('distinguishes a fixed parameter from another freely moving unknown',()=>{
+  const {problem,context}=setup(['a=2','m=1','P=(m,0)'],['a=2'],[['a','value',-5,5],['m','value',-5,5]]),r=solve(problem),b=r.branches[0];
+  expect(b.dof).toBeGreaterThan(0);expect(b.adjustableValues).toContain(context.unknowns[1].id);expect(b.adjustableValues).not.toContain(context.unknowns[0].id);
+  const old=structuredClone(r);delete old.branches[0].adjustableValues;
+  const refreshed=solveConstraints({id:2,problem,previous:old,refreshMobility:true,budget:1000});
+  expect(refreshed.branches[0].positions).toEqual(b.positions);expect(refreshed.branches[0].values).toEqual(b.values);expect(refreshed.branches[0].adjustableValues).toEqual(b.adjustableValues);
+ });
+ it('does not expose an extremum-locked parameter as adjustable',()=>{
+  const {problem}=setup(['a=0'],['a^2=0'],[['a','value',-5,5]]),b=solve(problem).branches[0];expect(b.adjustableValues).toEqual([]);
+ });
+});

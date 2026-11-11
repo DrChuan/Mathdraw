@@ -1,3 +1,4 @@
+import {parseExpression,evaluate} from '../expression';
 import type { Vec3 } from "../types";
 import type { ConstraintProblem, Positions, SpatialLocus } from "./types";
 import { expandConditions } from "./compile";
@@ -87,13 +88,32 @@ export function analyticLoci(problem:ConstraintProblem,p:Positions,reference:str
   }
   return result;
 }
+const conicFunctions=new Map<string,{x:ReturnType<typeof parseExpression>;y:ReturnType<typeof parseExpression>}>();
+function conicAt(l:SpatialLocus,t:number):Vec3 {
+ const p=l.conic;if(!p)throw Error('解析轨迹缺少参数方程');const key=JSON.stringify([p.x,p.y]);let f=conicFunctions.get(key);
+ if(!f){if(conicFunctions.size>=64)conicFunctions.delete(conicFunctions.keys().next().value!);f={x:parseExpression(p.x,['t']),y:parseExpression(p.y,['t'])};conicFunctions.set(key,f);}
+ return add(l.origin,add(mul(l.u,evaluate(f.x,{t})),mul(l.v,evaluate(f.y,{t}))));
+}
+/** UI projection onto an already known curve, not a constraint search. */
+export function conicParameter(l:SpatialLocus,target:Vec3){
+ const p=l.conic;if(!p)return 0;let lo=p.min,hi=p.max;
+ if(!p.closed){const distance=norm(sub(target,l.origin)),polynomial=!/exp\(/.test(p.x+p.y),extent=polynomial?Math.min(1e8,Math.max(Math.abs(lo),Math.abs(hi),distance*2+2)):Math.min(30,Math.max(Math.abs(lo),Math.abs(hi),Math.log1p(distance)*2+2));lo=-extent;hi=extent;}
+ const distance=(t:number)=>{const v=sub(conicAt(l,t),target);return dot(v,v);};
+ let best=lo,value=Infinity;const step=(hi-lo)/128;
+ for(let i=0;i<=128;i++){const t=lo+i*step,d=distance(t);if(d<value){best=t;value=d;}}
+ let a=Math.max(lo,best-step),b=Math.min(hi,best+step);
+ for(let i=0;i<70;i++){const x=(2*a+b)/3,y=(a+2*b)/3;if(distance(x)<distance(y))b=y;else a=x;}
+ return (a+b)/2;
+}
 export function locusPoint(l:SpatialLocus,a:number,b=0):Vec3 {
+  if(l.kind==='conic')return conicAt(l,a);
   if(l.kind==="circle")return add(l.origin,add(mul(l.u,l.radius*Math.cos(a)),mul(l.v,l.radius*Math.sin(a))));
   if(l.kind==="sphere") {const n=unit(cross(l.u,l.v));return add(l.origin,add(mul(n,l.radius*Math.sin(b)),add(mul(l.u,l.radius*Math.cos(b)*Math.cos(a)),mul(l.v,l.radius*Math.cos(b)*Math.sin(a)))));}
   if(l.kind==="plane")return add(l.origin,add(mul(l.u,a),mul(l.v,b)));
   return add(l.origin,mul(l.u,l.kind==="segment"?Math.max(0,Math.min(l.radius,a)):a));
 }
 export function nearestLocus(l:SpatialLocus,target:Vec3):Vec3 {
+  if(l.kind==='conic')return locusPoint(l,conicParameter(l,target));
   const d=sub(target,l.origin),n=unit(cross(l.u,l.v));
   if(l.kind==="sphere")return add(l.origin,mul(norm(d)>1e-12?unit(d):l.u,l.radius));
   if(l.kind==="circle") {const planar=sub(d,mul(n,dot(d,n)));return add(l.origin,mul(norm(planar)>1e-12?unit(planar):l.u,l.radius));}
@@ -107,6 +127,7 @@ export function nearestLocus(l:SpatialLocus,target:Vec3):Vec3 {
   return best;
 }
 export function locusPaths(l:SpatialLocus):Vec3[][] {
+  if(l.kind==='conic'&&l.conic)return (l.conic.components??[l.conic]).map(part=>{const component={...l,conic:{...l.conic!,...part}};return Array.from({length:193},(_,i)=>locusPoint(component,part.min+(part.max-part.min)*i/192));});
   if(l.kind==="sampled")return l.paths??[];
   if(l.kind==="line")return [[locusPoint(l,-l.radius),locusPoint(l,l.radius)]];
   if(l.kind==="segment")return [[locusPoint(l,0),locusPoint(l,l.radius)]];

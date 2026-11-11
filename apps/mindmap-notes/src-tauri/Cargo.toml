@@ -1,6 +1,6 @@
 [package]
 name = "mindgrove"
-version = "0.6.1"
+version = "0.6.3"
 description = "A local-first mindmap notebook"
 edition = "2021"
 

@@ -1,0 +1,57 @@
+{
+  "format": "mathdraw-conditions",
+  "version": 2,
+  "mode": "spatial",
+  "points": "A B C D",
+  "segments": "A B,B D,B C,C D,A C,A D",
+  "curves": [],
+  "conditions": [
+    {
+      "id": "i1:0",
+      "source": "pyramid(A,B,C,D)",
+      "enabled": true
+    },
+    {
+      "id": "i2:0",
+      "source": "AB = 2",
+      "enabled": true
+    },
+    {
+      "id": "i3:0",
+      "source": "BD = 2",
+      "enabled": true
+    },
+    {
+      "id": "i4:0",
+      "source": "BC = 1",
+      "enabled": true
+    },
+    {
+      "id": "i5:0",
+      "source": "angle(A,B,D) = 90",
+      "enabled": true
+    },
+    {
+      "id": "i6:0",
+      "source": "angle(C,B,D) = 60",
+      "enabled": true
+    },
+    {
+      "id": "i7:0",
+      "source": "perpendicular(BCD, ABD)",
+      "enabled": true
+    }
+  ],
+  "placement": {
+    "planeNames": [
+      "D",
+      "B",
+      "C"
+    ],
+    "side": 1,
+    "orientationPoint": "",
+    "keepPlacement": false,
+    "mirrored": false,
+    "targetPlane": "xy"
+  }
+}

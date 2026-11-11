@@ -1,14 +1,16 @@
+import type {DrawingDocument} from './types';
 import CoordinateConditionForm from './CoordinateConditionForm';
 import { declaredAngleSuggestions } from './constraints/angleSuggestions';
 import { FormulaPreview } from './FormulaPreview';
 import { symbolLatex } from './mathPreview';
-import { useMemo,useRef,useState } from "react";
+import { useEffect,useId,useMemo,useRef,useState } from "react";
 import { conditionLabels,pointNames } from "./constraints/input";
 import { conditionFields,conditionGroups,formConditionSource } from "./constraints/form";
+import {conditionFormReferences} from './constraints/formReferences';
 import { angleKinds,type AngleMode } from "./constraints/angles";
 import type { ConstraintKind,ConstraintCurve,Condition,VolumeShape,ConstraintMode } from "./constraints/types";
 
-export default function ConditionInput({points,segments='',angleEdges,curves=[],conditions=[],append,onError,mode='spatial'}:{points:string;segments?:string;angleEdges?:[string,string][];curves?:ConstraintCurve[];conditions?:Condition[];append:(sources:string[])=>boolean;onError:(message:string)=>void;mode?:ConstraintMode}) {
+export default function ConditionInput({points,segments='',angleEdges,curves=[],conditions=[],append,onError,mode='spatial',document:referenceDocument,seed}:{points:string;segments?:string;angleEdges?:[string,string][];curves?:ConstraintCurve[];conditions?:Condition[];append:(sources:string[])=>boolean;onError:(message:string)=>void;mode?:ConstraintMode;document?:DrawingDocument;seed?:{source:string;revision:number}}) {
   const [anglePage,setAnglePage]=useState(0);
   const angles=useMemo(()=>declaredAngleSuggestions(points,segments,angleEdges),[points,segments,angleEdges]);
   const pageCount=Math.ceil(angles.count/32),currentPage=Math.max(0,Math.min(anglePage,pageCount-1));
@@ -18,14 +20,13 @@ export default function ConditionInput({points,segments='',angleEdges,curves=[],
   const [angleMode,setAngleMode]=useState<AngleMode>("degrees"),[range,setRange]=useState<"both"|"acute"|"obtuse">("both");
   const [solid,setSolid]=useState<VolumeShape>("prism");
   const input=useRef<HTMLInputElement>(null),composing=useRef(false);
+  const listId=useId(),referenceNames=referenceDocument?.objects.map(o=>o.symbol??o.name)??[];
+  const catalog=useMemo(()=>conditionFormReferences(mode==='coordinate'?referenceDocument:undefined,curves),[mode,referenceDocument,curves]);
+  useEffect(()=>{if(seed){setShorthand(seed.source);requestAnimationFrame(()=>input.current?.focus());}},[seed?.revision]);
   const choose=(next:ConstraintKind)=>{setKind(next);setFields([]);setValue(["concyclic","cospherical"].includes(next)?"":next==="division"?"1":next==="vectorDot"?"0":angleKinds.includes(next)?angleMode==="degrees"?"60":angleMode==="radians"?"pi/3":"1/2":"3");};
   const submitShort=()=>{if(shorthand.trim()&&append([shorthand]))setShorthand("");};
   const submit=()=>{
-    try{let source:string;try{source=formConditionSource(kind,fields,pointNames(points,mode==='coordinate'?2000:50),value,angleMode,range,solid,curves);}catch(e){
-      if(mode!=='coordinate'||!['pointLineDistance','parallel','perpendicular','distance','equal','ratio','lineAngle','vectorDot'].includes(kind))throw e;
-      source=`${kind}(${fields.join(',')}${['pointLineDistance','distance','ratio','lineAngle','vectorDot'].includes(kind)?`,${value}`:''})`;
-      if(kind==='lineAngle')source=['sin','cos','tan'].includes(angleMode)?`${angleMode}Angle(${fields.join(',')})=${value}`:`lineAngle(${fields.join(',')},${angleMode==='radians'||/\\pi|\bpi\b|π/.test(value)?`(${value})*180/pi`:value})`;
-    }if(append([source]))setFields([]);}
+    try{const source=formConditionSource(kind,fields,pointNames(points,mode==='coordinate'?2000:50),value,angleMode,range,solid,curves,mode==='coordinate'?catalog.references:undefined);if(append([source]))setFields([]);}
     catch(e){onError((e as Error).message);}
   };
   const insert=(symbol:string,back=0)=>{
@@ -36,19 +37,20 @@ export default function ConditionInput({points,segments='',angleEdges,curves=[],
   const numeric=["pointLineDistance","pointPlaneDistance","distance","ratio","division","vectorDot","area","volume","circumradius","concyclic","cospherical",...angleKinds].includes(kind);
   const inputs=kind==="volume"?conditionFields[solid]:conditionFields[kind];
   const bodies=conditions.filter(c=>c.enabled&&["prism","pyramid","frustum","cylinder","cone","coneFrustum","cube"].includes(c.kind));
-  return <section className="constraint-input" aria-label="添加条件">
-    <div className="constraint-section-heading"><strong>添加条件</strong></div>
+  return <section className="constraint-input" aria-label={mode==='coordinate'?'添加关系':'添加条件'}>
+    {referenceDocument&&<datalist id={`${listId}-refs`}>{referenceNames.map(n=><option key={n} value={n}/>)}</datalist>}
+    <div className="constraint-section-heading"><strong>{mode==='coordinate'?'添加关系':'添加条件'}</strong></div>
     <div className="constraint-input-columns">
     <div className="constraint-full-input"><h3>完整输入</h3>
       <div className="constraint-categories" aria-label="条件分类">{groups.map((group,i)=><button key={group.name} className={category===i?"active":""} aria-pressed={category===i} onClick={()=>{setCategory(i);choose(group.kinds[0]);}}>{group.name}</button>)}{mode==='coordinate'&&<button className={category===groups.length?"active":""} aria-pressed={category===groups.length} onClick={()=>setCategory(groups.length)}>坐标 / 曲线</button>}</div>
-      {category===groups.length?<CoordinateConditionForm append={append}/>:<form className="constraint-full-form" onSubmit={e=>{e.preventDefault();if(!composing.current)submit();}} onCompositionStart={()=>{composing.current=true;}} onCompositionEnd={()=>{composing.current=false;}} onKeyDown={e=>{if(e.key==="Enter"&&(e.nativeEvent.isComposing||composing.current))e.preventDefault();}}>
+      {category===groups.length?<CoordinateConditionForm document={referenceDocument} curves={curves} append={append}/>:<form className="constraint-full-form" onSubmit={e=>{e.preventDefault();if(!composing.current)submit();}} onCompositionStart={()=>{composing.current=true;}} onCompositionEnd={()=>{composing.current=false;}} onKeyDown={e=>{if(e.key==="Enter"&&(e.nativeEvent.isComposing||composing.current))e.preventDefault();}}>
         <label>条件类型<select aria-label="条件类型" value={kind} onChange={e=>choose(e.target.value as ConstraintKind)}>{groups[category].kinds.map(k=><option key={k} value={k}>{conditionLabels[k]}</option>)}</select></label>
         {kind==="volume"&&<><label>几何体类型<select value={solid} onChange={e=>{setSolid(e.target.value as VolumeShape);setFields([]);}}>{(["prism","pyramid","frustum","cylinder","cone","coneFrustum"] as const).map(k=><option key={k} value={k}>{conditionLabels[k]}</option>)}</select></label>{bodies.length>0&&<label>填入已声明几何体<select value="" onChange={e=>{const body=bodies.find(c=>c.id===e.target.value);if(!body)return;setSolid(body.kind==="cube"?"prism":body.kind as VolumeShape);const p=body.refs[0],n=p.length/2;setFields(body.kind==="pyramid"?[p[0],p.slice(1).join(" ")]:["prism","frustum","cube"].includes(body.kind)?[p.slice(0,n).join(" "),p.slice(n).join(" ")]:p);}}><option value="">选择…</option>{bodies.map(c=><option key={c.id} value={c.id}>{conditionLabels[c.kind]} {c.refs.flat().join(" ")}</option>)}</select></label>}</>}
-        {inputs.map((field,i)=><label key={`${kind}-${solid}-${i}`}>{field.label}{kind==="onCurve"&&i===1?<select value={fields[i]??""} onChange={e=>setFields(v=>[v[0]??"",e.target.value])}><option value="">选择曲线…</option>{curves.map(c=><option key={c.id} value={c.name}>{c.name} · {c.type==="circle"?"圆":"椭圆"}</option>)}</select>:<input aria-label={field.label} spellCheck={false} autoComplete="off" placeholder={field.placeholder} value={fields[i]??""} onChange={e=>setFields(previous=>{const next=[...previous];next[i]=e.target.value;return next;})}/>}</label>)}
+        {inputs.map((field,i)=><label key={`${kind}-${solid}-${i}`}>{field.label}{kind==="onCurve"&&i===1?<select value={fields[i]??""} onChange={e=>setFields(v=>[v[0]??"",e.target.value])}><option value="">选择曲线…</option>{catalog.choices.map(c=><option key={c.id} value={c.name}>{c.name} · {c.label}</option>)}</select>:<input list={referenceDocument?`${listId}-refs`:undefined} aria-label={field.label} spellCheck={false} autoComplete="off" placeholder={field.placeholder} value={fields[i]??""} onChange={e=>setFields(previous=>{const next=[...previous];next[i]=e.target.value;return next;})}/>}</label>)}
         {angleKinds.includes(kind)&&<label>给定方式<select aria-label="角的给定方式" value={angleMode} onChange={e=>{setAngleMode(e.target.value as AngleMode);setValue(e.target.value==="degrees"?"60":e.target.value==="radians"?"pi/3":"1/2");}}><option value="degrees">角度（度）</option><option value="radians">角度（弧度）</option><option value="sin">正弦值 sin</option><option value="cos">余弦值 cos</option><option value="tan">正切值 tan</option></select></label>}
         {numeric&&<label>{kind==="area"?"面积":kind==="volume"?"体积":kind==="circumradius"?"外接圆半径":["concyclic","cospherical"].includes(kind)?"半径（可留空）":["pointLineDistance","pointPlaneDistance"].includes(kind)?"距离":kind==="distance"?"长度":kind==="vectorDot"?"数量积（可为负数或零）":kind==="division"?"AP / PB（1 为中点）":kind==="ratio"?"长度比":angleMode==="degrees"?"角度（度）":angleMode==="radians"?"角度（弧度）":"三角函数值"}<input aria-label="条件数值" value={value} onChange={e=>setValue(e.target.value)} placeholder="支持分数和根式"/></label>}
         {angleMode==="sin"&&["vertexAngle","dihedral"].includes(kind)&&<label>角的范围<select aria-label="正弦角的范围" value={range} onChange={e=>setRange(e.target.value as typeof range)}><option value="both">保留两种可能</option><option value="acute">0°～90°</option><option value="obtuse">90°～180°</option></select></label>}
-        <button className="primary constraint-add" type="submit" disabled={inputs.some((_,i)=>!fields[i]?.trim())}>加入条件</button>
+        <button className="primary constraint-add" type="submit" disabled={inputs.some((_,i)=>!fields[i]?.trim())}>{mode==='coordinate'?'加入关系':'加入条件'}</button>
       </form>}
       {category<groups.length&&["congruent","similar"].includes(kind)&&<small>按对应顺序输入顶点；同时适用于三角形和多边形。</small>}
       {kind==="vectorRelation"&&<small>向量用端点表示，如 AB；支持数乘、加减和分数、根式系数，右侧可填 0。</small>}

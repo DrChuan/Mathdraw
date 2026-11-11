@@ -1,6 +1,7 @@
 import type {RecognizedQuestion} from './types';
 import {extractionPrompt,ocrRegions,parseExtraction,recognitionText,normalizeQuestionParagraphs,validateRecognition} from './model';
 import {replyText} from './adapter';
+import {formatQuestionMath,questionMathWarnings} from './fulltext';
 export type RecognitionAction='text'|'all'|'conditions';
 type ImageSource=Pick<RecognizedQuestion,'image'|'width'|'height'>;
 export function createTextDraft(image:ImageSource):RecognizedQuestion{return {...image,version:1,id:crypto.randomUUID(),regions:[],originalText:'',editedText:'',paragraphs:[],mode:'coordinate',points:'',segments:'',scopes:[{id:'common',label:'公共题干'}],activeScope:'common',items:[],warnings:[],revision:0,textOnly:true,inputSource:'image'};}
@@ -12,7 +13,8 @@ export function ocrTextDocument(raw:unknown,image:ImageSource):RecognizedQuestio
  const markdown=(text:string)=>recognitionText(text.replace(/\\+\(/g,()=>'$').replace(/\\+\)/g,()=>'$').replace(/\\+\[/g,()=>'$$').replace(/\\+\]/g,()=>'$$'));
  let paragraphs=regions.map(r=>({text:markdown(r.text),regions:[r.id]}));
  if(!paragraphs.length){let text=replyText(raw).trim();try{const rows=JSON.parse(text.replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,''));if(Array.isArray(rows)&&rows.every(row=>row&&typeof row.text==='string'))text=rows.map(row=>row.text).join('\n');}catch{/* Plain OCR text remains plain text. */}if(!text)throw Error('OCR 未返回题文');paragraphs=[{text:markdown(text),regions:[]}];warnings.push('OCR 未返回实测来源区域，可编辑文本后提取条件；不会生成虚构来源框。');}
- paragraphs=normalizeQuestionParagraphs(paragraphs);const originalText=paragraphs.map(p=>p.text).join('\n\n');
+ paragraphs=normalizeQuestionParagraphs(paragraphs).map(p=>({...p,text:formatQuestionMath(p.text)}));const originalText=paragraphs.map(p=>p.text).join('\n\n');
+ warnings.push(...questionMathWarnings(originalText));
  const q:RecognizedQuestion={...image,version:1,id:crypto.randomUUID(),regions,originalText,editedText:originalText,paragraphs,mode:'coordinate',points:'',segments:'',scopes:[{id:'common',label:'公共题干'}],activeScope:'common',items:[],warnings,revision:0,textOnly:true,inputSource:'image'};
  validateRecognition(q);return q;
 }

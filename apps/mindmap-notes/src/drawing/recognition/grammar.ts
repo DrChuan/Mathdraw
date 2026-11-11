@@ -17,6 +17,7 @@ s=Segment(A,B)，l=Line(A,B)，h=Vector(A,B)，t=Triangle(A,B,C)。
 c=Circle(O,A)（圆心和圆上一点），c=Circle(O,2)（圆心和半径），c=Circle3(A,B,C)，c=DiameterCircle(A,B)（以AB为直径的圆）。不要在识别条目里引入未在题中命名的中点来替代直径圆。
 M,N=Intersect(c,l)（两个不同交点的一条定义）；单点用 M=Intersect(c,l,1)，第二点用 N=Intersect(c,l,2)。序号从1开始。若交点构造在初值不存在，使用 intersection(M,c,l)、intersection(N,c,l) 和 M!=N 保留为待求关系，不固定采样坐标。
 已知关系（不是新对象）：onCurve(A,c)、onLine(A,l)、intersection(A,c,l)、center(O,c)、focus(F,c,1)、directrix(l,c,1)、tangent(l,c)、parallel(l,s)、perpendicular(l,s)、lineAngle(l,s,60)。引用命名直线的角使用 lineAngle，而三点角使用 angle(A,B,C)=5*pi/6。
+直线斜率：k(AB)=2 或 k(l)=2；支持两点引用与已声明命名直线，不适用于非直线曲线。竖直直线的斜率不存在，不可用无穷大代入。
 参数/坐标等式：x(A)=2，y(A)=0，a(c)=2，b(c)=1，e(c)=sqrt(2)，radius(c)=3，focalDistance(c)=4。数值必须是原题给定，不能先解题填入。
 普通边长和角度等式始终是标量；只有原文带向量标记才用 vec 或 dot。数值角度默认度；含pi或rad(...)为弧度。不存在的命令、自然语言源码或不支持的定义应标 uncertain，不能伪装成可执行条件。
 `;

@@ -1,0 +1,1110 @@
+{
+  "schemaVersion": 4,
+  "type": "mindgrove-mathdraw",
+  "id": "2df79a7e-759f-4bb8-894d-dd1770ac91d4",
+  "title": "未命名绘图",
+  "dimension": "2d",
+  "objects": [
+    {
+      "id": "7bdf456b-3d22-48a1-859b-63696756d762",
+      "name": "O",
+      "symbol": "O",
+      "kind": "point",
+      "construction": {
+        "type": "origin"
+      },
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "showName": true,
+      "dot": "auto",
+      "coordinates": "none",
+      "labelOffset": [
+        -17,
+        19
+      ],
+      "constraintSet": "180dae4d-3f78-4ec7-ad28-01007ce084bd",
+      "constraintPointName": "O"
+    },
+    {
+      "id": "c0ca11a4-79e0-476c-9ecd-239c4f980b53",
+      "kind": "number",
+      "name": "a",
+      "expression": "2",
+      "references": {},
+      "value": 2,
+      "slider": {
+        "min": -5,
+        "max": 5,
+        "step": 0.1
+      },
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "a",
+      "hidden": true,
+      "constraintSet": "180dae4d-3f78-4ec7-ad28-01007ce084bd"
+    },
+    {
+      "id": "f29ead84-0cd7-46fe-9bd3-e330dd685cf5",
+      "kind": "number",
+      "name": "b",
+      "expression": "1",
+      "references": {},
+      "value": 1,
+      "slider": {
+        "min": -5,
+        "max": 5,
+        "step": 0.1
+      },
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "b",
+      "hidden": true,
+      "constraintSet": "180dae4d-3f78-4ec7-ad28-01007ce084bd"
+    },
+    {
+      "id": "a3dd632e-36ac-4e07-b223-4a1c8f72dccb",
+      "kind": "curve",
+      "name": "曲线",
+      "planeId": "xy",
+      "equation": "x^2/a^2+y^2/b^2=1",
+      "autoFoci": false,
+      "range": [
+        -5,
+        5,
+        -5,
+        5
+      ],
+      "followView": true,
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "parameters": {
+        "source": "x^2/a^2+y^2/b^2=1",
+        "references": {
+          "a": "c0ca11a4-79e0-476c-9ecd-239c4f980b53",
+          "b": "f29ead84-0cd7-46fe-9bd3-e330dd685cf5"
+        },
+        "fields": {
+          "equation": "x^2/a^2+y^2/b^2=1"
+        }
+      },
+      "symbol": "c",
+      "constraintSet": "180dae4d-3f78-4ec7-ad28-01007ce084bd"
+    },
+    {
+      "id": "f19a8208-e081-4919-9545-26af66732dba",
+      "kind": "number",
+      "name": "c_1",
+      "expression": "sqrt(abs(a^2-b^2))",
+      "references": {
+        "a": "c0ca11a4-79e0-476c-9ecd-239c4f980b53",
+        "b": "f29ead84-0cd7-46fe-9bd3-e330dd685cf5"
+      },
+      "value": 1.7320508075688772,
+      "slider": {
+        "min": -5,
+        "max": 5,
+        "step": 0.1
+      },
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "c_1",
+      "constraintSet": "180dae4d-3f78-4ec7-ad28-01007ce084bd"
+    },
+    {
+      "id": "ea2c51c5-d1df-4949-b684-e71147ab85cd",
+      "kind": "number",
+      "name": "e",
+      "expression": "c_1/a",
+      "references": {
+        "a": "c0ca11a4-79e0-476c-9ecd-239c4f980b53",
+        "c_1": "f19a8208-e081-4919-9545-26af66732dba"
+      },
+      "value": 0.8660254037844386,
+      "slider": {
+        "min": -5,
+        "max": 5,
+        "step": 0.1
+      },
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "e",
+      "constraintSet": "180dae4d-3f78-4ec7-ad28-01007ce084bd"
+    },
+    {
+      "id": "04341711-3b81-48dc-8521-4b5599703df6",
+      "name": "A",
+      "kind": "point",
+      "construction": {
+        "type": "free",
+        "position": [
+          -0.07512457747802406,
+          0.9992942882192963,
+          0
+        ]
+      },
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "showName": true,
+      "coordinates": "none",
+      "labelOffset": [
+        9,
+        -10
+      ],
+      "symbol": "A",
+      "constraintSet": "180dae4d-3f78-4ec7-ad28-01007ce084bd",
+      "constraintPointName": "A"
+    },
+    {
+      "id": "35b35bc5-eaeb-45a5-b693-4c496ec702ae",
+      "name": "B",
+      "kind": "point",
+      "construction": {
+        "type": "free",
+        "position": [
+          -1.999911789317093,
+          -0.00939195175621469,
+          0
+        ]
+      },
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "showName": true,
+      "coordinates": "none",
+      "labelOffset": [
+        9,
+        -10
+      ],
+      "symbol": "B",
+      "constraintSet": "180dae4d-3f78-4ec7-ad28-01007ce084bd",
+      "constraintPointName": "B"
+    },
+    {
+      "id": "d9359784-2a66-40cd-8d87-858f77202546",
+      "kind": "number",
+      "name": "l_t",
+      "expression": "3.1603818212562347",
+      "references": {},
+      "value": 3.1603818212562347,
+      "slider": {
+        "min": -5,
+        "max": 5,
+        "step": 0.1
+      },
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "l_t",
+      "hidden": true,
+      "constraintSet": "180dae4d-3f78-4ec7-ad28-01007ce084bd"
+    },
+    {
+      "id": "4d1fb8e0-806f-441b-a89b-a1d9a0ab265b",
+      "kind": "curve",
+      "name": "曲线",
+      "planeId": "xy",
+      "equation": "cos(l_t)*(y-y(A))-sin(l_t)*(x-x(A))=0",
+      "autoFoci": false,
+      "range": [
+        -5,
+        5,
+        -5,
+        5
+      ],
+      "followView": true,
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "parameters": {
+        "source": "cos(l_t)*(y-y(A))-sin(l_t)*(x-x(A))=0",
+        "references": {
+          "A": "04341711-3b81-48dc-8521-4b5599703df6",
+          "l_t": "d9359784-2a66-40cd-8d87-858f77202546"
+        },
+        "fields": {
+          "equation": "cos(l_t)*(y-y(A))-sin(l_t)*(x-x(A))=0"
+        }
+      },
+      "symbol": "l",
+      "constraintSet": "180dae4d-3f78-4ec7-ad28-01007ce084bd"
+    },
+    {
+      "id": "a011483e-47e7-4bf0-a504-b6fc4ce7aa7e",
+      "kind": "number",
+      "name": "m_t",
+      "expression": "-4.693599812718249",
+      "references": {},
+      "value": -4.693599812718249,
+      "slider": {
+        "min": -5,
+        "max": 5,
+        "step": 0.1
+      },
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "symbol": "m_t",
+      "hidden": true,
+      "constraintSet": "180dae4d-3f78-4ec7-ad28-01007ce084bd"
+    },
+    {
+      "id": "f4252166-49aa-4a16-b358-728d6618b372",
+      "kind": "curve",
+      "name": "曲线",
+      "planeId": "xy",
+      "equation": "cos(m_t)*(y-y(B))-sin(m_t)*(x-x(B))=0",
+      "autoFoci": false,
+      "range": [
+        -5,
+        5,
+        -5,
+        5
+      ],
+      "followView": true,
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "parameters": {
+        "source": "cos(m_t)*(y-y(B))-sin(m_t)*(x-x(B))=0",
+        "references": {
+          "B": "35b35bc5-eaeb-45a5-b693-4c496ec702ae",
+          "m_t": "a011483e-47e7-4bf0-a504-b6fc4ce7aa7e"
+        },
+        "fields": {
+          "equation": "cos(m_t)*(y-y(B))-sin(m_t)*(x-x(B))=0"
+        }
+      },
+      "symbol": "m",
+      "constraintSet": "180dae4d-3f78-4ec7-ad28-01007ce084bd"
+    },
+    {
+      "id": "180dae4d-3f78-4ec7-ad28-01007ce084bd",
+      "name": "条件作图解集",
+      "kind": "solutionSet",
+      "problem": {
+        "mode": "coordinate",
+        "points": [
+          "O",
+          "A",
+          "B"
+        ],
+        "segments": [],
+        "conditions": [],
+        "curves": [],
+        "planar": {
+          "document": {
+            "schemaVersion": 4,
+            "type": "mindgrove-mathdraw",
+            "id": "2df79a7e-759f-4bb8-894d-dd1770ac91d4",
+            "title": "未命名绘图",
+            "dimension": "2d",
+            "objects": [
+              {
+                "id": "7bdf456b-3d22-48a1-859b-63696756d762",
+                "name": "O",
+                "symbol": "O",
+                "kind": "point",
+                "construction": {
+                  "type": "origin"
+                },
+                "style": {
+                  "width": 1.25,
+                  "line": "auto",
+                  "fontSize": 18,
+                  "italic": true
+                },
+                "showName": true,
+                "dot": "auto",
+                "coordinates": "none",
+                "labelOffset": [
+                  -17,
+                  19
+                ]
+              },
+              {
+                "id": "c0ca11a4-79e0-476c-9ecd-239c4f980b53",
+                "kind": "number",
+                "name": "a",
+                "expression": "2",
+                "references": {},
+                "value": 2,
+                "slider": {
+                  "min": -5,
+                  "max": 5,
+                  "step": 0.1
+                },
+                "style": {
+                  "width": 1.25,
+                  "line": "auto",
+                  "fontSize": 18,
+                  "italic": true
+                },
+                "symbol": "a",
+                "hidden": true
+              },
+              {
+                "id": "f29ead84-0cd7-46fe-9bd3-e330dd685cf5",
+                "kind": "number",
+                "name": "b",
+                "expression": "1",
+                "references": {},
+                "value": 1,
+                "slider": {
+                  "min": -5,
+                  "max": 5,
+                  "step": 0.1
+                },
+                "style": {
+                  "width": 1.25,
+                  "line": "auto",
+                  "fontSize": 18,
+                  "italic": true
+                },
+                "symbol": "b",
+                "hidden": true
+              },
+              {
+                "id": "a3dd632e-36ac-4e07-b223-4a1c8f72dccb",
+                "kind": "curve",
+                "name": "曲线",
+                "planeId": "xy",
+                "equation": "x^2/a^2+y^2/b^2=1",
+                "autoFoci": false,
+                "range": [
+                  -5,
+                  5,
+                  -5,
+                  5
+                ],
+                "followView": true,
+                "style": {
+                  "width": 1.25,
+                  "line": "auto",
+                  "fontSize": 18,
+                  "italic": true
+                },
+                "parameters": {
+                  "source": "x^2/a^2+y^2/b^2=1",
+                  "references": {
+                    "a": "c0ca11a4-79e0-476c-9ecd-239c4f980b53",
+                    "b": "f29ead84-0cd7-46fe-9bd3-e330dd685cf5"
+                  },
+                  "fields": {
+                    "equation": "x^2/a^2+y^2/b^2=1"
+                  }
+                },
+                "symbol": "c"
+              },
+              {
+                "id": "f19a8208-e081-4919-9545-26af66732dba",
+                "kind": "number",
+                "name": "c_1",
+                "expression": "sqrt(abs(a^2-b^2))",
+                "references": {
+                  "a": "c0ca11a4-79e0-476c-9ecd-239c4f980b53",
+                  "b": "f29ead84-0cd7-46fe-9bd3-e330dd685cf5"
+                },
+                "value": 1.7320508075688772,
+                "slider": {
+                  "min": -5,
+                  "max": 5,
+                  "step": 0.1
+                },
+                "style": {
+                  "width": 1.25,
+                  "line": "auto",
+                  "fontSize": 18,
+                  "italic": true
+                },
+                "symbol": "c_1"
+              },
+              {
+                "id": "ea2c51c5-d1df-4949-b684-e71147ab85cd",
+                "kind": "number",
+                "name": "e",
+                "expression": "c_1/a",
+                "references": {
+                  "a": "c0ca11a4-79e0-476c-9ecd-239c4f980b53",
+                  "c_1": "f19a8208-e081-4919-9545-26af66732dba"
+                },
+                "value": 0.8660254037844386,
+                "slider": {
+                  "min": -5,
+                  "max": 5,
+                  "step": 0.1
+                },
+                "style": {
+                  "width": 1.25,
+                  "line": "auto",
+                  "fontSize": 18,
+                  "italic": true
+                },
+                "symbol": "e"
+              },
+              {
+                "id": "04341711-3b81-48dc-8521-4b5599703df6",
+                "name": "A",
+                "kind": "point",
+                "construction": {
+                  "type": "free",
+                  "position": [
+                    1.8804016295410773,
+                    -0.34062065104948824,
+                    0
+                  ]
+                },
+                "style": {
+                  "width": 1.25,
+                  "line": "auto",
+                  "fontSize": 18,
+                  "italic": true
+                },
+                "showName": true,
+                "coordinates": "none",
+                "labelOffset": [
+                  9,
+                  -10
+                ],
+                "symbol": "A"
+              },
+              {
+                "id": "35b35bc5-eaeb-45a5-b693-4c496ec702ae",
+                "name": "B",
+                "kind": "point",
+                "construction": {
+                  "type": "free",
+                  "position": [
+                    1.6461166400314522,
+                    0.567956866192221,
+                    0
+                  ]
+                },
+                "style": {
+                  "width": 1.25,
+                  "line": "auto",
+                  "fontSize": 18,
+                  "italic": true
+                },
+                "showName": true,
+                "coordinates": "none",
+                "labelOffset": [
+                  9,
+                  -10
+                ],
+                "symbol": "B"
+              },
+              {
+                "id": "d9359784-2a66-40cd-8d87-858f77202546",
+                "kind": "number",
+                "name": "l_t",
+                "expression": "4.085352993034661",
+                "references": {},
+                "value": 4.085352993034661,
+                "slider": {
+                  "min": -5,
+                  "max": 5,
+                  "step": 0.1
+                },
+                "style": {
+                  "width": 1.25,
+                  "line": "auto",
+                  "fontSize": 18,
+                  "italic": true
+                },
+                "symbol": "l_t",
+                "hidden": true
+              },
+              {
+                "id": "4d1fb8e0-806f-441b-a89b-a1d9a0ab265b",
+                "kind": "curve",
+                "name": "曲线",
+                "planeId": "xy",
+                "equation": "cos(l_t)*(y-y(A))-sin(l_t)*(x-x(A))=0",
+                "autoFoci": false,
+                "range": [
+                  -5,
+                  5,
+                  -5,
+                  5
+                ],
+                "followView": true,
+                "style": {
+                  "width": 1.25,
+                  "line": "auto",
+                  "fontSize": 18,
+                  "italic": true
+                },
+                "parameters": {
+                  "source": "cos(l_t)*(y-y(A))-sin(l_t)*(x-x(A))=0",
+                  "references": {
+                    "A": "04341711-3b81-48dc-8521-4b5599703df6",
+                    "l_t": "d9359784-2a66-40cd-8d87-858f77202546"
+                  },
+                  "fields": {
+                    "equation": "cos(l_t)*(y-y(A))-sin(l_t)*(x-x(A))=0"
+                  }
+                },
+                "symbol": "l"
+              },
+              {
+                "id": "a011483e-47e7-4bf0-a504-b6fc4ce7aa7e",
+                "kind": "number",
+                "name": "m_t",
+                "expression": "-0.6270359873500292",
+                "references": {},
+                "value": -0.6270359873500292,
+                "slider": {
+                  "min": -5,
+                  "max": 5,
+                  "step": 0.1
+                },
+                "style": {
+                  "width": 1.25,
+                  "line": "auto",
+                  "fontSize": 18,
+                  "italic": true
+                },
+                "symbol": "m_t",
+                "hidden": true
+              },
+              {
+                "id": "f4252166-49aa-4a16-b358-728d6618b372",
+                "kind": "curve",
+                "name": "曲线",
+                "planeId": "xy",
+                "equation": "cos(m_t)*(y-y(B))-sin(m_t)*(x-x(B))=0",
+                "autoFoci": false,
+                "range": [
+                  -5,
+                  5,
+                  -5,
+                  5
+                ],
+                "followView": true,
+                "style": {
+                  "width": 1.25,
+                  "line": "auto",
+                  "fontSize": 18,
+                  "italic": true
+                },
+                "parameters": {
+                  "source": "cos(m_t)*(y-y(B))-sin(m_t)*(x-x(B))=0",
+                  "references": {
+                    "B": "35b35bc5-eaeb-45a5-b693-4c496ec702ae",
+                    "m_t": "a011483e-47e7-4bf0-a504-b6fc4ce7aa7e"
+                  },
+                  "fields": {
+                    "equation": "cos(m_t)*(y-y(B))-sin(m_t)*(x-x(B))=0"
+                  }
+                },
+                "symbol": "m"
+              }
+            ],
+            "planes": [
+              {
+                "id": "xy",
+                "name": "z=0",
+                "origin": [
+                  0,
+                  0,
+                  0
+                ],
+                "u": [
+                  1,
+                  0,
+                  0
+                ],
+                "v": [
+                  0,
+                  1,
+                  0
+                ]
+              }
+            ],
+            "edgeStyles": {},
+            "view": {
+              "mode": "plane",
+              "planeId": "xy",
+              "angle": 0,
+              "projection": "orthographic",
+              "scale": 70,
+              "center": [
+                0,
+                0
+              ],
+              "axes": true,
+              "grid": false
+            },
+            "output": {
+              "width": 1600,
+              "background": "transparent",
+              "crop": "content",
+              "bounds": [
+                -5,
+                5,
+                -4,
+                4
+              ]
+            }
+          },
+          "unknowns": [
+            {
+              "id": "c0ca11a4-79e0-476c-9ecd-239c4f980b53.value",
+              "object": "c0ca11a4-79e0-476c-9ecd-239c4f980b53",
+              "field": "value",
+              "initial": 2
+            },
+            {
+              "id": "f29ead84-0cd7-46fe-9bd3-e330dd685cf5.value",
+              "object": "f29ead84-0cd7-46fe-9bd3-e330dd685cf5",
+              "field": "value",
+              "initial": 1
+            },
+            {
+              "id": "04341711-3b81-48dc-8521-4b5599703df6.x",
+              "object": "04341711-3b81-48dc-8521-4b5599703df6",
+              "field": "x",
+              "initial": 1.8804016295410773
+            },
+            {
+              "id": "04341711-3b81-48dc-8521-4b5599703df6.y",
+              "object": "04341711-3b81-48dc-8521-4b5599703df6",
+              "field": "y",
+              "initial": -0.34062065104948824
+            },
+            {
+              "id": "35b35bc5-eaeb-45a5-b693-4c496ec702ae.x",
+              "object": "35b35bc5-eaeb-45a5-b693-4c496ec702ae",
+              "field": "x",
+              "initial": 1.6461166400314522
+            },
+            {
+              "id": "35b35bc5-eaeb-45a5-b693-4c496ec702ae.y",
+              "object": "35b35bc5-eaeb-45a5-b693-4c496ec702ae",
+              "field": "y",
+              "initial": 0.567956866192221
+            },
+            {
+              "id": "d9359784-2a66-40cd-8d87-858f77202546.value",
+              "object": "d9359784-2a66-40cd-8d87-858f77202546",
+              "field": "value",
+              "initial": 4.085352993034661
+            },
+            {
+              "id": "a011483e-47e7-4bf0-a504-b6fc4ce7aa7e.value",
+              "object": "a011483e-47e7-4bf0-a504-b6fc4ce7aa7e",
+              "field": "value",
+              "initial": -0.6270359873500292
+            }
+          ],
+          "equations": [
+            {
+              "id": "180dae4d-3f78-4ec7-ad28-01007ce084bd-equation-0",
+              "source": "a>0",
+              "enabled": true
+            },
+            {
+              "id": "180dae4d-3f78-4ec7-ad28-01007ce084bd-equation-1",
+              "source": "b>0",
+              "enabled": true
+            },
+            {
+              "id": "180dae4d-3f78-4ec7-ad28-01007ce084bd-equation-2",
+              "source": "a>b",
+              "enabled": true
+            },
+            {
+              "id": "180dae4d-3f78-4ec7-ad28-01007ce084bd-equation-3",
+              "source": "a=2",
+              "enabled": true
+            },
+            {
+              "id": "180dae4d-3f78-4ec7-ad28-01007ce084bd-equation-4",
+              "source": "b=1",
+              "enabled": true
+            },
+            {
+              "id": "180dae4d-3f78-4ec7-ad28-01007ce084bd-equation-5",
+              "source": "onCurve(A,c)",
+              "enabled": true
+            },
+            {
+              "id": "180dae4d-3f78-4ec7-ad28-01007ce084bd-equation-6",
+              "source": "onCurve(B,c)",
+              "enabled": true
+            },
+            {
+              "id": "180dae4d-3f78-4ec7-ad28-01007ce084bd-equation-7",
+              "source": "l\\perp m",
+              "enabled": true
+            },
+            {
+              "id": "180dae4d-3f78-4ec7-ad28-01007ce084bd-equation-8",
+              "source": "tangent(l,c)",
+              "enabled": true
+            },
+            {
+              "id": "180dae4d-3f78-4ec7-ad28-01007ce084bd-equation-9",
+              "source": "tangent(m,c)",
+              "enabled": true
+            }
+          ],
+          "inputs": [],
+          "absorbedSets": [
+            "180dae4d-3f78-4ec7-ad28-01007ce084bd"
+          ],
+          "inheritedConditions": [],
+          "inheritedCurves": [],
+          "automaticSearch": true
+        }
+      },
+      "result": {
+        "modelSummary": {
+          "independent": [
+            "a.value",
+            "b.value",
+            "x(A)",
+            "y(A)",
+            "x(B)",
+            "y(B)",
+            "l_t.value",
+            "m_t.value"
+          ],
+          "eliminated": [],
+          "equations": [
+            "(1)*a.value+(-2)=0",
+            "(1)*b.value+(-1)=0",
+            "(-1)*b.value^2*x(A)^2+(-1)*a.value^2*y(A)^2+(1)*a.value^2*b.value^2=0",
+            "(-1)*b.value^2*x(B)^2+(-1)*a.value^2*y(B)^2+(1)*a.value^2*b.value^2=0",
+            "((((4)*(((1)/((b.value)^(2)))*(-1)))*(((0)-(sin(l_t.value)))*((0)-(sin(l_t.value)))))+(((4)*(((1)/((a.value)^(2)))*(-1)))*((cos(l_t.value))*(cos(l_t.value)))))+(((4)*(((1)/((a.value)^(2)))*((1)/((b.value)^(2)))))*((((cos(l_t.value))*((0)-(y(A))))-((sin(l_t.value))*((0)-(x(A)))))*(((cos(l_t.value))*((0)-(y(A))))-((sin(l_t.value))*((0)-(x(A)))))))=0",
+            "((((4)*(((1)/((b.value)^(2)))*(-1)))*(((0)-(sin(m_t.value)))*((0)-(sin(m_t.value)))))+(((4)*(((1)/((a.value)^(2)))*(-1)))*((cos(m_t.value))*(cos(m_t.value)))))+(((4)*(((1)/((a.value)^(2)))*((1)/((b.value)^(2)))))*((((cos(m_t.value))*((0)-(y(B))))-((sin(m_t.value))*((0)-(x(B)))))*(((cos(m_t.value))*((0)-(y(B))))-((sin(m_t.value))*((0)-(x(B)))))))=0"
+          ],
+          "domains": [
+            "(1)*a.value>0",
+            "(1)*b.value>0",
+            "(1)*a.value+(-1)*b.value>0",
+            "(1)*a.value^2!=0",
+            "(1)*b.value^2!=0",
+            "(1)*a.value^2*b.value^2!=0",
+            "(((1)/((a.value)^(2)))*((cos(l_t.value))*(cos(l_t.value))))+(((1)/((b.value)^(2)))*(((0)-(sin(l_t.value)))*((0)-(sin(l_t.value)))))!=0",
+            "(((0)-(sin(l_t.value)))*((0)-(sin(l_t.value))))+((cos(l_t.value))*(cos(l_t.value)))>0",
+            "(((1)/((a.value)^(2)))*((cos(m_t.value))*(cos(m_t.value))))+(((1)/((b.value)^(2)))*(((0)-(sin(m_t.value)))*((0)-(sin(m_t.value)))))!=0",
+            "(((0)-(sin(m_t.value)))*((0)-(sin(m_t.value))))+((cos(m_t.value))*(cos(m_t.value)))>0",
+            "((0)-(sin(l_t.value)))^2+(cos(l_t.value))^2>0",
+            "((0)-(sin(m_t.value)))^2+(cos(m_t.value))^2>0",
+            "(1)*a.value^2+(-1)*b.value^2>=0",
+            "(1)*a.value!=0"
+          ],
+          "unresolved": [
+            "l\\perp m: 不支持的 LaTeX 命令 \\perp",
+            "l：函数 cos 的全局定义域尚未代数化",
+            "m：函数 cos 的全局定义域尚未代数化"
+          ]
+        },
+        "branches": [
+          {
+            "positions": {
+              "O": [
+                0,
+                0,
+                0
+              ],
+              "A": [
+                1.8804016295410773,
+                -0.34062065104948824,
+                0
+              ],
+              "B": [
+                1.6461166400314522,
+                0.567956866192221,
+                0
+              ]
+            },
+            "values": {
+              "c0ca11a4-79e0-476c-9ecd-239c4f980b53.value": 2,
+              "f29ead84-0cd7-46fe-9bd3-e330dd685cf5.value": 1,
+              "04341711-3b81-48dc-8521-4b5599703df6.x": 1.8804016295410773,
+              "04341711-3b81-48dc-8521-4b5599703df6.y": -0.34062065104948824,
+              "35b35bc5-eaeb-45a5-b693-4c496ec702ae.x": 1.6461166400314522,
+              "35b35bc5-eaeb-45a5-b693-4c496ec702ae.y": 0.567956866192221,
+              "d9359784-2a66-40cd-8d87-858f77202546.value": 4.085352993034661,
+              "a011483e-47e7-4bf0-a504-b6fc4ce7aa7e.value": -0.6270359873500292
+            },
+            "adjustableValues": [
+              "d9359784-2a66-40cd-8d87-858f77202546.value",
+              "a011483e-47e7-4bf0-a504-b6fc4ce7aa7e.value"
+            ],
+            "reference": [
+              "O"
+            ],
+            "rigid": [],
+            "dof": 1,
+            "motionDof": 1,
+            "loci": [],
+            "residual": 5.165555267383424e-11,
+            "rigidityPending": false
+          },
+          {
+            "positions": {
+              "O": [
+                0,
+                0,
+                0
+              ],
+              "A": [
+                1.97541706295538,
+                -0.1563069315359726,
+                0
+              ],
+              "B": [
+                -1.0697138323743922,
+                -0.844942648472822,
+                0
+              ]
+            },
+            "values": {
+              "c0ca11a4-79e0-476c-9ecd-239c4f980b53.value": 2,
+              "f29ead84-0cd7-46fe-9bd3-e330dd685cf5.value": 1,
+              "04341711-3b81-48dc-8521-4b5599703df6.x": 1.97541706295538,
+              "04341711-3b81-48dc-8521-4b5599703df6.y": -0.1563069315359726,
+              "35b35bc5-eaeb-45a5-b693-4c496ec702ae.x": -1.0697138323743922,
+              "35b35bc5-eaeb-45a5-b693-4c496ec702ae.y": -0.844942648472822,
+              "d9359784-2a66-40cd-8d87-858f77202546.value": 7.547455592229692,
+              "a011483e-47e7-4bf0-a504-b6fc4ce7aa7e.value": -0.30652604174479087
+            },
+            "adjustableValues": [
+              "d9359784-2a66-40cd-8d87-858f77202546.value",
+              "a011483e-47e7-4bf0-a504-b6fc4ce7aa7e.value"
+            ],
+            "reference": [
+              "O"
+            ],
+            "rigid": [],
+            "dof": 2,
+            "motionDof": 1,
+            "loci": [],
+            "residual": 3.050029673268284e-11,
+            "rigidityPending": false
+          },
+          {
+            "positions": {
+              "O": [
+                0,
+                0,
+                0
+              ],
+              "A": [
+                -0.07512457747802406,
+                0.9992942882192963,
+                0
+              ],
+              "B": [
+                -1.999911789317093,
+                -0.00939195175621469,
+                0
+              ]
+            },
+            "values": {
+              "c0ca11a4-79e0-476c-9ecd-239c4f980b53.value": 2,
+              "f29ead84-0cd7-46fe-9bd3-e330dd685cf5.value": 1,
+              "04341711-3b81-48dc-8521-4b5599703df6.x": -0.07512457747802406,
+              "04341711-3b81-48dc-8521-4b5599703df6.y": 0.9992942882192963,
+              "35b35bc5-eaeb-45a5-b693-4c496ec702ae.x": -1.999911789317093,
+              "35b35bc5-eaeb-45a5-b693-4c496ec702ae.y": -0.00939195175621469,
+              "d9359784-2a66-40cd-8d87-858f77202546.value": 3.1603818212562347,
+              "a011483e-47e7-4bf0-a504-b6fc4ce7aa7e.value": -4.693599812718249
+            },
+            "adjustableValues": [
+              "d9359784-2a66-40cd-8d87-858f77202546.value",
+              "a011483e-47e7-4bf0-a504-b6fc4ce7aa7e.value"
+            ],
+            "reference": [
+              "O"
+            ],
+            "rigid": [],
+            "dof": 1,
+            "motionDof": 1,
+            "loci": [],
+            "residual": 3.647697205053091e-11,
+            "rigidityPending": false
+          },
+          {
+            "positions": {
+              "O": [
+                0,
+                0,
+                0
+              ],
+              "A": [
+                0.6881222722702371,
+                -0.9389472480415665,
+                0
+              ],
+              "B": [
+                1.9916594561508318,
+                0.09123131426942256,
+                0
+              ]
+            },
+            "values": {
+              "c0ca11a4-79e0-476c-9ecd-239c4f980b53.value": 2,
+              "f29ead84-0cd7-46fe-9bd3-e330dd685cf5.value": 1,
+              "04341711-3b81-48dc-8521-4b5599703df6.x": 0.6881222722702371,
+              "04341711-3b81-48dc-8521-4b5599703df6.y": -0.9389472480415665,
+              "35b35bc5-eaeb-45a5-b693-4c496ec702ae.x": 1.9916594561508318,
+              "35b35bc5-eaeb-45a5-b693-4c496ec702ae.y": 0.09123131426942256,
+              "d9359784-2a66-40cd-8d87-858f77202546.value": 9.605987312980758,
+              "a011483e-47e7-4bf0-a504-b6fc4ce7aa7e.value": -1.3895869745835183
+            },
+            "adjustableValues": [
+              "d9359784-2a66-40cd-8d87-858f77202546.value",
+              "a011483e-47e7-4bf0-a504-b6fc4ce7aa7e.value"
+            ],
+            "reference": [
+              "O"
+            ],
+            "rigid": [],
+            "dof": 1,
+            "motionDof": 1,
+            "loci": [],
+            "residual": 3.1754487928026265e-11,
+            "rigidityPending": false
+          }
+        ],
+        "status": "solved",
+        "precision": "approximate",
+        "method": "hybrid",
+        "complete": false,
+        "attempts": 6,
+        "elapsed": 268,
+        "constructionSteps": [
+          "先独立求解 1 组数值参数，再联立验证点、曲线及其余条件。"
+        ],
+        "approximationReason": "二维约束联立校正，每次移动后回代全部条件。",
+        "diagnostics": [
+          "二维求解得到 4 个构型；已验证原始条件。"
+        ]
+      },
+      "activeBranch": 2,
+      "placement": {
+        "origin": [
+          0,
+          0,
+          0
+        ],
+        "x": [
+          1,
+          0,
+          0
+        ],
+        "y": [
+          0,
+          1,
+          0
+        ],
+        "z": [
+          0,
+          0,
+          1
+        ]
+      },
+      "style": {
+        "width": 1.25,
+        "line": "auto",
+        "fontSize": 18,
+        "italic": true
+      },
+      "driver": "A",
+      "symbol": "p"
+    }
+  ],
+  "planes": [
+    {
+      "id": "xy",
+      "name": "z=0",
+      "origin": [
+        0,
+        0,
+        0
+      ],
+      "u": [
+        1,
+        0,
+        0
+      ],
+      "v": [
+        0,
+        1,
+        0
+      ]
+    }
+  ],
+  "edgeStyles": {},
+  "view": {
+    "mode": "plane",
+    "planeId": "xy",
+    "angle": 0,
+    "projection": "orthographic",
+    "scale": 70,
+    "center": [
+      0,
+      0
+    ],
+    "axes": true,
+    "grid": false
+  },
+  "output": {
+    "width": 1600,
+    "background": "transparent",
+    "crop": "content",
+    "bounds": [
+      -5,
+      5,
+      -4,
+      4
+    ]
+  }
+}

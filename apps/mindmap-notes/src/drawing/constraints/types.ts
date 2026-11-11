@@ -9,6 +9,8 @@ export interface PlanarEquation {id:string;source:string;enabled:boolean}
 export interface PlanarContext {
   /** Source definitions, not a second scene. Objects retain these IDs on commit. */
   document:DrawingDocument;unknowns:PlanarUnknown[];equations:PlanarEquation[];
+  /** Known during each solve; user changes trigger a new solve, not extra DOF. */
+  inputs?:{object:string;fields:string[]}[];
   absorbedSets?:string[];
   inheritedConditions?:Condition[];
   inheritedCurves?:ConstraintCurve[];
@@ -35,9 +37,11 @@ export interface Pose { origin: Vec3; x: Vec3; y: Vec3; z: Vec3 }
 export const identityPose = (): Pose => ({origin:[0,0,0],x:[1,0,0],y:[0,1,0],z:[0,0,1]});
 export type Positions = Record<string,Vec3>;
 export interface SpatialLocus {
-  point: string; kind: "line"|"segment"|"circle"|"plane"|"sphere"|"sampled";
+  point: string; kind: "line"|"segment"|"circle"|"plane"|"sphere"|"sampled"|"conic";
   origin: Vec3; u: Vec3; v: Vec3; radius: number;
   paths?: Vec3[][]; complete: boolean;
+  /** Exact implicit equation; finite parameter range is for rendering only. */
+  conic?:{equation:string;x:string;y:string;min:number;max:number;closed:boolean;components?:{x:string;y:string;min:number;max:number}[]};
 }
 export interface SolutionBranch {
   /** Intrinsic shape DOF, excluding an overall translation/rotation. */
@@ -47,11 +51,17 @@ export interface SolutionBranch {
   /** Motion allowed by the chosen fixed reference, separate from shape DOF. */
   motionDof?:number;
   mobility?:{version:1|2;linear:number;removed:number;checked:boolean};
+  /** Numeric unknown IDs with local motion under the current reference (Worker analysis). */
+  adjustableValues?:string[];
+  /** Free numeric inputs of a validated forward construction, with all original guards retained. */
+  constructionParameters?:string[];
   values?:Record<string,number>;
   exactValues?:Record<string,AlgebraicValue>;
   exactCertificate?:ExactCertificate;
 }
 export interface ConstraintResult {
+  /** Bounded audit of independent variables, eliminated definitions and domains. */
+  modelSummary?:{independent:string[];eliminated:string[];equations:string[];domains:string[];unresolved:string[]};
   exactAnalysis?:{state:'finite'|'family'|'unresolved';certified:boolean;totalSolutions:number;reducedVariables:number;reason?:string;reasonCode?:string;family?:ExactFamily;solutions?:ExactCertificate[]};
   method?: "construction"|"hybrid"|"numerical";
   precision?:"construction"|"algebraic"|"approximate";

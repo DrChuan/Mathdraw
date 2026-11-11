@@ -42,3 +42,21 @@ export function eccentricityEquations(source:string,value:string,variables:strin
  const rows=[`${op(det,'*',square(factor))}=${op(square(trace),'*',op('1','-',r))}`,`${value}>=0`,`${op(square(trace),'+',square(det))}>0`,`${square(g)}>0`,`${op(op(g,'*',trace),'*',factor)}>=0`];
  if(rows.some(s=>s.length>30000))throw Error('圆锥曲线表达式过于复杂，暂未完成精确展开');return rows;
 }
+
+/** Dual conic incidence, with nondegenerate and finite-contact guards.
+ * No slope division, coordinate sampling or square roots are needed. */
+export function tangentConicEquations(q:string[],line:string[]):string[]{
+ const [A,B,C,D,E,F]=q,[u,v,w]=line,op=operation;
+ const mul=(a:string,b:string)=>op(a,'*',b),sq=(a:string)=>mul(a,a),sub=(a:string,b:string)=>op(a,'-',b),add=(a:string,b:string)=>op(a,'+',b),times=(n:number,a:string)=>mul(String(n),a);
+ const terms=[
+  mul(sub(times(4,mul(C,F)),sq(E)),sq(u)),
+  mul(sub(times(4,mul(A,F)),sq(D)),sq(v)),
+  mul(sub(times(4,mul(A,C)),sq(B)),sq(w)),
+  mul(sub(times(2,mul(D,E)),times(4,mul(B,F))),mul(u,v)),
+  mul(sub(times(2,mul(B,E)),times(4,mul(C,D))),mul(u,w)),
+  mul(sub(times(2,mul(B,D)),times(4,mul(A,E))),mul(v,w))
+ ];
+ const det=sub(sub(sub(add(times(4,mul(mul(A,C),F)),mul(mul(B,D),E)),mul(A,sq(E))),mul(C,sq(D))),mul(F,sq(B)));
+ const direction=add(sub(mul(A,sq(v)),mul(B,mul(u,v))),mul(C,sq(u)));
+ return [`${terms.reduce(add,'0')}=0`,`${det}!=0`,`${direction}!=0`,`${add(sq(u),sq(v))}>0`];
+}

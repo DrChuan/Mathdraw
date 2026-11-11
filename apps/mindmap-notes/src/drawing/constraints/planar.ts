@@ -1,9 +1,12 @@
+import {independentPointConstructions} from './pointConstruction';
+import {tangentConicFamily} from './tangentFamily';
+import {planarConicFamily} from './conicFamily';
 import {independentParameterBranches} from './parameterBlocks';
 import type { Vec3 } from '../types';
 import type { ConstraintProblem,ConstraintResult,PlanarUnknown,Positions,SolutionBranch,SolveRequest,AlgebraicValue } from './types';
 import { evaluator,flatten,problemScale } from './compile';
 import { jacobian,rowBasis,offRowSpace,dampedStep,sub,norm,dot,cross } from './math';
-import { analyticLoci,nearestLocus } from './loci';
+import { analyticLoci,nearestLocus,locusPoint } from './loci';
 import { planConstructions } from './planner';
 import { materializePlanar,planarPositions,objectSymbol,coordinatePlane } from './planarModel';
 import { equationEnvironment } from './planarExpressions';
@@ -79,19 +82,60 @@ function planarOrbitDimension(e:ReturnType<typeof planarEvaluator>,v:number[]){
 export function solvePlanar(request:SolveRequest):ConstraintResult {
   const started=Date.now(),deadline=started+Math.max(30,Math.min(10000,request.budget??2000)),p=request.problem;validateProblem(p);
   const e=planarEvaluator(p),context=p.planar,branches:SolutionBranch[]=[],steps:string[]=[],equations=context?.equations.filter(q=>q.enabled)??[];
-  let attempts=0,state=request.seed??81741;const random=()=>((state=(Math.imul(state,1664525)+1013904223)>>>0)/4294967296);
+  let attempts=0,state=request.seed??81741,nearest=[...e.initial],nearestCost=Infinity;const random=()=>((state=(Math.imul(state,1664525)+1013904223)>>>0)/4294967296);
   if(e.variables.length>100)throw Error('最多同时求解 100 个独立二维坐标分量或参数');
+  const symbolic=symbolicPlanarEquations(p,e.variables),conicPlan=planarConicFamily(p,e.variables,symbolic);
+  const labels=Object.fromEntries(e.variables.map((u,i)=>{const name=u.point??context?.document.objects.find(o=>o.id===u.object)?.symbol??u.object;return [symbolic.tokens[i],['x','y'].includes(u.field)?`${u.field}(${name})`:`${name}.${u.field}`];}));
+  const readable=(s:string)=>substituteNames(s,labels),modelSummary={independent:Object.values(labels),eliminated:symbolic.definitions.eliminated,equations:symbolic.sources.filter(s=>/(?<![!<>])=/.test(s)).slice(0,20).map(readable).filter(s=>s.length<=4096),domains:symbolic.sources.filter(s=>/!=|[<>]/.test(s)).slice(0,20).map(readable).filter(s=>s.length<=4096),unresolved:[...symbolic.unsupported,...symbolic.definitions.unsupported].slice(0,20).map(s=>s.slice(0,1024))};
   const base=request.previous?.branches[request.trace?.branch??request.move?.branch??request.parameter?.branch??request.reference?.branch??0];
+  const parameterIndices=e.variables.flatMap((u,i)=>context?.document.objects.some(o=>o.id===u.object&&o.kind==='number')?[i]:[]);
+  const parameterBlocks=independentParameterBranches(symbolic.sources,symbolic.tokens,parameterIndices,e.initial,Math.min(deadline,Date.now()+Math.max(100,(request.budget??2000)*.25)));
+  const tangentPlan=parameterBlocks.branches.length<=1?tangentConicFamily(p,e.variables,symbolic,parameterBlocks.branches[0]??new Map(),parameterBlocks.expressions[0]??new Map()):undefined;
   const make=(v:number[],reference?:string[],exactValues?:Record<string,AlgebraicValue>)=>{
     const d=e.model(v),mobility=localMobility(e.mobilityResidual,v,e.variables.map(u=>Math.max(1,Math.abs(u.initial))),Math.min(deadline,Date.now()+50)),raw=mobility.dof,dof=p.mode==='plane'?Math.max(0,raw-planarOrbitDimension(e,v)):raw;
     const known=new Set<string>();if(context){const changed=new Set(context.unknowns.flatMap(u=>[u.object,...affectedObjects(context.document,u.object)]));for(const o of context.document.objects)if(o.kind==='point'&&!changed.has(o.id))known.add(objectSymbol(o));}
     const ref=reference??(p.mode==='coordinate'?[...known]:p.points.slice(0,1));
     const fixedResidual=(x:number[])=>{const q=e.model(x).positions;return ref.flatMap(n=>[0,1].map(i=>(q[n][i]-d.positions[n][i])/e.scale));};
-    const motion=localMobility(x=>[...e.mobilityResidual(x),...fixedResidual(x)],v,e.scale,Math.min(deadline,Date.now()+30)),motionDof=p.mode==='plane'&&dof===0?0:motion.dof;
+    const motion=localMobility(x=>[...e.mobilityResidual(x),...fixedResidual(x)],v,e.scale,Math.min(deadline,Date.now()+30),true),motionDof=p.mode==='plane'&&dof===0?0:motion.dof;
     const loci=analyticLoci(p,d.positions,ref,e.scale).filter(l=>l.kind!=='sphere'&&l.kind!=='plane').map(l=>({...l,origin:[l.origin[0],l.origin[1],0] as Vec3}));
+    if(tangentPlan&&ref.every(n=>known.has(n)))for(const locus of tangentPlan.loci(d.positions)){const index=loci.findIndex(l=>l.point===locus.point);if(index>=0)loci.splice(index,1);loci.push(locus);}
+    if(conicPlan){const index=loci.findIndex(l=>l.point===conicPlan.point);if(index>=0)loci.splice(index,1);loci.push(conicPlan.locus(d.positions[conicPlan.point]));}
     if((request.move||request.parameter)&&base)for(const l of base.loci)if(l.kind==='sampled'&&!ref.includes(l.point)&&!loci.some(k=>k.point===l.point))loci.push(l);
-    return {positions:d.positions,values:d.values,exactValues,exactCertificate:undefined as ExactCertificate|undefined,reference:ref,rigid:[],dof,motionDof,loci,residual:size(e.residual(v)),rigidityPending:!mobility.checked||!motion.checked} satisfies SolutionBranch;
+    const adjustableValues=e.variables.flatMap((u,i)=>u.field==='value'&&(tangentPlan?.angleIndices.includes(i)||motionDof>0&&motion.directions?.some(d=>Math.abs(d[i])>1e-7))?[u.id]:[]);
+    return {positions:d.positions,values:d.values,adjustableValues,exactValues,exactCertificate:undefined as ExactCertificate|undefined,reference:ref,rigid:[],dof:tangentPlan?1:dof,motionDof:tangentPlan&&ref.every(n=>known.has(n))?1:motionDof,loci,residual:size(e.residual(v)),rigidityPending:!mobility.checked||!motion.checked} satisfies SolutionBranch;
   };
+  if(tangentPlan&&!request.reference&&!request.refreshMobility){
+    const previous=base?e.encode(base.positions,base.values):request.seeds?.[0]?e.encode(request.seeds[0],request.seedValues?.[0]):e.initial;
+    let initialPoint=base?.positions[tangentPlan.point]??request.seeds?.[0]?.[tangentPlan.point];if(!initialPoint)try{initialPoint=e.model(previous).positions[tangentPlan.point];}catch{/* Coincident starting lines do not invalidate their symbolic construction. */}
+    let candidates:number[][]=[];try{candidates=request.move?tangentPlan.move(request.move.point,request.move.target,previous):request.parameter?tangentPlan.parameter(e.variables.findIndex(v=>v.id===request.parameter!.variable),request.parameter.target,previous):tangentPlan.reconstruct(initialPoint??tangentPlan.initialPoint(previous)??tangentPlan.seeds[0],previous);}catch{/* Exceptional tangent/contact domains retain the general solver. */}
+    if(request.move&&!candidates.length&&p.points.includes(request.move.point)){
+      // Inverse dragging of any downstream point uses the same source graph.
+      // Only the cursor projection is searched in one dimension; each trial
+      // reconstructs the original analytic family and all dependent objects.
+      const target=request.move.target,name=request.move.point,locus=tangentPlan.locus(base?.positions[tangentPlan.point]??tangentPlan.seeds[0]),path=locus.conic;
+      if(path){
+        const sample=(t:number)=>{try{const v=tangentPlan.reconstruct(locusPoint(locus,t),previous)[0],position=e.model(v).positions[name];return {v,cost:position.slice(0,2).reduce((s,n,i)=>s+(n-target[i])**2,0),t};}catch{return {v:previous,cost:Infinity,t};}};
+        const step=(path.max-path.min)/32,samples=Array.from({length:33},(_,i)=>sample(path.min+step*i));samples.sort((a,b)=>a.cost-b.cost);let best=samples[0],lo=best.t-step,hi=best.t+step;
+        for(let i=0;i<30&&Date.now()<deadline;i++){const a=sample(lo+(hi-lo)/3),b=sample(hi-(hi-lo)/3);if(a.cost<best.cost)best=a;if(b.cost<best.cost)best=b;if(a.cost<b.cost)hi=b.t;else lo=a.t;}
+        if(Number.isFinite(best.cost))candidates=[best.v];
+      }
+    }
+    const valid=candidates.filter(v=>!e.errors(v).length&&(!base||base.reference.every(n=>norm(sub(e.model(v).positions[n],base.positions[n]))<1e-6*Math.max(1,e.scale)))).sort((a,b)=>a.reduce((s,n,i)=>s+(n-previous[i])**2,0)-b.reduce((s,n,i)=>s+(n-previous[i])**2,0));
+    if(valid.length){
+      const branch=make(valid[0],base?.reference),result=request.previous?structuredClone(request.previous):undefined;
+      if(result)result.branches[request.move?.branch??request.parameter?.branch??request.trace?.branch??0]=branch;
+      return {...result,modelSummary:{independent:tangentPlan.visiblePoint?[`x(${tangentPlan.point})`,`y(${tangentPlan.point})`]:['切线对的方向参数'],eliminated:[...new Set([...symbolic.definitions.eliminated,...e.variables.filter((_,i)=>tangentPlan.angleIndices.includes(i)).map(u=>context?.document.objects.find(o=>o.id===u.object)?.symbol??u.id),...tangentPlan.contacts.filter(n=>n!==tangentPlan.point)])],equations:[tangentPlan.equation],domains:['原圆锥曲线非退化；两条切线及有限切点有效；保留原参数范围并回代全部条件'],unresolved:[]},branches:[branch],status:'solved',precision:'construction',method:'construction',complete:false,attempts:valid.length,elapsed:Date.now()-started,constructionSteps:tangentPlan.steps,approximationReason:undefined,exactAnalysis:undefined,diagnostics:[`${tangentPlan.visiblePoint?'解析轨迹':'内部消元关系（切线交点）'}：${tangentPlan.equation}`,'直线与切点按原构造连续恢复，并回代全部条件；方向的周期表示不另列成数值构型。']};
+    }
+  }
+  if(request.refreshMobility&&request.previous){
+    const result=structuredClone(request.previous);
+    result.branches=result.branches.map(b=>{const fresh=make(e.encode(b.positions,b.values),b.reference);return {...b,adjustableValues:fresh.adjustableValues,dof:fresh.dof,motionDof:fresh.motionDof,rigidityPending:fresh.rigidityPending,...(tangentPlan?{loci:fresh.loci}: {})};});
+    return {...result,elapsed:Date.now()-started};
+  }
+  if(conicPlan&&request.trace?.point===conicPlan.point&&base){
+    const result=structuredClone(request.previous!);result.branches[request.trace.branch].loci=[conicPlan.locus(base.positions[conicPlan.point])];
+    return {...result,precision:'construction',method:'construction',approximationReason:undefined,elapsed:Date.now()-started};
+  }
   if(request.trace){
     const {point,branch}=request.trace;if(!base||!p.points.includes(point)||base.reference.includes(point))throw Error('请选择未固定的动点');
     const initial=e.encode(base.positions,base.values);if(e.errors(initial).length)throw Error('当前构型失效，请先重新求解');
@@ -135,6 +179,13 @@ export function solvePlanar(request:SolveRequest):ConstraintResult {
   if(request.reference){if(!base)throw Error('构型已失效');const ref=request.reference.points;if(new Set(ref).size!==ref.length||ref.some(n=>!p.points.includes(n)))throw Error('固定点无效');const v=e.encode(base.positions,base.values);if(e.errors(v).length)throw Error('当前构型已失效');const result=structuredClone(request.previous!);const certificate=result.branches[request.reference.branch].exactCertificate;result.branches[request.reference.branch]=make(v,ref,result.branches[request.reference.branch].exactValues);result.branches[request.reference.branch].exactCertificate=certificate;if(certificate&&result.exactAnalysis?.state==='finite'){result.branches[request.reference.branch].dof=0;result.branches[request.reference.branch].motionDof=0;}return {...result,elapsed:Date.now()-started};}
   if(request.parameter){
     const move=request.parameter,index=e.variables.findIndex(u=>u.id===move.variable);if(!base||index<0||!Number.isFinite(move.target))throw Error('该数值不是待求参数');
+    if(base.constructionParameters?.includes(move.variable)){
+      const v=e.encode(base.positions,base.values);v[index]=move.target;
+      const positions=e.model(v).positions;
+      if(e.errors(v).length||base.reference.some(n=>norm(sub(positions[n],base.positions[n]))>3e-6*e.scale))throw Error('该参数值不满足全部条件，已保留原构型');
+      const result=structuredClone(request.previous!);result.branches[move.branch]={...make(v,base.reference),constructionParameters:[...base.constructionParameters]};
+      return {...result,exactAnalysis:undefined,complete:false,precision:'construction' as const,method:'construction' as const,approximationReason:undefined,elapsed:Date.now()-started};
+    }
     const exact=exactUpdate(symbolic=>[`${symbolic.tokens[index]}=${move.target}`]);if(exact)return exact;
     const start=e.encode(base.positions,base.values),candidate=[...start];candidate[index]=move.target;
     const hard=(x:number[])=>[...e.residual(x),...base.reference.flatMap(n=>[0,1].map(i=>(e.model(x).positions[n][i]-base.positions[n][i])/e.scale))];
@@ -144,6 +195,12 @@ export function solvePlanar(request:SolveRequest):ConstraintResult {
   }
   if(request.move){if(!base||!p.points.includes(request.move.point)||base.reference.includes(request.move.point))throw Error('该点是固定参照，不能直接拖动');const v=e.encode(base.positions,base.values),locus=base.loci.find(l=>l.point===request.move!.point),raw:[number,number,number]=[request.move.target[0],request.move.target[1],0],target=locus?nearestLocus(locus,raw):raw;
     const axis=Math.abs(target[0]-base.positions[request.move.point][0])>=Math.abs(target[1]-base.positions[request.move.point][1])?0:1;
+    if(conicPlan&&request.move.point===conicPlan.point){
+      const locus=conicPlan.locus(base.positions[conicPlan.point]),position=nearestLocus(locus,raw),v=e.variables.map(u=>position[u.field==='x'?0:1]);
+      if(e.errors(v).length)throw Error('该位置不满足全部条件，已保留原构型');
+      const result=structuredClone(request.previous!);result.branches[request.move.branch]=make(v,base.reference);
+      return {...result,precision:'construction',method:'construction',approximationReason:undefined,elapsed:Date.now()-started};
+    }
     const exact=exactUpdate(symbolic=>symbolic.coordinates[request.move!.point]?[`${symbolic.coordinates[request.move!.point][axis]}=${target[axis]}`]:undefined);if(exact)return exact;
     const fixed=(x:number[])=>{const q=e.model(x).positions;return base.reference.flatMap(n=>[0,1].map(i=>(q[n][i]-base.positions[n][i])/e.scale));};
     const hard=(x:number[])=>[...e.residual(x),...fixed(x)],withTarget=(x:number[])=>[...hard(x),...[0,1].map(i=>(e.model(x).positions[request.move!.point][i]-target[i])/e.scale)];
@@ -152,7 +209,7 @@ export function solvePlanar(request:SolveRequest):ConstraintResult {
     const result=structuredClone(request.previous!);result.branches[request.move.branch]=make(next,base.reference);return {...result,exactAnalysis:undefined,complete:false,precision:'approximate',method:'hybrid',approximationReason:'二维约束联立校正，每次移动后回代全部条件。',elapsed:Date.now()-started};
   }
   const accept=(v:number[],exact?:Record<string,AlgebraicValue>,certificate?:ExactCertificate,finite=false)=>{
-    attempts++;if(e.errors(v).length)return false;const b=make(v,undefined,exact);b.exactCertificate=certificate;if(finite){b.dof=0;b.motionDof=0;b.loci=[];if(p.mode==='plane')b.reference=[...p.points];}
+    attempts++;if(e.errors(v).length){const cost=e.residual(v).reduce((sum,n)=>sum+n*n,0);if(cost<nearestCost){nearest=[...v];nearestCost=cost;}return false;}const b=make(v,undefined,exact);b.exactCertificate=certificate;if(finite){b.dof=0;b.motionDof=0;b.loci=[];if(p.mode==='plane')b.reference=[...p.points];}
     // In the coordinate-free problem, remove planar Euclidean motion only.
     // A reflection changes winding and is retained as a separate branch.
     if(p.mode==='plane'&&!certificate){
@@ -176,12 +233,40 @@ export function solvePlanar(request:SolveRequest):ConstraintResult {
     };
     if(!branches.some(a=>sameRoots(a)&&p.points.every(n=>norm(sub(a.positions[n],b.positions[n]))<e.scale*1e-5)&&e.variables.every(u=>u.point||Math.abs((a.values?.[u.id]??0)-(b.values?.[u.id]??0))<1e-6)))branches.push(b);return true;
   };
+  if(conicPlan){
+    const guess=request.seeds?.[0]?.[conicPlan.point]??base?.positions[conicPlan.point],seeds=[...conicPlan.seeds];
+    if(guess)seeds.sort((a,b)=>norm(sub(a,guess))-norm(sub(b,guess)));
+    for(const [i,seed]of seeds.entries()){
+      const position=i===0&&guess?nearestLocus(conicPlan.locus(seed),guess):seed;
+      accept(e.variables.map(u=>position[u.field==='x'?0:1]));
+    }
+    if(branches.length===conicPlan.seeds.length)return {modelSummary,branches,status:'solved',precision:'construction',method:'construction',complete:true,attempts,elapsed:Date.now()-started,constructionSteps:['按原定义消去从动坐标，保留定义域并规范化有理多项式，得到精确轨迹方程。','按非退化圆锥曲线的连通分支建立参数化；代表位置不另列为构型。'],diagnostics:[`解析轨迹：${conicPlan.equation}`,`共 ${branches.length} 个连通分支；显示范围不限制数学定义域。`]};
+    branches.length=0;
+  }
   let analytic=false,complete=false;let exactAnalysis:ConstraintResult['exactAnalysis'];
-  const symbolic=symbolicPlanarEquations(p,e.variables);
-  const parameterIndices=e.variables.flatMap((u,i)=>context?.document.objects.some(o=>o.id===u.object&&o.kind==='number')?[i]:[]);
-  const parameterBlocks=independentParameterBranches(symbolic.sources,symbolic.tokens,parameterIndices,e.initial,Math.min(deadline,Date.now()+Math.max(100,(request.budget??2000)*.25)));
+
   if(parameterBlocks.solved)steps.push(`先独立求解 ${parameterBlocks.solved} 组数值参数，再联立验证点、曲线及其余条件。`);
-  if(symbolic.sources.length&&e.variables.length&&(p.conditions.some(c=>c.enabled)||equations.length||p.curves?.length)){
+  // Finite parameter blocks followed only by definitions and inequality guards
+  // form a forward construction. Free inputs are not equations to minimize.
+  const guardOnly=(source:string)=>/[<>]/.test(source)&&!/(?<![<>!=])=(?!=)/.test(source.replace(/<=|>=/g,''));
+  const unsupportedGuards=symbolic.unsupported.every(message=>equations.some(q=>guardOnly(q.source)&&message.startsWith(q.source+':')));
+  for(const fixed of parameterBlocks.branches.length?parameterBlocks.branches:[new Map<number,number>()]){
+    const free=e.variables.flatMap((_,i)=>fixed.has(i)?[]:[i]);
+    const constrainedFree=symbolic.sources.some(source=>!guardOnly(source)&&free.some(i=>new RegExp(`\\b${symbolic.tokens[i]}\\b`).test(source)));
+    if(!free.length||!fixed.size||!unsupportedGuards||constrainedFree||free.some(i=>e.variables[i].field!=='value'||e.variables[i].point))continue;
+    const v=base?e.encode(base.positions,base.values):[...e.initial];for(const [i,value]of fixed)v[i]=value;
+    const before=branches.length;if(!accept(v))continue;
+    if(branches.length>before)branches.at(-1)!.constructionParameters=free.map(i=>e.variables[i].id);
+    analytic=true;
+  }
+  if(analytic)steps.push('先精确求出受等式限定的参数，再按原有对象依赖构造曲线特征、交点及后续图形；其余参数保持自由，原不等式保留为有效域并逐次回代，不作数值逼近。');
+  if(!analytic){
+    for(const [i,fixed]of (parameterBlocks.branches.length?parameterBlocks.branches:[new Map<number,number>()]).entries()){
+      for(const values of independentPointConstructions(p,e.variables,symbolic,fixed,parameterBlocks.expressions[i]??new Map(),base?e.encode(base.positions,base.values):e.initial))if(accept(values))analytic=true;
+    }
+    if(analytic)steps.push('先构造独立点的已知曲线/直线关联，再沿原生依赖建立切线、交点等对象；代表位置不成为题设条件。');
+  }
+  if(!analytic&&symbolic.sources.length&&e.variables.length&&(p.conditions.some(c=>c.enabled)||equations.length||p.curves?.length)){
     const exact=solveExactSystem(symbolic.sources,symbolic.tokens,{deadline:Math.min(deadline,Date.now()+Math.max(50,(request.budget??2000)*.4)),initial:e.initial});
     let accepted=0;for(const candidate of exact.candidates){const values=Object.fromEntries(Object.entries(candidate.exactValues).map(([token,value])=>[e.variables[symbolic.tokens.indexOf(token)].id,value]));if(accept(candidate.values,values,candidate.certificate,exact.kind==='finite'))accepted++;}
     exactAnalysis={state:exact.kind,certified:exact.complete&&symbolic.complete&&accepted===exact.candidates.length,totalSolutions:exact.candidates.length,reducedVariables:exact.reducedVariables,reason:exact.reason??symbolic.unsupported.join('；'),reasonCode:exact.reasonCode??(symbolic.complete?undefined:'translation'),family:exact.family,solutions:exact.complete?exact.candidates.map(c=>c.certificate):undefined};
@@ -241,7 +326,8 @@ export function solvePlanar(request:SolveRequest):ConstraintResult {
       if(branches.length&&branches[0].dof>0&&attempt>3)break;
     }
   }
-  const reason='当前二维条件含尚未完成解析消元的耦合关系，采用限定范围内的多起点数值联立，再回代原始定义和条件；不表示不存在解析解。';
-  const failures=branches.length?[]:e.errors(e.initial).slice(0,5).map(v=>`${v.source}（误差 ${v.error.toPrecision(3)}）`);
-  return {exactAnalysis,branches:branches.slice(0,cap),status:branches.length?'solved':analytic&&complete?'contradiction':'notFound',precision:analytic?branches.some(b=>b.exactValues||b.exactCertificate)?'algebraic':'construction':'approximate',method:analytic?'construction':'numerical',complete:complete&&branches.length<=cap,attempts,elapsed:Date.now()-started,constructionSteps:steps.slice(0,100),approximationReason:analytic?undefined:reason,diagnostics:[branches.length?`二维求解得到 ${branches.length} 个构型；已验证原始条件。`:analytic&&complete?'解析候选均不满足原条件，没有可行实解。':'暂未找到可行解，未证明无解。',...failures]};
+  const translationIssues=[...symbolic.unsupported,...symbolic.definitions.unsupported].slice(0,3).map(s=>s.slice(0,600));
+  const reason=(translationIssues.length?`尚未完成精确转换：${translationIssues.join('；')}。`:'当前二维条件含尚未完成解析消元的耦合关系。')+'采用限定范围内的多起点数值联立，再回代原始定义和条件；不表示不存在解析解。';
+  const failures=branches.length?[]:e.errors(nearest).slice(0,5).map(v=>`最近尝试仍未满足：${v.source}（误差 ${v.error.toPrecision(3)}；不能据此判定该条题设错误）`);
+  return {modelSummary,exactAnalysis,branches:branches.slice(0,cap),status:branches.length?'solved':analytic&&complete?'contradiction':'notFound',precision:analytic?branches.some(b=>b.exactValues||b.exactCertificate)?'algebraic':'construction':'approximate',method:analytic?'construction':'numerical',complete:complete&&branches.length<=cap,attempts,elapsed:Date.now()-started,constructionSteps:steps.slice(0,100),approximationReason:analytic?undefined:reason,diagnostics:[branches.length?`二维求解得到 ${branches.length} 个构型；已验证原始条件。`:analytic&&complete?'解析候选均不满足原条件，没有可行实解。':'暂未找到可行解，未证明无解。',...failures]};
 }

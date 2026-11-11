@@ -1,7 +1,8 @@
+import {mapPlanarMetrics} from './planarReferences';
 import {splitArguments} from '../model';
 import type {DrawingDocument} from '../types';
 import {parseExpression} from '../expression';
-import {planarRelationPattern,planarRelationCounts,namedAngleSyntaxHint} from './planarRelations';
+import {planarRelationSource,planarRelationPattern,planarRelationCounts,namedAngleSyntaxHint} from './planarRelations';
 import {angleDegrees} from './angles';
 import {entity} from './input';
 import {objectSymbol} from './planarModel';
@@ -16,13 +17,12 @@ export function validatePlanarEquationSyntax(raw:string,doc:DrawingDocument,name
  const curve=(s:string)=>{if(objects.get(s)?.kind!=='curve')throw Error(`找不到曲线 ${s}`);};
  const vars=doc.objects.filter(o=>o.kind==='number').map(objectSymbol);
  const numeric=(s:string)=>{
-  s=s.replace(/\b(x|y|a|b|c|e|p|radius|eccentricity|focalDistance|length|Length)\s*\(\s*([A-Za-z][A-Za-z0-9_]*)\s*\)/g,(_,fn:string,ref:string)=>{if(fn==='x'||fn==='y')point(ref);else if(/length/i.test(fn))line(ref);else curve(ref);return '(1)';});
-  s=s.replace(/\b(dot|sinAngle|cosAngle|tanAngle)\s*\(\s*([A-Za-z][A-Za-z0-9_]*)\s*,\s*([A-Za-z][A-Za-z0-9_]*)\s*\)/g,(_,_fn:string,a:string,b:string)=>{line(a);line(b);return '(1)';});
+  s=s.replace(/\b(x|y|a|b|c|e|p|radius|eccentricity|focalDistance)\s*\(\s*([A-Za-z][A-Za-z0-9_]*)\s*\)/g,(_,fn:string,ref:string)=>{if(fn==='x'||fn==='y')point(ref);else if(/length/i.test(fn))line(ref);else curve(ref);return '(1)';});
+  s=mapPlanarMetrics(s,(_kind,args)=>{args.forEach(line);return '(1)';});
   s=s.replace(/\b[A-Za-z][A-Za-z0-9_]*\b/g,(token,offset:number)=>{if(vars.includes(token)||/^\s*\(/.test(s.slice(offset+token.length))||['pi','e'].includes(token))return token;try{if(entity(token,names).length===2)return '(1)';}catch{/* The expression parser reports unknown symbols. */}return token;});
   parseExpression(s,vars);
  };
- const source=raw.trim().replace(/\\(?:perp|bot)\b|⊥/g,'⟂').replace(/\\parallel\b|∥/g,'//');
- const infix=source.match(/^(.+?)\s*(⟂|\/\/)\s*(.+)$/);if(infix){line(infix[1].trim());line(infix[3].trim());return;}
+ const source=planarRelationSource(raw);
  const call=source.match(planarRelationPattern);
  if(call){const fn=call[1].toLowerCase(),a=splitArguments(call[2]);
   const counts=planarRelationCounts;

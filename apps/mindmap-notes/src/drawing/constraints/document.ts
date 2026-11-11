@@ -1,3 +1,8 @@
+import {constraintObjectId} from './objectIdentity';
+import {coordinateOwners,expandedCoordinateSet} from './planarMembers';
+import {parseExpression} from '../expression';
+import {conicCoefficients} from '../conics';
+import {isPlanarInput,inputFields} from './inputs';
 import type { DrawingDocument, DrawingSolutionSet, DrawingSpatialLocus, DrawingPoint,GeometryObject, Vec3 } from "../types";
 import { defaultStyle } from "../types";
 import type { ConstraintProblem, ConstraintResult, Pose } from "./types";
@@ -34,6 +39,7 @@ export function validateSolutionSet(set:DrawingSolutionSet) {
     r.constructionSteps!==undefined&&(!Array.isArray(r.constructionSteps)||r.constructionSteps.length>200||r.constructionSteps.some(s=>typeof s!=="string"||s.length>4096))||
     typeof r.complete!=="boolean"||!["solved","notFound","contradiction"].includes(r.status)||!Number.isFinite(r.elapsed)||!Number.isInteger(r.attempts)||
     !Array.isArray(r.diagnostics)||r.diagnostics.length>100||r.diagnostics.some(s=>typeof s!=="string"||s.length>4096))throw new Error("约束解集数据无效");
+  if(r.modelSummary){for(const key of ['independent','eliminated','equations','domains','unresolved'] as const){const rows=r.modelSummary[key];if(!Array.isArray(rows)||rows.length>2000||rows.some(s=>typeof s!=='string'||s.length>4096))throw Error('计算模型摘要无效');}}
   const vector=(p:unknown)=>Array.isArray(p)&&p.length===3&&p.every(n=>typeof n==="number"&&Number.isFinite(n)&&Math.abs(n)<=1e9);
   const check=evaluator(set.problem),planar=planarMode(set.problem)?planarEvaluator(set.problem):undefined;
   if(r.precision==='algebraic'&&r.branches.some(b=>!b.exactCertificate&&!Object.keys(b.exactValues??{}).length))throw Error('代数精度声明缺少精确信息');
@@ -52,6 +58,8 @@ export function validateSolutionSet(set:DrawingSolutionSet) {
       const values=planar.encode(b.positions,b.values),calculated=planar.model(values).positions;
       if(names.some(n=>Math.abs(b.positions[n][2])>1e-9||norm(sub(b.positions[n],calculated[n]))>1e-6*Math.max(1,planar.scale))||planar.errors(values).length||b.motionDof!==undefined&&(!Number.isInteger(b.motionDof)||b.motionDof<0)||b.values&&Object.values(b.values).some(v=>!Number.isFinite(v)))throw new Error('保存的二维构型不满足条件');
     }else if(!check.verify(flatten(names,b.positions)).valid)throw new Error("保存的约束构型不满足条件");
+    if(b.constructionParameters!==undefined&&(!Array.isArray(b.constructionParameters)||b.constructionParameters.length>(planar?.variables.length??0)||b.constructionParameters.some(id=>typeof id!=='string'||!planar?.variables.some(u=>u.id===id&&u.field==='value'))))throw Error('解析构造参数记录无效');
+    if(b.adjustableValues!==undefined&&(!Array.isArray(b.adjustableValues)||b.adjustableValues.length>(planar?.variables.length??0)||b.adjustableValues.some(id=>typeof id!=='string'||!planar?.variables.some(u=>u.id===id&&u.field==='value'))))throw Error('可调整参数记录无效');
     if(b.exactValues){
       if(typeof b.exactValues!=='object'||Array.isArray(b.exactValues)||Object.keys(b.exactValues).length>(planar?.variables.length??names.length*3))throw Error('精确数值记录无效');
       for(const [id,root]of Object.entries(b.exactValues)){
@@ -65,7 +73,13 @@ export function validateSolutionSet(set:DrawingSolutionSet) {
       validateExactCertificate(b.exactCertificate,planar?planar.encode(b.positions,b.values):flatten(names,b.positions),symbolic.sources,symbolic.tokens);
     }
     for(const l of b.loci) {
-      if(!l||!names.includes(l.point)||!["line","segment","circle","plane","sphere","sampled"].includes(l.kind)||!vector(l.origin)||!vector(l.u)||!vector(l.v)||
+      if(l?.kind==='conic'&&(!l.conic||[l.conic.equation,l.conic.x,l.conic.y].some(s=>typeof s!=='string'||s.length>2048)||!Number.isFinite(l.conic.min)||!Number.isFinite(l.conic.max)||l.conic.min>=l.conic.max||typeof l.conic.closed!=='boolean'))throw Error('解析圆锥曲线轨迹数据无效');
+      if(l?.kind==='conic'&&l.conic){
+        if(!conicCoefficients(l.conic.equation))throw Error('解析轨迹方程无效');
+        const parts=l.conic.components??[l.conic];if(!Array.isArray(parts)||parts.length<1||parts.length>2)throw Error('解析轨迹分支无效');
+        for(const p of [l.conic,...parts]){if(!p||[p.x,p.y].some(s=>typeof s!=='string'||s.length>2048)||!Number.isFinite(p.min)||!Number.isFinite(p.max)||p.min>=p.max)throw Error('解析轨迹参数无效');parseExpression(p.x,['t']);parseExpression(p.y,['t']);}
+      }
+      if(!l||!names.includes(l.point)||!["line","segment","circle","plane","sphere","sampled","conic"].includes(l.kind)||!vector(l.origin)||!vector(l.u)||!vector(l.v)||
         Math.abs(norm(l.u)-1)>1e-5||Math.abs(norm(l.v)-1)>1e-5||Math.abs(dot(l.u,l.v))>1e-5||typeof l.radius!=="number"||!Number.isFinite(l.radius)||l.radius<=0||l.radius>1e9||typeof l.complete!=="boolean"||
         l.paths&&(!Array.isArray(l.paths)||l.paths.length>8||l.paths.some(path=>!Array.isArray(path)||path.length>2000||path.some(p=>!vector(p)))))throw new Error("空间轨迹数据无效");
     }
@@ -88,10 +102,12 @@ export function constraintPointName(set:DrawingSolutionSet,point:DrawingPoint):s
 export function constraintBinding(doc:DrawingDocument,point:DrawingPoint|undefined) {
   if(!point)return;
   const c=point.construction,id=c.type==='constraint'?c.set:point.constraintSet;
-  const set=id&&doc.objects.find(o=>o.id===id);
+  const original=id?doc.objects.find(o=>o.id===id):coordinateOwners(doc,point)[0];
+  const set=original?.kind==='solutionSet'?expandedCoordinateSet(doc,original):undefined;
   if(!set||set.kind!=='solutionSet')return;
-  const name=constraintPointName(set,point);if(!name)return {set,point:'',reference:false,movable:false};
-  const branch=selectedBranch(set);return {set,point:name,reference:branch.reference.includes(name),movable:(branch.motionDof??branch.dof)>0&&!branch.reference.includes(name)};
+  const name=constraintPointName(set,point);if(!name)return {set,point:'',reference:false,movable:false,input:false};
+  const source=set.problem.planar?.document.objects.find(o=>o.id===point.id),input=set.problem.mode==='coordinate'&&!!source&&inputFields(source).some(f=>isPlanarInput(set.problem.planar,point.id,f));
+  const branch=selectedBranch(set);return {set,point:name,input,reference:branch.reference.includes(name),movable:!point.locked&&(input||(branch.motionDof??branch.dof)>0&&!branch.reference.includes(name))};
 }
 export function restoreConstraintPoints(doc:DrawingDocument):DrawingDocument {
   let changed=false;
@@ -145,7 +161,7 @@ export function installSolutionSet(doc:DrawingDocument,set:DrawingSolutionSet):D
     o.kind==="segment"&&o.constraintSet===set.id&&!desiredEdges.has(edgeKey(nameForId.get(o.points[0])??"",nameForId.get(o.points[1])??""))||
     o.constraintSet===set.id&&!!o.constraintFace&&!desiredFaces.has(o.constraintFace)||
     o.constraintSet===set.id&&o.kind==="curve"&&!!o.declaration&&!(set.problem.curves??[]).some(c=>c.id===o.declaration!.id)||
-    o.constraintSet===set.id&&o.kind==="solid"&&o.construction?.type==="roundPoints"&&!set.problem.conditions.some(c=>c.enabled&&c.id===o.id.slice(`${set.id}-round-`.length))
+    o.constraintSet===set.id&&o.kind==="solid"&&o.construction?.type==="roundPoints"&&!set.problem.conditions.some(c=>c.enabled&&constraintObjectId(set.id,'round',c.id)===o.id)
   ).map(o=>o.id));
   for(const o of doc.objects)if(o.kind==="solid"&&o.construction?.type==="faces"&&o.construction.faces.some(id=>removed.has(id)))removed.add(o.id);
   const referencesRemoved=(value:unknown):boolean=>{
@@ -175,14 +191,14 @@ export function installSolutionSet(doc:DrawingDocument,set:DrawingSolutionSet):D
     objects.push({id:crypto.randomUUID(),name:`${a}${b}`,kind:"segment",constraintSet:set.id,points:[existing.get(a)!,existing.get(b)!],style:defaultStyle()});
   const planes=[...doc.planes];
   for(const curve of set.problem.curves??[]) {
-    const id=`${set.id}-curve-${curve.id}`,planeId=`${id}-plane`,points=[...new Set([...curve.points,...(curve.plane??[]),...(curve.normalAxis??[]),...(curve.radiusSegment??[])])].map(n=>existing.get(n)!);
+    const id=constraintObjectId(set.id,'curve',curve.id),planeId=`${id}-plane`,points=[...new Set([...curve.points,...(curve.plane??[]),...(curve.normalAxis??[]),...(curve.radiusSegment??[])])].map(n=>existing.get(n)!);
     const frame=curveGeometry(curve,Object.fromEntries(set.problem.points.map(n=>[n,constraintPoint(set,n)])));
     if(!planes.some(p=>p.id===planeId))planes.push({id:planeId,name:`${curve.name} 所在平面`,origin:frame.center,u:frame.u,v:frame.v});
     const old=objects.find(o=>o.id===id),item:GeometryObject={...(old?.kind==="curve"?old:{}),id,name:curve.name,kind:"curve",constraintSet:set.id,declaration:{id:curve.id,points},circle:undefined,preset:undefined,derived:undefined,parameters:undefined,parametric:undefined,planeId,equation:"x^2+y^2=1",range:[-frame.a*1.1,frame.a*1.1,-frame.b*1.1,frame.b*1.1],followView:true,style:old?.style??defaultStyle()};
     if(old)objects=objects.map(o=>o.id===id?item:o);else objects.push(item);
   }
   for(const condition of set.problem.conditions.filter(c=>c.enabled&&["cylinder","cone","coneFrustum","sphere"].includes(c.kind))) {
-    const id=`${set.id}-round-${condition.id}`,old=objects.find(o=>o.id===id),item:GeometryObject={...(old?.kind==="solid"?old:{}),id,name:({cylinder:"圆柱",cone:"圆锥",coneFrustum:"圆台",sphere:"球"} as Record<string,string>)[condition.kind],kind:"solid",shape:condition.kind as "cylinder"|"cone"|"coneFrustum"|"sphere",constraintSet:set.id,construction:{type:"roundPoints",points:condition.refs[0].map(n=>existing.get(n)!)},origin:[0,0,0],rotation:[0,0,0],width:1,depth:1,height:1,radius:1,topRadius:1,sides:40,style:old?.style??defaultStyle()};
+    const id=constraintObjectId(set.id,'round',condition.id),old=objects.find(o=>o.id===id),item:GeometryObject={...(old?.kind==="solid"?old:{}),id,name:({cylinder:"圆柱",cone:"圆锥",coneFrustum:"圆台",sphere:"球"} as Record<string,string>)[condition.kind],kind:"solid",shape:condition.kind as "cylinder"|"cone"|"coneFrustum"|"sphere",constraintSet:set.id,construction:{type:"roundPoints",points:condition.refs[0].map(n=>existing.get(n)!)},origin:[0,0,0],rotation:[0,0,0],width:1,depth:1,height:1,radius:1,topRadius:1,sides:40,style:old?.style??defaultStyle()};
     if(old)objects=objects.map(o=>o.id===id?item:o);else objects.push(item);
   }
   const edgeStyles={...doc.edgeStyles};for(const key of Object.keys(edgeStyles))if(removed.has(key.split(":")[0]))delete edgeStyles[key];
@@ -281,7 +297,7 @@ export function restoreConditionSurfaces(doc:DrawingDocument):DrawingDocument {
       }
       if(!["pyramid","prism","frustum","cube"].includes(condition.kind)||faces.length!==boundaries.length||faces.length<4)continue;
       if(objects.some(o=>o.kind==="solid"&&o.construction?.type==="faces"&&faces.every(id=>o.construction?.type==="faces"&&o.construction.faces.includes(id))))continue;
-      const id=`${set.id}-body-${condition.id}`;if(objects.some(o=>o.id===id))continue;
+      const id=constraintObjectId(set.id,'body',condition.id);if(objects.some(o=>o.id===id))continue;
       let symbol="S",i=1;while(objects.some(o=>o.symbol===symbol))symbol=`S_${i++}`;
       objects.push({id,symbol,name:`多面体 ${symbol}`,kind:"solid",shape:"prism",constraintSet:set.id,construction:{type:"faces",faces},origin:[0,0,0],rotation:[0,0,0],width:1,depth:1,height:1,radius:1,topRadius:0,sides:4,style:defaultStyle()});
       objects=objects.map(o=>faces.includes(o.id)?{...o,body:id}:o);changed=true;

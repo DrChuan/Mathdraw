@@ -1,24 +1,28 @@
+import {constraintObjectId} from './objectIdentity';
 import type { DrawingDocument,DrawingSolutionSet,GeometryObject,Vec3 } from '../types';
 import { newDrawing,defaultStyle } from '../types';
 import type { ConstraintProblem,PlanarContext,PlanarUnknown,Positions } from './types';
 import { fromPlane,toPlane,resolveGeometry,validateDrawing,sub,dot,cross,add,mul } from '../geometry';
 import { definition,applyDefinition } from '../model';
 import { curveGeometry } from './measures';
-import { numericFunctions } from '../symbols';
+import { numericFunctions,numericSource } from '../symbols';
+import {expressionNames} from '../parameters';
+import {inputFields,validatePlanarInputs} from './inputs';
 
 export const planarMode=(p:ConstraintProblem)=>p.mode==='plane'||p.mode==='coordinate';
 export function coordinatePlane(d:DrawingDocument) {
   return d.coordinateFrame?{id:d.view.planeId,name:'坐标平面',origin:d.coordinateFrame.origin,u:d.coordinateFrame.x,v:d.coordinateFrame.y}:d.planes.find(p=>p.id===d.view.planeId)!;
 }
 export function objectSymbol(o:GeometryObject) {return o.symbol??o.name;}
-export function planarContext(doc:DrawingDocument):PlanarContext {
+export function planarContext(doc:DrawingDocument,editableCanvasInputs=false):PlanarContext {
   const document=structuredClone(doc);document.dimension='2d';document.view.mode='plane';
-  const context:PlanarContext={document,unknowns:[],equations:[],absorbedSets:[],inheritedConditions:[],inheritedCurves:[]};
+  const context:PlanarContext={document,unknowns:[],equations:[],inputs:editableCanvasInputs?doc.objects.filter(o=>!o.constraintSet&&o.kind!=='solutionSet').flatMap(o=>{const fields=inputFields(o);return fields.length?[{object:o.id,fields}]:[];}):[],absorbedSets:[],inheritedConditions:[],inheritedCurves:[]};
   const geometry=resolveGeometry(doc),aliases=new Map<string,string>();
   for(const root of doc.objects){if(root.kind!=='solutionSet'||!planarMode(root.problem))continue;
     context.absorbedSets!.push(root.id);const branch=root.result.branches[root.activeBranch],source=materializePlanar(root.problem,branch.values,branch.positions,root.id),definitions=new Map(source.objects.map(o=>[o.id,o]));
-    const symbols:Record<string,string>={},curveIds:Record<string,string>={};for(const o of doc.objects)if(o.constraintSet===root.id){if(o.constraintPointName)symbols[o.constraintPointName]=objectSymbol(o);else if(o.kind==='curve'){const c=root.problem.curves?.find(c=>c.id===o.id||`${root.id}-curve-${c.id}`===o.id);if(c){symbols[c.name]=objectSymbol(o);curveIds[c.id]=o.id;}}}
+    const symbols:Record<string,string>={},curveIds:Record<string,string>={};for(const o of doc.objects)if(o.constraintSet===root.id){if(o.constraintPointName)symbols[o.constraintPointName]=objectSymbol(o);else if(o.kind==='curve'){const c=root.problem.curves?.find(c=>c.id===o.id||constraintObjectId(root.id,'curve',c.id)===o.id);if(c){symbols[c.name]=objectSymbol(o);curveIds[c.id]=o.id;}}}
     context.unknowns.push(...(root.problem.planar?.unknowns??[]).map(u=>({...u,initial:branch.values?.[u.id]??u.initial})));
+    context.inputs!.push(...structuredClone(root.problem.planar?.inputs??[]));
     context.equations.push(...(root.problem.planar?.equations??[]).map((e,i)=>({...structuredClone(e),id:`${root.id}-equation-${i}`})));context.inheritedConditions!.push(...root.problem.conditions.map((c,i)=>({...structuredClone(c),id:`${root.id}-condition-${i}`,curve:c.curve?curveIds[c.curve]??c.curve:undefined,refs:c.refs.map(r=>r.map(n=>symbols[n]??n)),source:renamePlanarSymbols(c.source,symbols,root.problem.points)})));context.inheritedCurves!.push(...(root.problem.curves??[]).map(c=>({...structuredClone(c),id:curveIds[c.id]??c.id,name:symbols[c.name]??c.name,points:c.points.map(n=>symbols[n]??n),plane:c.plane?.map(n=>symbols[n]??n)})));
     document.objects=document.objects.filter(o=>o.id!==root.id&&!(o.kind==='spatialLocus'&&o.set===root.id)).map(o=>{
       if(o.constraintSet!==root.id)return o;
@@ -58,12 +62,19 @@ export function applyValues(context:PlanarContext,values:Record<string,number>={
 }
 export function addPlanarDefinition(context:PlanarContext,source:string):PlanarContext {
   const next=structuredClone(context),before=new Set(next.document.objects.map(o=>o.id));
+  const assignment=source.match(/^\s*([A-Za-z][A-Za-z0-9_]*)\s*[=:]\s*([\s\S]*)$/),body=assignment?.[2]??source;
+  if(!next.document.objects.some(o=>objectSymbol(o)==='E')&&expressionNames(numericSource(body,next.document.objects.map(objectSymbol))).includes('E'))throw Error('大写 E 尚未声明，不能将它当作圆方程的待求系数；请先声明 E_1=? 并在方程中使用 E_1。自然常数请写小写 e。');
   const pending=source.includes('?'),clean=source.replace(/\?/g,'1');
   next.document=applyDefinition(next.document,clean,undefined,true);
   const tuple=source.match(/=\s*\(([^,]+),([^,)]+)\)\s*$/);
   if(pending)for(const o of next.document.objects.filter(o=>!before.has(o.id)))for(const field of unknownFields(o)) {
     if(tuple&&['x','y'].includes(field)&&!tuple[field==='x'?1:2].includes('?'))continue;
     const initial=unknownValue(next.document,o,field);next.unknowns.push({id:`${o.id}.${field}`,object:o.id,field,initial,min:undefined,max:undefined});
+  }
+  // Implicit scalar references belong to this condition problem. A default
+  // construction seed of 1 is an initial guess, never a known premise.
+  for(const o of next.document.objects)if(!before.has(o.id)&&o.kind==='number'&&objectSymbol(o)!==assignment?.[1]&&!Object.keys(o.references).length&&!next.unknowns.some(u=>u.object===o.id)){
+    next.unknowns.push({id:`${o.id}.value`,object:o.id,field:'value',initial:o.value});
   }
   return next;
 }
@@ -82,7 +93,7 @@ export function materializePlanar(problem:ConstraintProblem,values:Record<string
   if(positions)for(const c of problem.curves??[]){
     if(d.objects.some(o=>o.kind==='curve'&&objectSymbol(o)===c.name))continue;
     const frame=curveGeometry(c,positions),p=toPlane(plane,fromPlane(plane,frame.center[0],frame.center[1]));
-    d.objects.push({id:`${namespace}-curve-${c.id}`,name:c.name,symbol:c.name,kind:'curve',planeId:plane.id,equation:`(x-(${p[0]}))^2+(y-(${p[1]}))^2=(${frame.radius})^2`,circle:c.method==='threePoint'?{type:'threePoint',points:c.points.map(n=>symbols.get(n)!.id)}:c.method==='centerPoint'?{type:'centerPoint',points:c.points.map(n=>symbols.get(n)!.id)}:{type:'centerRadius',points:c.points.map(n=>symbols.get(n)!.id),radius:c.value},range:[-10,10,-10,10],followView:true,style:defaultStyle()});
+    d.objects.push({id:constraintObjectId(namespace,'curve',c.id),name:c.name,symbol:c.name,kind:'curve',planeId:plane.id,equation:`(x-(${p[0]}))^2+(y-(${p[1]}))^2=(${frame.radius})^2`,circle:c.method==='threePoint'?{type:'threePoint',points:c.points.map(n=>symbols.get(n)!.id)}:c.method==='centerPoint'?{type:'centerPoint',points:c.points.map(n=>symbols.get(n)!.id)}:{type:'centerRadius',points:c.points.map(n=>symbols.get(n)!.id),radius:c.value},range:[-10,10,-10,10],followView:true,style:defaultStyle()});
   }
   return d;
 }
@@ -102,6 +113,7 @@ export function validatePlanarContext(p:ConstraintProblem) {
   contextValidationDepth++;try{validateDrawing(c.document);}finally{contextValidationDepth--;}
   if(c.document.dimension!=='2d'||c.document.objects.some(o=>o.kind==='solid')||!Array.isArray(c.unknowns)||c.unknowns.length>100||!Array.isArray(c.equations)||c.equations.length>200)throw Error('二维对象或未知量配置无效');
   const ids=new Set<string>();for(const u of c.unknowns){const o=c.document.objects.find(o=>o.id===u.object);if(!o||!unknownFields(o).includes(u.field)||u.id!==`${u.object}.${u.field}`||ids.has(u.id)||!Number.isFinite(u.initial)||[u.min,u.max].some(v=>v!==undefined&&(!Number.isFinite(v)||Math.abs(v)>1e9))||u.min!==undefined&&u.max!==undefined&&u.min>=u.max)throw Error('待求量或取值范围无效');ids.add(u.id);}
+  validatePlanarInputs(c);
   for(const e of c.equations)if(!e||typeof e.id!=='string'||typeof e.enabled!=='boolean'||typeof e.source!=='string'||e.source.length>2048)throw Error('坐标条件无效');
   if(c.automaticSearch!==undefined&&typeof c.automaticSearch!=='boolean')throw Error('自动搜索设置无效');
   if(c.searchScale!==undefined&&(!Number.isFinite(c.searchScale)||c.searchScale<=0||c.searchScale>1e6))throw Error('近似搜索尺度无效');

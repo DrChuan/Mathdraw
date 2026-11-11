@@ -1,4 +1,5 @@
 import {objectState} from './objectState';
+import {isPlanarInput} from './constraints/inputs';
 import PlanarObjectForm from './PlanarObjectForm';
 import {addLessonInput} from './constraints/planarLesson';
 import {planarContext} from './constraints/planarModel';
@@ -26,7 +27,7 @@ export interface ExpressionEditor {
 }
 export const kindName: Record<GeometryObject["kind"], string> = {
   solutionSet: "约束解集",
-  spatialLocus: "空间轨迹",
+  spatialLocus: "轨迹",
   number: "数值",
   point: "点",
   segment: "线段",
@@ -158,6 +159,8 @@ export function ExpressionPanel({
             />):null;
     if(!node.children.length&&!node.label)return <div key={node.id} onMouseEnter={()=>highlight?.(obj?.id)} onMouseLeave={()=>highlight?.()} onFocus={()=>highlight?.(obj?.id)} onBlur={()=>highlight?.()}>{row}</div>;
     const open=!!query||!collapsed.has(node.id),count=node.children.reduce((n,c)=>n+(c.object?1:c.children.length),0);
+    if(!obj&&node.label&&!node.children.length)return null;
+    if(obj?.kind==='solutionSet')return <section key={node.id} className="expression-tree-set">{row}<button className="expression-tree-toggle" aria-expanded={open} onClick={()=>toggle(node.id)}>{open?'▾':'▸'} 对象 <span>{count}</span></button>{open&&<div className="expression-tree-children">{node.children.map(renderNode)}</div>}</section>;
     return <section key={node.id} className={obj?"expression-tree-set":"expression-tree-group"}>
       <button className="expression-tree-toggle" aria-expanded={open} onClick={()=>toggle(node.id)}>{open?"▾":"▸"} {node.label??`${obj?.symbol??obj?.name} · 条件体系`} <span>{count}</span></button>
       {open&&<>{obj?<details className="expression-tree-settings"><summary>构型与动点设置</summary>{row}</details>:row}<div className="expression-tree-children">{node.children.map(renderNode)}</div></>}
@@ -360,7 +363,7 @@ function ExpressionRow({
     recorded = useRef(false),
     draftRef = useRef(value ?? definition(doc, obj));
   const source = value ?? definition(doc, obj);
-  const constraintSet=obj.kind === "solutionSet"?obj.id:obj.kind === "spatialLocus"?obj.set:obj.kind === "point"&&obj.construction.type === "constraint"?obj.construction.set:undefined;
+  const constraintSet=obj.kind === "solutionSet"?obj.id:obj.kind === "spatialLocus"?obj.set:obj.kind === "point"&&obj.construction.type === "constraint"?obj.construction.set:obj.constraintSet;
   draftRef.current = source;
   const apply = (text: string) => {
     try {
@@ -390,7 +393,7 @@ function ExpressionRow({
   const vectorResult=obj.kind==="vector"?vectorCoordinates(doc,obj):undefined;
   return (
     <div
-      className={`expression-row ${editing?"editing":""} ${selected ? "selected" : ""} ${obj.hidden ? "is-hidden" : ""}`}
+      className={`expression-row ${obj.kind==='solutionSet'?'expression-solution-set':''} ${editing?"editing":""} ${selected ? "selected" : ""} ${obj.hidden ? "is-hidden" : ""}`}
       data-expression-id={obj.id}
       onPointerDown={(e) => {
         if (!(e.target as HTMLElement).closest("textarea,input,button"))
@@ -491,7 +494,7 @@ function ExpressionRow({
               requestAnimationFrame(() => field.current?.focus());
             }}
           >
-            {obj.kind === "label" && !obj.measurement ? <Markdown compact text={obj.text}/> : <FormulaPreview source={(result||vectorResult)&&!error?symbolLatex(obj.symbol??obj.name):obj.kind === "curve" && source.includes(":") ? `${obj.symbol}: ${preview}` : preview} />}
+            {obj.kind==='spatialLocus'&&spatialLocus?.kind==='conic'&&spatialLocus.conic?<FormulaPreview source={mathPreview(spatialLocus.conic.equation)}/>:obj.kind=== "solutionSet"?<span className="expression-set-title">条件图形 {obj.symbol??obj.name}<small> · {obj.problem.points.length} 点</small></span>:obj.kind === "label" && !obj.measurement ? <Markdown compact text={obj.text}/> : <FormulaPreview source={(result||vectorResult)&&!error?symbolLatex(obj.symbol??obj.name):obj.kind === "curve" && source.includes(":") ? `${obj.symbol}: ${preview}` : preview} />}
           </button>
         )}
         {editing && <FormulaPreview source={preview} />}
@@ -506,7 +509,7 @@ function ExpressionRow({
         </div>}
         <div className="expression-meta">
           <span>
-            {kindName[obj.kind]} · {objectState(doc,obj)} {obj.locked?"· 位置锁定":""}{obj.hidden?" · 画布隐藏":""}
+            {obj.kind==='solutionSet'?'':`${kindName[obj.kind]} · ${objectState(doc,obj)}`} {obj.locked?"· 位置锁定":""}{obj.hidden?" · 画布隐藏":""}
           </span>
           <span>{obj.name !== obj.symbol ? obj.name : ""}</span>
           <button
@@ -526,7 +529,7 @@ function ExpressionRow({
         {obj.kind === "number" && <NumberSlider obj={obj} value={numberValue ?? obj.value}
           docRef={docRef} change={change} error={error} editor={editor} />}
         {selected&&obj.kind==='spatialLocus'&&<small>{!displayableLocus(spatialLocus)?'仅有部分条件给出的候选范围，暂不绘制为轨迹。':spatialLocus.kind==='sampled'?'采样轨迹：采样位置已回代全部条件验证。':'解析轨迹'}</small>}
-        {obj.kind === "solutionSet"&&<ConstraintSetControls set={obj} docRef={docRef} change={change} edit={()=>onConstraintEdit?.(obj.id)}/>}
+        {obj.kind === "solutionSet"&&<ConstraintSetControls set={obj} docRef={docRef} change={change}/>}
         {selected&&obj.kind === "point"&&obj.construction.type === "constraint"&&<small>由条件解集联动；能否拖动取决于当前参照与自由度。</small>}
         {(problem || error) && (
           <InputFeedback source={source} message={problem||error||''}/>
@@ -552,13 +555,14 @@ function NumberSlider({ obj, value, docRef, change, error, editor }: {
   const motion=useConstraintMotion(docRef,change,setProblem);
   const owner=docRef.current.objects.find(o=>o.id===obj.constraintSet),managed=owner?.kind==='solutionSet'&&owner.problem.mode==='coordinate';
   const variable=managed?owner.problem.planar?.unknowns.find(u=>u.object===obj.id&&u.field==='value'):undefined;
+  const input=managed&&isPlanarInput(owner.problem.planar,obj.id,'value');
   const flushValue = () => {
     frame.current = 0;
     const value = pending.current; pending.current = null;
     if(value === null) return;
     const current = docRef.current, original = current.objects.find(o => o.id === obj.id);
     if(original?.kind !== "number" || Object.keys(original.references).length || original.locked) return;
-    if(managed){if(variable)motion.moveValue(owner.id,variable.id,value);return;}
+    if(managed){if(input)motion.moveInputValue(owner.id,obj.id,value);else if(variable)motion.moveValue(owner.id,variable.id,value);return;}
     if(original.value === value && original.expression === String(value)) return;
     const next = {...current, objects:current.objects.map(o => o.id === obj.id ? {...original,value,expression:String(value)} : o)};
     if (change(next,!recorded.current,"continuous")) { docRef.current = next; recorded.current = true; setProblem(""); }
@@ -590,11 +594,13 @@ function NumberSlider({ obj, value, docRef, change, error, editor }: {
     if (change({ ...docRef.current, objects: docRef.current.objects.map(o => o.id === obj.id
       ? { ...obj, slider: { ...obj.slider, [key]: value } } : o) })) setProblem("");
   };
+  const adjustable=!derived&&!error&&!obj.locked&&(!managed||input||!!variable&&!!owner.result.branches[owner.activeBranch].adjustableValues?.includes(variable.id));
+  if(!adjustable&&!derived)return null;
   return <div className="number-slider" onPointerDown={e => e.stopPropagation()}>
     <div className="number-value">= {Number((live ?? value).toPrecision(10))}{derived && <small> · 关联计算</small>}</div>
-    {!derived && <>
+    {adjustable && <>
       <input type="range" aria-label={`调整数值 ${obj.symbol}`} min={obj.slider.min} max={obj.slider.max}
-        step={obj.slider.step} value={live ?? value} disabled={!!error || obj.locked || managed&&(!variable||owner.result.branches[owner.activeBranch].dof===0)}
+        step={obj.slider.step} value={live ?? value} disabled={!!error || obj.locked || managed&&!input&&(!variable||owner.result.branches[owner.activeBranch].dof===0)}
         onFocus={begin}
         onPointerDown={begin}
         onPointerUp={finish} onPointerCancel={finish}
@@ -606,6 +612,6 @@ function NumberSlider({ obj, value, docRef, change, error, editor }: {
       </div></details>
     </>}
     {problem && <small className="expression-problem">{problem}</small>}
-    {managed&&!variable&&<small>已知条件；请在“按条件作图”中修改。</small>}
+
   </div>;
 }

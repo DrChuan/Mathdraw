@@ -1,0 +1,487 @@
+{
+  "format": "mathdraw-conditions",
+  "version": 2,
+  "mode": "coordinate",
+  "points": "O F_1 F_2 P C",
+  "segments": "",
+  "curves": [],
+  "planar": {
+    "document": {
+      "schemaVersion": 4,
+      "type": "mindgrove-mathdraw",
+      "id": "007f5ef4-3b48-4021-b3ef-94483a1b65b8",
+      "title": "未命名绘图",
+      "dimension": "2d",
+      "objects": [
+        {
+          "id": "9e442def-fe57-4166-97cb-dbff598e5eb8",
+          "name": "O",
+          "symbol": "O",
+          "kind": "point",
+          "construction": {
+            "type": "origin"
+          },
+          "style": {
+            "width": 1.25,
+            "line": "auto",
+            "fontSize": 18,
+            "italic": true
+          },
+          "showName": true,
+          "dot": "auto",
+          "coordinates": "none",
+          "labelOffset": [
+            -17,
+            19
+          ]
+        },
+        {
+          "id": "3cfe5bb0-ef88-4cd7-8c92-3665478f3bb2",
+          "kind": "number",
+          "name": "a",
+          "expression": "2",
+          "references": {},
+          "value": 2,
+          "slider": {
+            "min": -5,
+            "max": 5,
+            "step": 0.1
+          },
+          "style": {
+            "width": 1.25,
+            "line": "auto",
+            "fontSize": 18,
+            "italic": true
+          },
+          "symbol": "a",
+          "hidden": true
+        },
+        {
+          "id": "cffa4fa1-0188-4a89-ba97-15cdcf9df227",
+          "kind": "number",
+          "name": "b",
+          "expression": "1",
+          "references": {},
+          "value": 1,
+          "slider": {
+            "min": -5,
+            "max": 5,
+            "step": 0.1
+          },
+          "style": {
+            "width": 1.25,
+            "line": "auto",
+            "fontSize": 18,
+            "italic": true
+          },
+          "symbol": "b",
+          "hidden": true
+        },
+        {
+          "id": "c618617b-5f2e-4825-b441-dc7c40e31fef",
+          "kind": "curve",
+          "name": "曲线",
+          "planeId": "xy",
+          "equation": "x^2/a^2+y^2/b^2=1",
+          "autoFoci": false,
+          "range": [
+            -5,
+            5,
+            -5,
+            5
+          ],
+          "followView": true,
+          "style": {
+            "width": 1.25,
+            "line": "auto",
+            "fontSize": 18,
+            "italic": true
+          },
+          "parameters": {
+            "source": "x^2/a^2+y^2/b^2=1",
+            "references": {
+              "a": "3cfe5bb0-ef88-4cd7-8c92-3665478f3bb2",
+              "b": "cffa4fa1-0188-4a89-ba97-15cdcf9df227"
+            },
+            "fields": {
+              "equation": "x^2/a^2+y^2/b^2=1"
+            }
+          },
+          "symbol": "c"
+        },
+        {
+          "id": "345628c5-daca-4c88-87a8-61325c405e66",
+          "kind": "number",
+          "name": "c_1",
+          "expression": "sqrt(abs(a^2-b^2))",
+          "references": {
+            "a": "3cfe5bb0-ef88-4cd7-8c92-3665478f3bb2",
+            "b": "cffa4fa1-0188-4a89-ba97-15cdcf9df227"
+          },
+          "value": 1.7320508075688772,
+          "slider": {
+            "min": -5,
+            "max": 5,
+            "step": 0.1
+          },
+          "style": {
+            "width": 1.25,
+            "line": "auto",
+            "fontSize": 18,
+            "italic": true
+          },
+          "symbol": "c_1"
+        },
+        {
+          "id": "2d359b38-719c-471e-9bbf-6aede95264d0",
+          "kind": "number",
+          "name": "e",
+          "expression": "c_1/a",
+          "references": {
+            "a": "3cfe5bb0-ef88-4cd7-8c92-3665478f3bb2",
+            "c_1": "345628c5-daca-4c88-87a8-61325c405e66"
+          },
+          "value": 0.8660254037844386,
+          "slider": {
+            "min": -5,
+            "max": 5,
+            "step": 0.1
+          },
+          "style": {
+            "width": 1.25,
+            "line": "auto",
+            "fontSize": 18,
+            "italic": true
+          },
+          "symbol": "e"
+        },
+        {
+          "id": "0a440b48-ba03-41fd-8bc1-aa5681ca8cf9",
+          "name": "F_1",
+          "kind": "point",
+          "construction": {
+            "type": "focus",
+            "curve": "c618617b-5f2e-4825-b441-dc7c40e31fef",
+            "index": 0
+          },
+          "style": {
+            "width": 1.25,
+            "line": "auto",
+            "fontSize": 18,
+            "italic": true
+          },
+          "showName": true,
+          "coordinates": "none",
+          "labelOffset": [
+            9,
+            -10
+          ],
+          "symbol": "F_1"
+        },
+        {
+          "id": "9b699eaf-c26b-41c8-b86c-0d1bb649ade9",
+          "name": "F_2",
+          "kind": "point",
+          "construction": {
+            "type": "focus",
+            "curve": "c618617b-5f2e-4825-b441-dc7c40e31fef",
+            "index": 1
+          },
+          "style": {
+            "width": 1.25,
+            "line": "auto",
+            "fontSize": 18,
+            "italic": true
+          },
+          "showName": true,
+          "coordinates": "none",
+          "labelOffset": [
+            9,
+            -10
+          ],
+          "symbol": "F_2"
+        },
+        {
+          "id": "0a0a494e-a527-4198-800f-f03a46e73cd7",
+          "name": "P",
+          "kind": "point",
+          "construction": {
+            "type": "free",
+            "position": [
+              1,
+              1,
+              0
+            ]
+          },
+          "style": {
+            "width": 1.25,
+            "line": "auto",
+            "fontSize": 18,
+            "italic": true
+          },
+          "showName": true,
+          "coordinates": "none",
+          "labelOffset": [
+            9,
+            -10
+          ],
+          "symbol": "P"
+        },
+        {
+          "id": "85a100f1-d5f0-4181-b192-75015a5d28f6",
+          "kind": "line",
+          "name": "直线",
+          "points": [
+            "0a0a494e-a527-4198-800f-f03a46e73cd7",
+            "0a440b48-ba03-41fd-8bc1-aa5681ca8cf9"
+          ],
+          "style": {
+            "width": 1.25,
+            "line": "auto",
+            "fontSize": 18,
+            "italic": true
+          },
+          "symbol": "l1"
+        },
+        {
+          "id": "2e5d905f-2442-40f2-b076-ac5c3a4dadf3",
+          "kind": "line",
+          "name": "直线",
+          "points": [
+            "0a0a494e-a527-4198-800f-f03a46e73cd7",
+            "9b699eaf-c26b-41c8-b86c-0d1bb649ade9"
+          ],
+          "style": {
+            "width": 1.25,
+            "line": "auto",
+            "fontSize": 18,
+            "italic": true
+          },
+          "symbol": "L2"
+        },
+        {
+          "id": "af298731-691e-4462-8660-f0686ab6cf65",
+          "kind": "curve",
+          "name": "曲线",
+          "planeId": "xy",
+          "equation": "x^2+y^2+Dx+Ey+F=0",
+          "autoFoci": true,
+          "range": [
+            -5,
+            5,
+            -5,
+            5
+          ],
+          "followView": true,
+          "style": {
+            "width": 1.25,
+            "line": "auto",
+            "fontSize": 18,
+            "italic": true
+          },
+          "parameters": {
+            "source": "x^2+y^2+Dx+Ey+F=0",
+            "references": {
+              "D": "36587b29-3605-4586-9440-3929905f3d1b",
+              "F": "e34b0a6b-c270-4210-b9c1-41eda53abb26"
+            },
+            "fields": {
+              "equation": "x^2+y^2+Dx+Ey+F=0"
+            }
+          },
+          "symbol": "c1"
+        },
+        {
+          "id": "36587b29-3605-4586-9440-3929905f3d1b",
+          "kind": "number",
+          "name": "D",
+          "symbol": "D",
+          "expression": "1",
+          "references": {},
+          "value": 1,
+          "slider": {
+            "min": -5,
+            "max": 5,
+            "step": 0.1
+          },
+          "style": {
+            "width": 1.25,
+            "line": "auto",
+            "fontSize": 18,
+            "italic": true
+          }
+        },
+        {
+          "id": "e34b0a6b-c270-4210-b9c1-41eda53abb26",
+          "kind": "number",
+          "name": "F",
+          "symbol": "F",
+          "expression": "1",
+          "references": {},
+          "value": 1,
+          "slider": {
+            "min": -5,
+            "max": 5,
+            "step": 0.1
+          },
+          "style": {
+            "width": 1.25,
+            "line": "auto",
+            "fontSize": 18,
+            "italic": true
+          }
+        },
+        {
+          "id": "af298731-691e-4462-8660-f0686ab6cf65-center",
+          "name": "C",
+          "kind": "point",
+          "construction": {
+            "type": "curveCenter",
+            "curve": "af298731-691e-4462-8660-f0686ab6cf65"
+          },
+          "style": {
+            "width": 1.25,
+            "line": "auto",
+            "fontSize": 18,
+            "italic": true
+          },
+          "showName": true,
+          "coordinates": "none",
+          "labelOffset": [
+            9,
+            -10
+          ],
+          "symbol": "C"
+        }
+      ],
+      "planes": [
+        {
+          "id": "xy",
+          "name": "z=0",
+          "origin": [
+            0,
+            0,
+            0
+          ],
+          "u": [
+            1,
+            0,
+            0
+          ],
+          "v": [
+            0,
+            1,
+            0
+          ]
+        }
+      ],
+      "edgeStyles": {},
+      "view": {
+        "mode": "plane",
+        "planeId": "xy",
+        "angle": 0,
+        "projection": "orthographic",
+        "scale": 48,
+        "center": [
+          0,
+          0
+        ],
+        "axes": true,
+        "grid": false
+      },
+      "output": {
+        "width": 1600,
+        "background": "transparent",
+        "crop": "content",
+        "bounds": [
+          -5,
+          5,
+          -4,
+          4
+        ]
+      }
+    },
+    "unknowns": [
+      {
+        "id": "3cfe5bb0-ef88-4cd7-8c92-3665478f3bb2.value",
+        "object": "3cfe5bb0-ef88-4cd7-8c92-3665478f3bb2",
+        "field": "value",
+        "initial": 2
+      },
+      {
+        "id": "cffa4fa1-0188-4a89-ba97-15cdcf9df227.value",
+        "object": "cffa4fa1-0188-4a89-ba97-15cdcf9df227",
+        "field": "value",
+        "initial": 1
+      },
+      {
+        "id": "0a0a494e-a527-4198-800f-f03a46e73cd7.x",
+        "object": "0a0a494e-a527-4198-800f-f03a46e73cd7",
+        "field": "x",
+        "initial": 1
+      },
+      {
+        "id": "0a0a494e-a527-4198-800f-f03a46e73cd7.y",
+        "object": "0a0a494e-a527-4198-800f-f03a46e73cd7",
+        "field": "y",
+        "initial": 1
+      }
+    ],
+    "equations": [
+      {
+        "id": "ccb9d518-e1fd-4e60-84f6-fcfd16d21738",
+        "source": "a>0",
+        "enabled": true
+      },
+      {
+        "id": "aad7f3b5-5e96-4346-9bf7-c7130e2b742e",
+        "source": "b>0",
+        "enabled": true
+      },
+      {
+        "id": "582b08e6-722f-4e40-aa9a-bafa9a6836a5",
+        "source": "a>b",
+        "enabled": true
+      },
+      {
+        "id": "6a8bc5bc-adac-48a3-9fc1-488d4c479093",
+        "source": "onCurve(P,c)",
+        "enabled": true
+      },
+      {
+        "id": "7e141579-357c-4326-a4fb-f7a2e9afb44e",
+        "source": "tangent(l1,c1)",
+        "enabled": true
+      },
+      {
+        "id": "00426ca1-5150-4fe3-9062-d6de3283cc2d",
+        "source": "tangent(L2,c1)",
+        "enabled": true
+      },
+      {
+        "id": "bcaa04cb-eafe-4a13-9456-a0948bd5dbd5",
+        "source": "tangent(F_1F_2,c1)",
+        "enabled": true
+      }
+    ],
+    "inputs": [],
+    "absorbedSets": [],
+    "inheritedConditions": [],
+    "inheritedCurves": [],
+    "automaticSearch": true
+  },
+  "conditions": [
+    {
+      "id": "e3360c45-dee2-4619-a4e2-e71b56efc0e5",
+      "source": "PF_1=3PF_2",
+      "enabled": true
+    }
+  ],
+  "placement": {
+    "planeNames": [],
+    "side": 1,
+    "orientationPoint": "",
+    "keepPlacement": true,
+    "mirrored": false
+  }
+}
